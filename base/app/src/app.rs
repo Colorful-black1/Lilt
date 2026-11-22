@@ -895,7 +895,7 @@ impl LiltApp {
                     let path = song.path.clone();
                     if self.ensure_audio() {
                         if let Some(audio) = &mut self.audio {
-                            if audio.append_next(&path).is_ok() {
+                            if matches!(audio.append_next(&path), Ok(true)) {
                                 self.pending_next = Some(next_index);
                             }
                         }
@@ -1577,29 +1577,40 @@ impl LiltApp {
         else {
             return;
         };
-        if self.pending_next.is_some() && len < 2 && len > 0 {
-            let pending = self.pending_next.take();
-            if let Some(index) = pending {
-                if let Some(queue) = self.state.active_queue_mut() {
-                    queue.index = index;
-                    queue.position = 0.0;
-                    queue.updated = now_secs();
-                }
-                if let Some(key) = self
-                    .active_queue()
-                    .and_then(|q| q.songs.get(index))
-                    .cloned()
-                {
-                    self.current_key = Some(key.clone());
-                    self.counted_current = false;
-                    self.lyrics = None;
-                    self.lyrics_for = None;
-                    if let Some(extra) = self.state.songs.get_mut(&key) {
-                        extra.last_position = 0.0;
-                    }
-                    self.queue_next();
-                }
+        // Gapless transition: only advance the visible queue when Rodio has
+        // actually consumed the queued source. The sink clears its queued
+        // flag here, so the next append can succeed. Returning avoids writing
+        // the previous track's end position onto the new track.
+        let transition_started = if self.pending_next.is_some() {
+            self.audio
+                .as_mut()
+                .map(|audio| audio.take_transition(len))
+                .unwrap_or(false)
+        } else {
+            false
+        };
+        if let Some(index) = take_pending_transition(&mut self.pending_next, transition_started)
+        {
+            if let Some(queue) = self.state.active_queue_mut() {
+                queue.index = index;
+                queue.position = 0.0;
+                queue.updated = now_secs();
             }
+            if let Some(key) = self
+                .active_queue()
+                .and_then(|q| q.songs.get(index))
+                .cloned()
+            {
+                self.current_key = Some(key.clone());
+                self.counted_current = false;
+                self.lyrics = None;
+                self.lyrics_for = None;
+                if let Some(extra) = self.state.songs.get_mut(&key) {
+                    extra.last_position = 0.0;
+                }
+                self.queue_next();
+            }
+            return;
         }
         if empty {
             // Keep `playing` true across an automatic track change: the target
@@ -2748,6 +2759,17 @@ impl LiltApp {
     }
 }
 
+/// Consumes the pending gapless index only when Rodio reports that the
+/// queued source actually started. Without this guard the UI can advance on
+/// every frame while the old track is still playing.
+fn take_pending_transition(pending: &mut Option<usize>, started: bool) -> Option<usize> {
+    if started {
+        pending.take()
+    } else {
+        None
+    }
+}
+
 fn is_replace(policy: ConflictPolicy) -> bool {
     matches!(policy, ConflictPolicy::Replace)
 }
@@ -2940,6 +2962,15 @@ mod tests {
             "b".to_owned(),
         ];
         assert_eq!(dedupe_songs(keys), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn pending_transition_waits_for_the_queued_source() {
+        let mut pending = Some(7);
+        assert_eq!(take_pending_transition(&mut pending, false), None);
+        assert_eq!(pending, Some(7));
+        assert_eq!(take_pending_transition(&mut pending, true), Some(7));
+        assert_eq!(pending, None);
     }
 
     #[test]

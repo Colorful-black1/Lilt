@@ -158,14 +158,17 @@ impl AudioEngine {
         Ok(())
     }
 
-    pub fn append_next(&mut self, path: &Path) -> Result<(), String> {
+    /// Appends the next decoded track to the gapless sink. Returns `false`
+    /// when a track is already queued (or nothing is loaded), so callers do
+    /// not record a pending transition that will never start.
+    pub fn append_next(&mut self, path: &Path) -> Result<bool, String> {
         if self.queued_next || !self.loaded {
-            return Ok(());
+            return Ok(false);
         }
         let source = self.make_source(path)?;
         self.sink.append(source);
         self.queued_next = true;
-        Ok(())
+        Ok(true)
     }
 
     pub fn set_volume(&mut self, volume: f32) {
@@ -235,11 +238,31 @@ impl AudioEngine {
     pub fn take_transition(&mut self, new_len: usize) -> bool {
         // A queued next track has started when the sink loses one sound
         // without being empty.
-        if self.queued_next && new_len < 2 && new_len > 0 {
+        if transition_started(self.queued_next, new_len) {
             self.queued_next = false;
             return true;
         }
         false
+    }
+}
+
+/// True when the sink has consumed the current source and the queued source
+/// is now the only one playing. `len == 2` still means the old track is
+/// playing; `len == 0` means the sink drained completely.
+pub(crate) fn transition_started(queued_next: bool, new_len: usize) -> bool {
+    queued_next && new_len == 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::transition_started;
+
+    #[test]
+    fn transition_requires_a_queued_source_and_one_remaining() {
+        assert!(transition_started(true, 1));
+        assert!(!transition_started(true, 2));
+        assert!(!transition_started(true, 0));
+        assert!(!transition_started(false, 1));
     }
 }
 
