@@ -98,6 +98,21 @@ interface SearchHistoryDao {
 }
 
 @Dao
+interface LyricsDao {
+    @Query("SELECT * FROM lyrics WHERE mediaId = :mediaId")
+    fun observe(mediaId: Long): Flow<LyricsEntity?>
+
+    @Query("SELECT * FROM lyrics WHERE mediaId = :mediaId")
+    suspend fun get(mediaId: Long): LyricsEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(entry: LyricsEntity)
+
+    @Query("DELETE FROM lyrics WHERE mediaId = :mediaId")
+    suspend fun delete(mediaId: Long)
+}
+
+@Dao
 interface PlaylistDao {
     @Query(
         """
@@ -159,7 +174,8 @@ interface QueueDao {
     @Query(
         """
         SELECT q.id, q.name, q.createdAt,
-               (SELECT COUNT(*) FROM queue_songs qs WHERE qs.queueId = q.id) AS songCount
+               (SELECT COUNT(*) FROM queue_songs qs WHERE qs.queueId = q.id) AS songCount,
+               q.lastIndex, q.lastPositionMs
         FROM queues q
         ORDER BY q.createdAt DESC
         """
@@ -183,6 +199,9 @@ interface QueueDao {
 
     @Query("UPDATE queues SET name = :name WHERE id = :id")
     suspend fun renameQueue(id: Long, name: String)
+
+    @Query("UPDATE queues SET lastIndex = :index, lastPositionMs = :positionMs WHERE id = :id")
+    suspend fun setQueuePosition(id: Long, index: Int, positionMs: Long)
 
     @Query("DELETE FROM queues WHERE id = :id")
     suspend fun deleteQueue(id: Long)
@@ -225,6 +244,8 @@ interface QueueDao {
         mediaIds: List<Long>,
         merge: Boolean,
         limit: Int = 20,
+        lastIndex: Int = 0,
+        lastPositionMs: Long = 0,
     ): Long {
         val existing = queueByName(name)
         val queueId: Long
@@ -241,6 +262,11 @@ interface QueueDao {
             addQueueSong(QueueSongEntity(queueId, id, position))
             position += 1
         }
+        setQueuePosition(
+            queueId,
+            lastIndex.coerceAtLeast(0),
+            lastPositionMs.coerceAtLeast(0),
+        )
         while (count() > limit) {
             val oldest = oldestQueue() ?: break
             deleteQueueSongs(oldest.id)

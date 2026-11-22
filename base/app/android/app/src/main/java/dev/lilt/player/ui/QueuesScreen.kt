@@ -59,6 +59,7 @@ fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
     val player by vm.player.collectAsStateWithLifecycle()
     val active by vm.activeQueueId.collectAsStateWithLifecycle()
     val conflict by vm.queueConflict.collectAsStateWithLifecycle()
+    val rememberPositions by vm.rememberQueuePositions.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showCreate by remember { mutableStateOf(false) }
@@ -103,6 +104,22 @@ fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
+            Text(
+                if (rememberPositions) {
+                    t(
+                        "Queue positions are remembered. Tapping a queue resumes where you stopped.",
+                        "队列位置已记忆。点击队列会从上次停止处继续。",
+                    )
+                } else {
+                    t(
+                        "Queue positions are not remembered. Every queue starts from its first song.",
+                        "未记忆队列位置。每个队列都会从第一首开始。",
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
+            )
             if (queues.isEmpty()) {
                 EmptyState(
                     title = t("No queues yet", "还没有队列"),
@@ -117,6 +134,7 @@ fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
                         QueueRow(
                             queue = queue,
                             active = queue.id == active && player.itemCount > 0,
+                            rememberPositions = rememberPositions,
                             onPlay = { vm.playQueue(queue.id) },
                             onRename = { renameTarget = queue },
                             onDelete = { deleteTarget = queue },
@@ -168,6 +186,7 @@ fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
 private fun QueueRow(
     queue: QueueSummary,
     active: Boolean,
+    rememberPositions: Boolean,
     onPlay: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -218,7 +237,18 @@ private fun QueueRow(
                 }
             }
             Text(
-                t("${queue.songCount} tracks", "${queue.songCount} 首"),
+                buildString {
+                    append(trackCountLabel(queue.songCount))
+                    if (rememberPositions && queue.lastPositionMs > 0) {
+                        append(" · ")
+                        append(
+                            t(
+                                "resume ${formatDuration(queue.lastPositionMs)}",
+                                "续播 ${formatDuration(queue.lastPositionMs)}",
+                            ),
+                        )
+                    }
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

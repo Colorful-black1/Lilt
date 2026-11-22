@@ -58,6 +58,7 @@ import dev.lilt.player.ui.AboutScreen
 import dev.lilt.player.ui.ArtistDetailScreen
 import dev.lilt.player.ui.HomeScreen
 import dev.lilt.player.ui.LiltTheme
+import dev.lilt.player.ui.LyricsScreen
 import dev.lilt.player.ui.PlayerScreen
 import dev.lilt.player.ui.PlaylistScreen
 import dev.lilt.player.ui.QueuesScreen
@@ -162,7 +163,12 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onBack = { nav.popBackStack() },
                 onOpenQueues = { nav.navigate("queues") },
                 onOpenEqualizer = { nav.navigate("equalizer") },
+                onOpenLyrics = { nav.navigate("lyrics/$it") },
             )
+        }
+        composable("lyrics/{id}") { entry ->
+            val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+            LyricsScreen(vm = vm, mediaId = id, onBack = { nav.popBackStack() })
         }
         composable("queues") {
             QueuesScreen(vm, onBack = { nav.popBackStack() })

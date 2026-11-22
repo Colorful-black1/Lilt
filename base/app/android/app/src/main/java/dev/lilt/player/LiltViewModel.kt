@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,14 +19,19 @@ import com.google.common.util.concurrent.ListenableFuture
 import dev.lilt.player.data.BookmarkEntity
 import dev.lilt.player.data.HistoryEntity
 import dev.lilt.player.data.LiltDatabase
+import dev.lilt.player.data.LyricsEntity
 import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.ScanState
 import dev.lilt.player.data.SearchHistoryEntity
 import dev.lilt.player.data.SettingsStore
 import dev.lilt.player.data.SongEntity
 import dev.lilt.player.data.SongStateEntity
+import dev.lilt.player.library.EQ_PRESETS
+import dev.lilt.player.library.EqProfile
+import dev.lilt.player.library.PreampMode
+import dev.lilt.player.library.presetNameFor
+import dev.lilt.player.library.queueStart
 import dev.lilt.player.playback.PlaybackService
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -58,9 +64,23 @@ data class PlayerUiState(
 )
 
 data class EqUiState(
-    val enabled: Boolean = true,
-    val gains: List<Float> = List(10) { 0f },
+    val profile: EqProfile = EqProfile(),
+    val perDevice: Boolean = true,
+    val deviceName: String = "Phone speaker",
+    val virtualizerAvailable: Boolean = false,
 )
+
+data class SleepUiState(
+    val mode: String = "off",
+    val remainingMs: Long = 0,
+    val totalMs: Long = 0,
+    val tracksLeft: Int = 0,
+    val waitTillEnd: Boolean = false,
+    val fade: Boolean = true,
+    val pendingStop: Boolean = false,
+) {
+    val active: Boolean get() = mode != "off"
+}
 
 class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
@@ -99,26 +119,44 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val activeQueueId = settings.activeQueueId
     val songSort = settings.songSort
     val songSortDescending = settings.songSortDescending
+    val fadeInMs = settings.fadeInMs
+    val fadeOutMs = settings.fadeOutMs
+    val sleepHours = settings.sleepHours
+    val sleepMinutes = settings.sleepMinutes
+    val sleepTracks = settings.sleepTracks
+    val sleepWaitTillEnd = settings.sleepWaitTillEnd
+    val sleepFade = settings.sleepFade
+    val rememberQueuePositions = settings.rememberQueuePositions
 
     private val _player = MutableStateFlow(PlayerUiState())
     val player: StateFlow<PlayerUiState> = _player.asStateFlow()
 
-    private val _sleepDeadline = MutableStateFlow<Long?>(null)
-    val sleepDeadline: StateFlow<Long?> = _sleepDeadline.asStateFlow()
+    private val _sleep = MutableStateFlow(SleepUiState())
+    val sleep: StateFlow<SleepUiState> = _sleep.asStateFlow()
 
     private val _eq = MutableStateFlow(EqUiState())
     val eq: StateFlow<EqUiState> = _eq.asStateFlow()
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
-    private var sleepJob: Job? = null
     private var lastRecorded = -1L
     private var countedMediaId = -1L
     private var pendingPlay: (() -> Unit)? = null
+    private var lastQueueSaveQueue = -1L
+    private var lastQueueSaveIndex = -1
+    private var lastQueueSavePosition = -1L
+    private var queueSaveGuardUntil = 0L
 
     private val listener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             countedMediaId = -1L
+            if (SystemClock.elapsedRealtime() >= queueSaveGuardUntil) {
+                saveActiveQueuePosition(force = true)
+            }
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (!isPlaying) saveActiveQueuePosition(force = true)
         }
 
         override fun onEvents(player: Player, events: Player.Events) {
@@ -146,6 +184,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                     publish(c)
                     c.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
                     refreshEq(c)
+                    refreshSleep(c)
                     pendingPlay?.invoke()
                     pendingPlay = null
                 } catch (_: Exception) {
@@ -165,6 +204,45 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 delay(500)
             }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                delay(1_000)
+                if (_sleep.value.active) controller?.let(::refreshSleep)
+            }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                delay(5_000)
+                if (controller?.isPlaying == true) saveActiveQueuePosition()
+            }
+        }
+    }
+
+    private fun saveActiveQueuePosition(force: Boolean = false) {
+        if (SystemClock.elapsedRealtime() < queueSaveGuardUntil) return
+        val player = controller ?: return
+        val queueId = settings.activeQueueId.value
+        if (queueId <= 0 || player.mediaItemCount == 0) return
+        if (!settings.rememberQueuePositions.value) return
+        val index = player.currentMediaItemIndex.coerceAtLeast(0)
+        val position = if (player.playbackState == Player.STATE_ENDED) {
+            0L
+        } else {
+            player.currentPosition.coerceAtLeast(0)
+        }
+        if (!force &&
+            queueId == lastQueueSaveQueue &&
+            index == lastQueueSaveIndex &&
+            kotlin.math.abs(position - lastQueueSavePosition) < 2_000
+        ) {
+            return
+        }
+        lastQueueSaveQueue = queueId
+        lastQueueSaveIndex = index
+        lastQueueSavePosition = position
+        viewModelScope.launch {
+            repository.saveQueuePosition(queueId, index, position)
         }
     }
 
@@ -217,7 +295,11 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         if (songs.isEmpty()) return
+        if (queueId == null || queueId != settings.activeQueueId.value) {
+            saveActiveQueuePosition(force = true)
+        }
         if (queueId == null) settings.setActiveQueue(-1) else settings.setActiveQueue(queueId)
+        queueSaveGuardUntil = SystemClock.elapsedRealtime() + 1_500
         countedMediaId = -1L
         player.setMediaItems(
             songs.map(::mediaItem),
@@ -237,8 +319,19 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playQueue(queueId: Long) {
         viewModelScope.launch {
+            val queue = repository.queue(queueId) ?: return@launch
             val songs = repository.queueSongs(queueId)
-            playSongs(songs, 0, queueId)
+            if (songs.isEmpty()) return@launch
+            val start = queueStart(
+                savedIndex = queue.lastIndex,
+                savedPositionMs = queue.lastPositionMs,
+                songCount = songs.size,
+                remember = settings.rememberQueuePositions.value,
+            )
+            playSongs(songs, start.index, queueId, start.positionMs)
+            lastQueueSaveQueue = -1
+            lastQueueSaveIndex = -1
+            lastQueueSavePosition = -1
         }
     }
 
@@ -252,16 +345,25 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         controller?.addMediaItem(mediaItem(song))
     }
 
-    fun saveQueue(name: String, songs: List<SongEntity>) {
-        viewModelScope.launch { repository.createQueue(name, songs.map { it.mediaId }) }
-    }
-
     fun saveCurrentQueue(name: String) {
         val player = controller ?: return
         val ids = (0 until player.mediaItemCount).mapNotNull { index ->
             player.getMediaItemAt(index).mediaId.toLongOrNull()
         }
-        viewModelScope.launch { repository.createQueue(name, ids) }
+        val index = player.currentMediaItemIndex.coerceAtLeast(0)
+        val position = player.currentPosition.coerceAtLeast(0)
+        viewModelScope.launch {
+            val id = repository.createQueue(
+                name,
+                ids,
+                lastIndex = index,
+                lastPositionMs = position,
+            )
+            settings.setActiveQueue(id)
+            lastQueueSaveQueue = -1
+            lastQueueSaveIndex = -1
+            lastQueueSavePosition = -1
+        }
     }
 
     fun renameQueue(id: Long, name: String) {
@@ -348,32 +450,89 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setEqEnabled(enabled: Boolean) {
-        _eq.value = _eq.value.copy(enabled = enabled)
-        pushEq()
+        updateEqProfile(_eq.value.profile.copy(enabled = enabled))
     }
 
     fun setEqGain(index: Int, gain: Float) {
-        val gains = _eq.value.gains.toMutableList()
+        val profile = _eq.value.profile
+        val gains = profile.gains.toMutableList()
         if (index !in gains.indices) return
         gains[index] = gain.coerceIn(-15f, 15f)
-        _eq.value = _eq.value.copy(gains = gains)
-        pushEq()
+        updateEqProfile(
+            profile.copy(gains = gains, preset = presetNameFor(gains)),
+        )
     }
 
     fun setEqPreset(name: String) {
-        val gains = EQ_PRESETS[name] ?: return
-        _eq.value = _eq.value.copy(gains = gains)
+        val profile = _eq.value.profile
+        if (!EQ_PRESETS.containsKey(name)) return
+        updateEqProfile(profile.withPreset(name))
+    }
+
+    fun setEqPreampMode(mode: PreampMode) {
+        updateEqProfile(_eq.value.profile.copy(preampMode = mode))
+    }
+
+    fun setEqHeadroom(value: Float) {
+        updateEqProfile(_eq.value.profile.copy(headroomDb = value))
+    }
+
+    fun setEqBoost(value: Float) {
+        updateEqProfile(_eq.value.profile.copy(boostDb = value))
+    }
+
+    fun setEqBass(value: Float) {
+        updateEqProfile(_eq.value.profile.copy(bass = value))
+    }
+
+    fun setEqVirtualizer(value: Float) {
+        updateEqProfile(_eq.value.profile.copy(virtualizer = value))
+    }
+
+    fun setEqBalance(value: Float) {
+        updateEqProfile(_eq.value.profile.copy(balance = value))
+    }
+
+    fun setEqPerDevice(enabled: Boolean) {
+        _eq.value = _eq.value.copy(perDevice = enabled)
+        pushEq()
+    }
+
+    fun refreshEq() {
+        controller?.let(::refreshEq)
+    }
+
+    private fun updateEqProfile(profile: EqProfile) {
+        _eq.value = _eq.value.copy(profile = profile.cleaned())
         pushEq()
     }
 
     private fun pushEq() {
         val player = controller ?: return
         val state = _eq.value
+        val profile = state.profile
         val args = Bundle().apply {
-            putBoolean("enabled", state.enabled)
-            putFloatArray("gains", state.gains.toFloatArray())
+            putBoolean("enabled", profile.enabled)
+            putFloatArray("gains", profile.gains.toFloatArray())
+            putString("preampMode", profile.preampMode.id)
+            putFloat("headroomDb", profile.headroomDb)
+            putFloat("boostDb", profile.boostDb)
+            putFloat("bass", profile.bass)
+            putFloat("virtualizer", profile.virtualizer)
+            putFloat("balance", profile.balance)
+            putString("preset", profile.preset)
+            putBoolean("perDevice", state.perDevice)
         }
-        player.sendCustomCommand(SessionCommand(PlaybackService.CMD_EQ_SET, Bundle.EMPTY), args)
+        val future = player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_EQ_SET, Bundle.EMPTY),
+            args,
+        )
+        future.addListener(
+            {
+                runCatching { applyEqExtras(future.get().extras) }
+            },
+            ContextCompat.getMainExecutor(app),
+        )
     }
 
     private fun refreshEq(player: MediaController) {
@@ -383,40 +542,123 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         )
         future.addListener(
             {
-                runCatching {
-                    val extras = future.get().extras
-                    val gains = extras.getFloatArray("gains")?.toList()
-                    _eq.value = EqUiState(
-                        enabled = extras.getBoolean("enabled", true),
-                        gains = gains ?: _eq.value.gains,
-                    )
-                }
+                runCatching { applyEqExtras(future.get().extras) }
             },
             ContextCompat.getMainExecutor(app),
         )
     }
 
-    fun setSleepTimer(minutes: Int) {
-        sleepJob?.cancel()
-        controller?.volume = 1f
-        if (minutes <= 0) {
-            _sleepDeadline.value = null
-            return
-        }
-        val deadline = System.currentTimeMillis() + minutes * 60_000L
-        _sleepDeadline.value = deadline
-        sleepJob = viewModelScope.launch {
-            delay(minutes * 60_000L)
-            val player = controller ?: return@launch
-            repeat(20) {
-                player.volume = (1f - (it + 1) / 20f).coerceAtLeast(0f)
-                delay(200)
-            }
-            player.pause()
-            player.volume = 1f
-            _sleepDeadline.value = null
-        }
+    private fun applyEqExtras(extras: Bundle?) {
+        if (extras == null) return
+        val gains = extras.getFloatArray("gains")?.toList()
+        val current = _eq.value.profile
+        val profile = EqProfile(
+            enabled = extras.getBoolean("enabled", current.enabled),
+            gains = gains ?: current.gains,
+            preset = extras.getString("preset") ?: current.preset,
+            preampMode = PreampMode.fromId(
+                extras.getString("preampMode") ?: current.preampMode.id
+            ),
+            headroomDb = extras.getFloat("headroomDb", current.headroomDb),
+            boostDb = extras.getFloat("boostDb", current.boostDb),
+            bass = extras.getFloat("bass", current.bass),
+            virtualizer = extras.getFloat("virtualizer", current.virtualizer),
+            balance = extras.getFloat("balance", current.balance),
+        ).cleaned()
+        _eq.value = EqUiState(
+            profile = profile,
+            perDevice = extras.getBoolean("perDevice", _eq.value.perDevice),
+            deviceName = extras.getString("deviceName") ?: _eq.value.deviceName,
+            virtualizerAvailable = extras.getBoolean(
+                "virtualizerAvailable",
+                _eq.value.virtualizerAvailable,
+            ),
+        )
     }
+
+    fun startSleepTime(hours: Int, minutes: Int, waitTillEnd: Boolean, fade: Boolean) {
+        if (hours <= 0 && minutes <= 0) return
+        settings.setSleepDefaults(
+            hours = hours,
+            minutes = minutes,
+            tracks = settings.sleepTracks.value,
+            waitTillEnd = waitTillEnd,
+            fade = fade,
+        )
+        sendSleep(
+            PlaybackService.CMD_SLEEP_SET,
+            Bundle().apply {
+                putString("mode", "time")
+                putInt("hours", hours)
+                putInt("minutes", minutes)
+                putBoolean("waitTillEnd", waitTillEnd)
+                putBoolean("fade", fade)
+            },
+        )
+    }
+
+    fun startSleepTracks(tracks: Int, fade: Boolean) {
+        val count = tracks.coerceIn(1, 99)
+        settings.setSleepDefaults(
+            hours = settings.sleepHours.value,
+            minutes = settings.sleepMinutes.value,
+            tracks = count,
+            waitTillEnd = false,
+            fade = fade,
+        )
+        sendSleep(
+            PlaybackService.CMD_SLEEP_SET,
+            Bundle().apply {
+                putString("mode", "tracks")
+                putInt("tracks", count)
+                putBoolean("fade", fade)
+            },
+        )
+    }
+
+    fun cancelSleep() {
+        sendSleep(PlaybackService.CMD_SLEEP_CANCEL, Bundle.EMPTY)
+    }
+
+    private fun sendSleep(action: String, args: Bundle) {
+        val player = controller ?: return
+        val future = player.sendCustomCommand(SessionCommand(action, Bundle.EMPTY), args)
+        future.addListener(
+            {
+                runCatching { applySleep(future.get().extras) }
+            },
+            ContextCompat.getMainExecutor(app),
+        )
+    }
+
+    private fun refreshSleep(player: MediaController) {
+        val future = player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_SLEEP_GET, Bundle.EMPTY),
+            Bundle.EMPTY,
+        )
+        future.addListener(
+            {
+                runCatching { applySleep(future.get().extras) }
+            },
+            ContextCompat.getMainExecutor(app),
+        )
+    }
+
+    private fun applySleep(extras: Bundle?) {
+        if (extras == null) return
+        _sleep.value = SleepUiState(
+            mode = extras.getString("mode") ?: "off",
+            remainingMs = extras.getLong("remainingMs", 0),
+            totalMs = extras.getLong("totalMs", 0),
+            tracksLeft = extras.getInt("tracksLeft", 0),
+            waitTillEnd = extras.getBoolean("waitTillEnd", false),
+            fade = extras.getBoolean("fade", true),
+            pendingStop = extras.getBoolean("pendingStop", false),
+        )
+    }
+
+    fun setFadeInMs(value: Int) = settings.setFadeInMs(value)
+    fun setFadeOutMs(value: Int) = settings.setFadeOutMs(value)
 
     fun setLanguage(value: String) = settings.setLanguage(value)
     fun setTheme(value: String) = settings.setTheme(value)
@@ -425,6 +667,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun setQueueConflict(value: String) = settings.setQueueConflict(value)
     fun setSongSort(value: String) = settings.setSongSort(value)
     fun setSongSortDescending(value: Boolean) = settings.setSongSortDescending(value)
+    fun setRememberQueuePositions(value: Boolean) = settings.setRememberQueuePositions(value)
 
     fun toggleFavorite(mediaId: Long) {
         if (mediaId <= 0) return
@@ -474,6 +717,17 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearSearchHistory() {
         viewModelScope.launch { repository.clearSearchHistory() }
+    }
+
+    fun lyricsFor(mediaId: Long): kotlinx.coroutines.flow.Flow<LyricsEntity?> =
+        repository.observeLyrics(mediaId)
+
+    fun saveLyrics(mediaId: Long, text: String) {
+        viewModelScope.launch { repository.saveLyrics(mediaId, text) }
+    }
+
+    fun deleteLyrics(mediaId: Long) {
+        viewModelScope.launch { repository.deleteLyrics(mediaId) }
     }
 
     fun setFolderRule(path: String, kind: String, on: Boolean) {
@@ -541,7 +795,6 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         .build()
 
     override fun onCleared() {
-        sleepJob?.cancel()
         controller?.removeListener(listener)
         controllerFuture?.let { if (it.isDone && !it.isCancelled) runCatching { it.get().release() } }
         controller = null
@@ -549,16 +802,4 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 
-    companion object {
-        val EQ_PRESETS: Map<String, List<Float>> = linkedMapOf(
-            "Flat" to List(10) { 0f },
-            "Rock" to listOf(5f, 4f, 2f, 0f, -1f, -1f, 0f, 2f, 3f, 4f),
-            "Pop" to listOf(-1f, 2f, 4f, 5f, 3f, 0f, -1f, -1f, 0f, 1f),
-            "Jazz" to listOf(4f, 3f, 1f, 2f, -1f, -1f, 0f, 1f, 2f, 3f),
-            "Classical" to listOf(4f, 3f, 1f, 0f, -1f, -1f, 0f, 2f, 3f, 4f),
-            "Bass" to listOf(8f, 6f, 4f, 2f, 0f, 0f, 0f, 0f, 0f, 0f),
-            "Vocal" to listOf(-2f, -1f, 0f, 3f, 5f, 5f, 3f, 1f, 0f, -1f),
-            "Treble" to listOf(0f, 0f, 0f, 0f, 0f, 1f, 3f, 5f, 6f, 7f),
-        )
-    }
 }

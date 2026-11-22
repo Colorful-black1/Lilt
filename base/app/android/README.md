@@ -66,13 +66,22 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   index strip when sorted by title; and per-playlist multi-select removal.
 - **Search** is grouped into songs, albums, artists, folders and playlists, highlights the
   matching text, and keeps the last 12 queries for one-tap reuse.
+- **Lyrics** are stored per song in Room, support LRC timestamps with the current line
+  highlighted in the player, plain text, and import from a local `.lrc`/`.txt` document.
+- **Sleep timer** runs in the playback service: custom hours/minutes, stop after a number
+  of songs, “after this track”, fade-out, countdown and cancellation. It keeps running
+  with the screen off.
+- **Play/pause fades** are configurable from 0 to 4 seconds in 250 ms steps.
+- **Queue position memory** stores the current index and position for named queues, both
+  periodically and on pause, and resumes there when the queue is tapped again. It can be
+  turned off in Settings.
 - **History and bookmarks.** Playback history keeps the latest 200 starts and can be
   cleared. A bookmark stores a song position plus an optional note; bookmarks are listed
   in the library and as one-tap chips on the now-playing screen.
-- **Room database v3** with a separate `song_state` table for favourites, play counts and
-  last-played time, so a MediaStore rescan cannot wipe user data. It also stores bookmarks
-  and search history. Upgrades from v1/v2 keep the existing library, playlists, queues and
-  user state.
+- **Room database v5** with a separate `song_state` table for favourites, play counts and
+  last-played time, so a MediaStore rescan cannot wipe user data. It also stores bookmarks,
+  search history, lyrics and named queue positions. Upgrades from v1/v2/v3/v4 keep the
+  existing library, playlists, queues and user state.
 - **Play counts** are recorded after 30% of a track has been heard; history is recorded at
   playback start.
 - Playback through Media3 ExoPlayer inside a foreground `MediaSessionService`:
@@ -83,17 +92,20 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - Up to 20 named queues, same-name Replace/Merge policy, M3U export and import with a
   tested round trip.
 - Playlists with create, rename, delete, add/remove songs and M3U export/import.
-- Ten-band equalizer (31.5 Hz to 16 kHz, ±15 dB) applied to the media session, stored on
-  the device, plus eight presets. On Android 9+ this uses `DynamicsProcessing`; Android
-  8.0–8.1 falls back to the platform five-band equalizer mapped to the same curve.
-- Sleep timer with a five-second fade, playback speed 0.50–3.00×, search, light/dark/
-  black/system themes, five accents, and a switchable English/Chinese interface.
+- Ten-band equalizer (31.5 Hz to 16 kHz, ±15 dB) with all 22 desktop presets, preamp
+  Off/Headroom/Boost, a peak-based headroom suggestion, bass boost, virtual surround where
+  supported, left/right balance and one saved profile per output device. On Android 9+
+  this uses `DynamicsProcessing`; Android 8.0–8.1 falls back to the platform equalizer.
+- Full sleep timer (custom time, song count, after this track, fade, countdown, cancel)
+  that runs in the playback service, play/pause fades up to four seconds, queue position
+  memory, playback speed 0.50–3.00×, search, light/dark/black/system themes, five accents,
+  and a switchable English/Chinese interface.
 
 ## Deliberately not in this build
 
-Tag editing, lyrics editing, embedded ReplayGain writing, drag-to-reorder playlists and
-queues, home-screen widgets, quick-settings tile, Android Auto, Chromecast, audio trimming
-and backup/restore are later rounds. They are not simulated with fake data.
+Tag editing, embedded ReplayGain writing, drag-to-reorder playlists and queues, pinyin
+letter buckets, home-screen widgets, quick-settings tile, Android Auto, Chromecast, audio
+trimming and backup/restore are later rounds. They are not simulated with fake data.
 
 ## Privacy and permissions
 
@@ -105,12 +117,13 @@ its library manifest; Lilt removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 13 unit tests for M3U round trips, path imports,
-  include/exclude filtering, album/artist grouping, sorting, search grouping and the
-  letter index.
-- `./gradlew connectedDebugAndroidTest` passes the Room 1→2 and 2→3 migration tests on an
-  Android 15 emulator.
+- `./gradlew testDebugUnitTest` passes 20 unit tests for M3U round trips, path imports,
+  include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
+  index, LRC parsing and lyrics timing, EQ curves/profiles and queue resume positions.
+- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4 and 4→5 migration
+  tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
-  `../checks/round-4-c/README.md` for the library evidence, and
+  `../checks/round-5/README.md` for lyrics, sleep/fade, equalizer and queue-memory
+  evidence, `../checks/round-4-c/README.md` for the library evidence, and
   `../checks/round-3/README.md` for the remaining unverified items (headset unplug and
   real-phone audio routing).

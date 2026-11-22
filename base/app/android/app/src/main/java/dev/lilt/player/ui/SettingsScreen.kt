@@ -28,11 +28,15 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +59,9 @@ fun SettingsScreen(
     val language by vm.language.collectAsStateWithLifecycle()
     val includeOnly by vm.includeOnly.collectAsStateWithLifecycle()
     val conflict by vm.queueConflict.collectAsStateWithLifecycle()
+    val rememberPositions by vm.rememberQueuePositions.collectAsStateWithLifecycle()
+    val fadeIn by vm.fadeInMs.collectAsStateWithLifecycle()
+    val fadeOut by vm.fadeOutMs.collectAsStateWithLifecycle()
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val allSongs by vm.allSongs.collectAsStateWithLifecycle()
@@ -163,6 +170,16 @@ fun SettingsScreen(
                     body = t("Ten bands, stored for this phone.", "十段均衡，保存在本机。"),
                     onClick = onOpenEqualizer,
                 )
+                FadeSlider(
+                    title = t("Fade in on play", "播放淡入"),
+                    valueMs = fadeIn,
+                    onChange = vm::setFadeInMs,
+                )
+                FadeSlider(
+                    title = t("Fade out on pause", "暂停淡出"),
+                    valueMs = fadeOut,
+                    onChange = vm::setFadeOutMs,
+                )
                 Text(
                     t(
                         "Output follows the phone's sound settings. Use the hardware volume keys while music plays.",
@@ -175,6 +192,14 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
             SettingCard(t("Queues", "队列")) {
+                SettingSwitch(
+                    title = t("Remember queue positions", "记住队列位置"),
+                    body = t(
+                        "Return to each queue where you left it.",
+                        "切换队列时回到上次播放的位置。",
+                    ),
+                    checked = rememberPositions,
+                ) { vm.setRememberQueuePositions(it) }
                 SettingLabel(t("Same-name queue", "同名队列"), t("Used when you save a queue with a name that exists.", "保存同名队列时的处理方式。"))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
                     ChoicePill(t("Replace", "替换"), selected = conflict == "replace") { vm.setQueueConflict("replace") }
@@ -198,6 +223,32 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(40.dp))
         }
+    }
+}
+
+@Composable
+private fun FadeSlider(title: String, valueMs: Int, onChange: (Int) -> Unit) {
+    var local by remember(valueMs) { mutableFloatStateOf(valueMs.toFloat()) }
+    Column(Modifier.padding(top = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (local <= 0f) t("Off", "关闭") else "%.1f s".format(local / 1000f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = local,
+            onValueChange = { local = it },
+            valueRange = 0f..4_000f,
+            steps = 15,
+            onValueChangeFinished = { onChange(local.toInt()) },
+        )
     }
 }
 
@@ -302,10 +353,12 @@ fun AboutScreen(onBack: () -> Unit) {
                 t("Recent, most played, history and bookmarks", "最近添加、最多播放、历史与书签"),
                 t("Sorting, multi-select and A-Z index", "排序、多选与字母索引"),
                 t("Grouped search with query history", "分组搜索与搜索历史"),
+                t("Local lyrics with LRC timing and import", "本地歌词、LRC 时间轴与导入"),
                 t("Foreground service, notification and lock-screen controls", "前台服务、通知栏与锁屏控制"),
                 t("Named queues with M3U import and export", "命名队列与 M3U 导入导出"),
-                t("Playlists, sleep timer and playback speed", "播放列表、睡眠定时与播放速度"),
-                t("Ten-band equalizer stored on the device", "保存在本机的十段均衡器"),
+                t("Playlists, full sleep timer and playback speed", "播放列表、完整睡眠定时与播放速度"),
+                t("Play/pause fades and queue position memory", "播放/暂停淡入淡出与队列位置记忆"),
+                t("Ten-band equalizer with preamp, bass, balance and per-device profiles", "十段均衡器，支持前级、低音、平衡与按设备配置"),
                 t("Folder include and exclude rules", "文件夹包含与排除规则"),
                 t("English and Chinese interface", "中文与英文界面"),
             ).forEach {

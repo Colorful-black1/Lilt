@@ -5,16 +5,25 @@ import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.PlaylistSummary
 import dev.lilt.player.data.SongEntity
 import dev.lilt.player.data.SongStateEntity
+import dev.lilt.player.library.EQ_PRESETS
+import dev.lilt.player.library.EqProfile
 import dev.lilt.player.library.LibraryGroups
+import dev.lilt.player.library.PreampMode
 import dev.lilt.player.library.M3u
 import dev.lilt.player.library.SongSort
 import dev.lilt.player.library.UNKNOWN_ALBUM
 import dev.lilt.player.library.UNKNOWN_ARTIST
+import dev.lilt.player.library.activeLrcLine
+import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.letterOf
+import dev.lilt.player.library.parseLrc
+import dev.lilt.player.library.presetNameFor
+import dev.lilt.player.library.queueStart
 import dev.lilt.player.library.searchLibrary
 import dev.lilt.player.library.sortSongs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -198,5 +207,117 @@ class LibraryTest {
         assertEquals(listOf(2, 1), music.folders.map { it.songs.size })
 
         assertTrue(searchLibrary(songs, playlists, "   ").isEmpty)
+    }
+
+    @Test
+    fun lrcParsesTimestampsFractionsAndMultipleTags() {
+        val document = parseLrc(
+            """
+            [ar:Demo]
+            [00:12.50]First line
+            [00:18,250][01:02.001]Shared chorus
+            [01:30]Last line
+            """.trimIndent(),
+        )
+        assertTrue(document.timed)
+        assertEquals(4, document.lines.size)
+        assertFalse(document.lines.any { it.text.contains("Demo") })
+        assertEquals(12_500L, document.lines[0].timeMs)
+        assertEquals("First line", document.lines[0].text)
+        assertEquals(18_250L, document.lines[1].timeMs)
+        assertEquals(62_001L, document.lines[2].timeMs)
+        assertEquals("Shared chorus", document.lines[2].text)
+        assertEquals(90_000L, document.lines[3].timeMs)
+    }
+
+    @Test
+    fun lrcKeepsPlainTextAndSortsOutOfOrderTags() {
+        val plain = parseLrc("Just a line\nAnother line")
+        assertFalse(plain.timed)
+        assertEquals(listOf("Just a line", "Another line"), plain.lines.map { it.text })
+        assertEquals(-1, activeLrcLine(plain, 30_000))
+
+        val shuffled = parseLrc("[00:20.00]Later\n[00:05.00]Earlier")
+        assertEquals(listOf("Earlier", "Later"), shuffled.lines.map { it.text })
+        assertEquals(-1, activeLrcLine(shuffled, 4_999))
+        assertEquals(0, activeLrcLine(shuffled, 5_000))
+        assertEquals(1, activeLrcLine(shuffled, 45_000))
+    }
+
+    @Test
+    fun eqPreampModesAndHeadroomSuggestionMatchDesktop() {
+        val flat = EqProfile()
+        assertEquals(0f, flat.preampDb(), 0.001f)
+        assertEquals(-6f, flat.copy(preampMode = PreampMode.Headroom).preampDb(), 0.001f)
+        assertEquals(2f, flat.copy(preampMode = PreampMode.Boost).preampDb(), 0.001f)
+        assertNull(flat.suggestedHeadroomDb())
+
+        val loud = flat.copy(
+            gains = listOf(12f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+            bass = 0.5f,
+        )
+        assertEquals(13.5f, loud.suggestedHeadroomDb()!!, 0.01f)
+    }
+
+    @Test
+    fun eqProfileStorageRoundTripKeepsEveryField() {
+        val source = EqProfile(
+            enabled = false,
+            gains = listOf(1f, -2f, 3f, -4f, 5f, -6f, 7f, -8f, 9f, -10f),
+            preset = "Rock",
+            preampMode = PreampMode.Headroom,
+            headroomDb = 8f,
+            boostDb = 4f,
+            bass = 0.4f,
+            virtualizer = 0.7f,
+            balance = 130f,
+        )
+        val restored = EqProfile.decode(source.encode())
+        assertEquals(source, restored)
+        assertNull(EqProfile.decode("broken"))
+        assertNull(EqProfile.decode(null))
+    }
+
+    @Test
+    fun eqBalanceKeepsOneChannelAndAttenuatesTheOther() {
+        val center = balanceOffsetsDb(100f)
+        assertEquals(0f, center.first, 0.01f)
+        assertEquals(0f, center.second, 0.01f)
+        val left = balanceOffsetsDb(0f)
+        assertEquals(0f, left.first, 0.01f)
+        assertTrue(left.second < -59f)
+        val right = balanceOffsetsDb(200f)
+        assertTrue(right.first < -59f)
+        assertEquals(0f, right.second, 0.01f)
+    }
+
+    @Test
+    fun eqPresetsKeepTheDesktopTwentyTwoCurves() {
+        assertEquals(22, EQ_PRESETS.size)
+        assertEquals(
+            listOf(5.80f, 3.20f, 1.30f, -3f, -2.30f, 2.30f, 3.60f, 5.80f, 5.80f, 5.80f),
+            EQ_PRESETS["Rock"],
+        )
+        assertEquals("Rock", presetNameFor(EQ_PRESETS.getValue("Rock")))
+        assertEquals("Custom", presetNameFor(listOf(9f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)))
+    }
+
+    @Test
+    fun queueStartResumesClampsOrResets() {
+        val resumed = queueStart(4, 61_000, songCount = 9, remember = true)
+        assertEquals(4, resumed.index)
+        assertEquals(61_000L, resumed.positionMs)
+
+        val forgotten = queueStart(4, 61_000, songCount = 9, remember = false)
+        assertEquals(0, forgotten.index)
+        assertEquals(0L, forgotten.positionMs)
+
+        val stale = queueStart(12, 61_000, songCount = 9, remember = true)
+        assertEquals(0, stale.index)
+        assertEquals(0L, stale.positionMs)
+
+        val empty = queueStart(0, 1_000, songCount = 0, remember = true)
+        assertEquals(0, empty.index)
+        assertEquals(0L, empty.positionMs)
     }
 }

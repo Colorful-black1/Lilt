@@ -72,6 +72,83 @@ class LiltDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate3To4AddsLyricsAndKeepsBookmarks() {
+        val name = "lilt-migration-3-4.db"
+        helper.createDatabase(name, 3).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO songs
+                    (mediaId, title, artist, album, albumId, folder, displayName,
+                     durationMs, track, year, mime, dateAdded, size, lastSeen)
+                VALUES
+                    (42, 'Track', 'Artist', 'Album', 7, 'Music/Rock', 'track.mp3',
+                     185000, 1, 2020, 'audio/mpeg', 1, 10, 1)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "INSERT INTO bookmarks (mediaId, positionMs, note, createdAt) " +
+                    "VALUES (42, 61000, 'Chorus', 456)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            4,
+            true,
+            LiltDatabase.MIGRATION_3_4,
+        ).use { db ->
+            db.query("SELECT note FROM bookmarks WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Chorus", cursor.getString(0))
+            }
+            db.execSQL(
+                "INSERT INTO lyrics (mediaId, text, updatedAt) VALUES (42, '[00:01.00]Hello', 789)",
+            )
+            db.query("SELECT text FROM lyrics WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("[00:01.00]Hello", cursor.getString(0))
+            }
+        }
+    }
+
+    @Test
+    fun migrate4To5AddsQueuePositionColumns() {
+        val name = "lilt-migration-4-5.db"
+        helper.createDatabase(name, 4).use { db ->
+            db.execSQL("INSERT INTO queues (id, name, createdAt) VALUES (7, 'Trip', 123)")
+            db.execSQL(
+                "INSERT INTO queue_songs (queueId, mediaId, position) VALUES (7, 42, 0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            5,
+            true,
+            LiltDatabase.MIGRATION_4_5,
+        ).use { db ->
+            db.query(
+                "SELECT name, lastIndex, lastPositionMs FROM queues WHERE id = 7",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Trip", cursor.getString(0))
+                assertEquals(0, cursor.getInt(1))
+                assertEquals(0L, cursor.getLong(2))
+            }
+            db.execSQL(
+                "UPDATE queues SET lastIndex = 3, lastPositionMs = 61234 WHERE id = 7",
+            )
+            db.query(
+                "SELECT lastIndex, lastPositionMs FROM queues WHERE id = 7",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(3, cursor.getInt(0))
+                assertEquals(61234L, cursor.getLong(1))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2KeepsLibraryAndAddsSongState() {
         helper.createDatabase(databaseName, 1).use { db ->
             db.execSQL(

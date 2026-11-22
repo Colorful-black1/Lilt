@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -20,15 +21,20 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -47,9 +53,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -57,21 +65,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.PlayerUiState
+import dev.lilt.player.SleepUiState
 import dev.lilt.player.data.SongEntity
-import kotlinx.coroutines.delay
+import dev.lilt.player.library.LrcDocument
+import dev.lilt.player.library.activeLrcLine
+import dev.lilt.player.library.parseLrc
 
 @Composable
 fun PlayerScreen(
@@ -79,6 +91,7 @@ fun PlayerScreen(
     onBack: () -> Unit,
     onOpenQueues: () -> Unit,
     onOpenEqualizer: () -> Unit,
+    onOpenLyrics: (Long) -> Unit,
 ) {
     val state by vm.player.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
@@ -86,7 +99,14 @@ fun PlayerScreen(
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val bookmarks by vm.bookmarks.collectAsStateWithLifecycle()
     val speed by vm.playbackSpeed.collectAsStateWithLifecycle()
-    val sleepDeadline by vm.sleepDeadline.collectAsStateWithLifecycle()
+    val lyrics by remember(state.mediaId) { vm.lyricsFor(state.mediaId) }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val sleep by vm.sleep.collectAsStateWithLifecycle()
+    val defaultHours by vm.sleepHours.collectAsStateWithLifecycle()
+    val defaultMinutes by vm.sleepMinutes.collectAsStateWithLifecycle()
+    val defaultTracks by vm.sleepTracks.collectAsStateWithLifecycle()
+    val defaultWait by vm.sleepWaitTillEnd.collectAsStateWithLifecycle()
+    val defaultFade by vm.sleepFade.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showSpeed by remember { mutableStateOf(false) }
@@ -137,6 +157,15 @@ fun PlayerScreen(
                                     menu = false
                                     bookmarkPosition = state.positionMs
                                     showBookmark = true
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(t("Lyrics", "歌词")) },
+                                leadingIcon = { Icon(Icons.Rounded.Lyrics, null) },
+                                enabled = current != null,
+                                onClick = {
+                                    menu = false
+                                    current?.let { onOpenLyrics(it.mediaId) }
                                 },
                             )
                             DropdownMenuItem(
@@ -259,9 +288,8 @@ fun PlayerScreen(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                val sleep = sleepDeadline
-                if (sleep != null) {
-                    SleepCountdown(sleep)
+                if (sleep.active) {
+                    SleepStatus(sleep)
                 }
                 Spacer(Modifier.height(20.dp))
                 Row(
@@ -301,6 +329,12 @@ fun PlayerScreen(
                         }
                     }
                 }
+                Spacer(Modifier.height(14.dp))
+                LyricsPanel(
+                    text = lyrics?.text,
+                    positionMs = state.positionMs,
+                    onOpen = { if (state.mediaId > 0) onOpenLyrics(state.mediaId) },
+                )
                 Spacer(Modifier.height(18.dp))
             }
         }
@@ -308,12 +342,20 @@ fun PlayerScreen(
 
     if (showSleep) {
         SleepDialog(
-            active = sleepDeadline != null,
+            sleep = sleep,
+            initialHours = defaultHours,
+            initialMinutes = defaultMinutes,
+            initialTracks = defaultTracks,
+            initialWait = defaultWait,
+            initialFade = defaultFade,
             onDismiss = { showSleep = false },
-            onPick = { minutes ->
-                vm.setSleepTimer(minutes)
-                showSleep = false
+            onStartTime = { hours, minutes, wait, fade ->
+                vm.startSleepTime(hours, minutes, wait, fade)
             },
+            onStartTracks = { tracks, fade ->
+                vm.startSleepTracks(tracks, fade)
+            },
+            onCancelTimer = vm::cancelSleep,
         )
     }
     if (showSpeed) {
@@ -381,22 +423,113 @@ private fun SeekBar(state: PlayerUiState, onSeek: (Long) -> Unit) {
 }
 
 @Composable
-private fun SleepCountdown(deadline: Long) {
-    val remaining by produceState(initialValue = deadline - System.currentTimeMillis(), deadline) {
-        while (value > 0) {
-            value = deadline - System.currentTimeMillis()
-            delay(1_000)
-        }
+private fun SleepStatus(sleep: SleepUiState) {
+    val label = when {
+        sleep.mode == "tracks" -> t(
+            "Sleep timer · ${sleep.tracksLeft} songs left",
+            "睡眠定时 · 还剩 ${sleep.tracksLeft} 首",
+        )
+        sleep.pendingStop -> t(
+            "Sleep timer · after this track",
+            "睡眠定时 · 当前曲目结束后停止",
+        )
+        else -> t(
+            "Sleep timer · ${formatDuration(sleep.remainingMs)} left",
+            "睡眠定时 · 还剩 ${formatDuration(sleep.remainingMs)}",
+        )
     }
     Text(
-        t(
-            "Sleep timer · ${formatDuration(remaining.coerceAtLeast(0))} left",
-            "睡眠定时 · 还剩 ${formatDuration(remaining.coerceAtLeast(0))}",
-        ),
+        label,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(top = 4.dp),
     )
+}
+
+@Composable
+private fun LyricsPanel(text: String?, positionMs: Long, onOpen: () -> Unit) {
+    val document = remember(text) { parseLrc(text.orEmpty()) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Rounded.Lyrics,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                t("Lyrics", "歌词"),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (text.isNullOrBlank()) t("Add", "添加") else t("Edit", "编辑"),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        when {
+            text.isNullOrBlank() -> Text(
+                t(
+                    "Tap to add lyrics for this song. LRC timestamps highlight the current line.",
+                    "点击为这首歌添加歌词。LRC 时间标签会高亮当前行。",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            document.isEmpty -> Text(
+                t("The saved lyrics are empty.", "已保存的歌词为空。"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            document.timed -> SyncedLyrics(document, positionMs)
+            else -> Text(
+                document.lines.joinToString("\n") { it.text },
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SyncedLyrics(document: LrcDocument, positionMs: Long) {
+    val active = activeLrcLine(document, positionMs)
+    val listState = rememberLazyListState()
+    LaunchedEffect(active) {
+        if (active >= 0) listState.animateScrollToItem(active)
+    }
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxWidth().height(180.dp),
+        contentPadding = PaddingValues(vertical = 40.dp),
+    ) {
+        itemsIndexed(document.lines) { index, line ->
+            Text(
+                line.text,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                textAlign = TextAlign.Center,
+                style = if (index == active) MaterialTheme.typography.titleMedium
+                else MaterialTheme.typography.bodyMedium,
+                fontWeight = if (index == active) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (index == active) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable
@@ -416,38 +549,186 @@ private fun QuickAction(
 }
 
 @Composable
-private fun SleepDialog(active: Boolean, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
-    val options = listOf(
-        0 to t("Off", "关闭"),
-        5 to t("5 minutes", "5 分钟"),
-        15 to t("15 minutes", "15 分钟"),
-        30 to t("30 minutes", "30 分钟"),
-        60 to t("1 hour", "1 小时"),
-        90 to t("1 hour 30", "1 小时 30 分"),
-    )
+private fun SleepDialog(
+    sleep: SleepUiState,
+    initialHours: Int,
+    initialMinutes: Int,
+    initialTracks: Int,
+    initialWait: Boolean,
+    initialFade: Boolean,
+    onDismiss: () -> Unit,
+    onStartTime: (Int, Int, Boolean, Boolean) -> Unit,
+    onStartTracks: (Int, Boolean) -> Unit,
+    onCancelTimer: () -> Unit,
+) {
+    var mode by remember { mutableStateOf("time") }
+    var hours by remember { mutableStateOf(initialHours.toString()) }
+    var minutes by remember { mutableStateOf(initialMinutes.toString()) }
+    var tracks by remember { mutableStateOf(initialTracks.toString()) }
+    var waitTillEnd by remember { mutableStateOf(initialWait) }
+    var fade by remember { mutableStateOf(initialFade) }
+    val timeTotal = (hours.toIntOrNull() ?: 0) * 60 + (minutes.toIntOrNull() ?: 0)
+    val trackCount = tracks.toIntOrNull() ?: 0
+    val valid = if (mode == "time") timeTotal > 0 else trackCount in 1..99
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(t("Sleep timer", "睡眠定时")) },
         text = {
-            Column {
-                if (active) {
-                    Text(
-                        t("A timer is running.", "定时器正在运行。"),
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodyMedium,
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (sleep.active) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            when {
+                                sleep.mode == "tracks" -> t(
+                                    "Running · ${sleep.tracksLeft} songs left",
+                                    "运行中 · 还剩 ${sleep.tracksLeft} 首",
+                                )
+                                sleep.pendingStop -> t(
+                                    "Running · after this track",
+                                    "运行中 · 当前曲目结束后停止",
+                                )
+                                else -> t(
+                                    "Running · ${formatDuration(sleep.remainingMs)} left",
+                                    "运行中 · 还剩 ${formatDuration(sleep.remainingMs)}",
+                                )
+                            },
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { onCancelTimer(); onDismiss() }) {
+                            Text(t("Cancel timer", "取消定时"))
+                        }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoicePill(
+                        label = t("After time", "按时长"),
+                        selected = mode == "time",
+                    ) { mode = "time" }
+                    ChoicePill(
+                        label = t("After songs", "按曲目数"),
+                        selected = mode == "tracks",
+                    ) { mode = "tracks" }
+                }
+                Spacer(Modifier.height(10.dp))
+                if (mode == "time") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        NumberField(
+                            value = hours,
+                            label = t("Hours", "小时"),
+                            onValueChange = { hours = it.filter(Char::isDigit).take(2) },
+                        )
+                        NumberField(
+                            value = minutes,
+                            label = t("Minutes", "分钟"),
+                            onValueChange = { minutes = it.filter(Char::isDigit).take(2) },
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        listOf(15, 30, 60, 90).forEach { preset ->
+                            ChoicePill(
+                                label = when {
+                                    preset < 60 -> "$preset m"
+                                    preset == 60 -> "1 h"
+                                    else -> "1.5 h"
+                                },
+                                selected = timeTotal == preset,
+                            ) {
+                                hours = (preset / 60).toString()
+                                minutes = (preset % 60).toString()
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    DialogSwitch(
+                        title = t(
+                            "Stop after the current track",
+                            "等当前曲目结束后停止",
+                        ),
+                        checked = waitTillEnd,
+                    ) { waitTillEnd = it }
+                } else {
+                    NumberField(
+                        value = tracks,
+                        label = t("Songs", "曲目数"),
+                        onValueChange = { tracks = it.filter(Char::isDigit).take(2) },
                     )
                 }
-                options.forEach { (minutes, label) ->
-                    Row(
-                        Modifier.fillMaxWidth().clickable { onPick(minutes) }.padding(vertical = 13.dp),
-                    ) { Text(label, style = MaterialTheme.typography.bodyLarge) }
-                }
+                DialogSwitch(
+                    title = t("Fade out before stopping", "停止前淡出"),
+                    checked = fade,
+                ) { fade = it }
+                Text(
+                    t(
+                        "The timer runs in the playback service, so it keeps working with the screen off.",
+                        "定时器在播放服务中运行，息屏后仍会继续计时。",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         },
         confirmButton = {
+            TextButton(
+                enabled = valid,
+                onClick = {
+                    if (mode == "time") {
+                        onStartTime(
+                            hours.toIntOrNull() ?: 0,
+                            minutes.toIntOrNull() ?: 0,
+                            waitTillEnd,
+                            fade,
+                        )
+                    } else {
+                        onStartTracks(trackCount, fade)
+                    }
+                    onDismiss()
+                },
+            ) { Text(t("Start", "开始")) }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) { Text(t("Close", "关闭")) }
         },
     )
+}
+
+@Composable
+private fun NumberField(value: String, label: String, onValueChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.width(118.dp),
+    )
+}
+
+@Composable
+private fun DialogSwitch(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
 }
 
 @Composable

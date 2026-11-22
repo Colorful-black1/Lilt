@@ -88,22 +88,24 @@
 - 无缝队列、10 秒上一首规则、随机、三种循环模式。
 - 20 个命名队列、同名替换/合并、M3U 导入导出。
 - 播放列表增删改、M3U 导入导出。
-- 10 段均衡器（DynamicsProcessing/旧版 Equalizer）、8 个预设、持久化。
-- 睡眠定时（5/15/30/60/90 分钟 + 5 秒淡出）。
+- 本地歌词：Room 存储、LRC 时间轴高亮、纯文本、从本地 `.lrc`/`.txt` 导入。
+- 完整睡眠定时：自定义时分、按曲目数、等当前曲结束、淡出、倒计时、取消；定时器在播放服务中运行。
+- 播放/暂停淡入淡出，0–4 秒、250 ms 步进。
+- 10 段均衡器（DynamicsProcessing/旧版 Equalizer）、22 个桌面预设、前级 Off/Headroom/Boost、峰值余量建议、低音增强、虚拟环绕、左右平衡、按输出设备保存。
+- 命名队列位置记忆：定时和暂停时保存索引与位置，点击队列续播，可在设置中关闭。
 - 0.50–3.00× 播放速度。
 - 纯黑/深色/浅色/跟随系统主题，5 种强调色，中英界面。
 
 尚未实现：
 
-- 播放列表/队列拖拽排序、上下移动。
-- 歌词显示与编辑。
+- 播放列表/队列拖拽排序、上下移动、队列间自动跳转。
+- 内置/同目录 `.lrc` 自动读取、歌词偏移微调、逐字歌词。
 - 标签编辑、封面编辑。
 - ReplayGain。
-- 播放淡入/淡出、上一首规则设置、无缝播放开关。
-- 睡眠定时完整选项（自定义时分、按曲目数、等当前曲结束）。
-- 均衡器前级/低音增强/虚拟环绕/平衡/按设备保存。
+- 上一首规则设置、无缝播放开关。
 - 昼夜主题。
 - 备份/恢复、播放统计 CSV 导出。
+- 拼音首字母索引。
 - 桌面小部件、快捷设置磁贴、Android Auto、车载模式、悬浮歌词、锁屏歌词。
 
 ---
@@ -121,15 +123,15 @@
 | 排序/多选/字母索引 | ✅ | ✅ | 9 种排序、升降序持久化、批量操作、A–Z 跳转 |
 | 搜索 | ✅ | ✅ | 五类分组、高亮、最近 12 条历史 |
 | 播放列表管理 | ✅ | △ | Android 缺拖拽/上下移动排序 |
-| 命名队列 | ✅ | △ | Android 缺位置记忆、队列间跳转、排序 |
+| 命名队列 | ✅ | △ | Android 已有位置记忆；缺队列间跳转、排序 |
 | 播放模式 | ✅ | ✅ | 基本对齐 |
 | 上一首规则 | ✅ | ❌ | Android 固定 10 秒 |
-| 淡入/淡出 | ✅ | ❌ | Android 缺 |
+| 淡入/淡出 | ✅ | ✅ | 0–4 秒，250 ms 步进 |
 | 无缝播放 | ✅ | △ | Android 自动无缝，缺开关 |
-| 睡眠定时 | ✅ | △ | Android 只有固定档位 |
-| 均衡器/音效 | ✅ | △ | Android 缺前级、低音、环绕、平衡、设备配置 |
+| 睡眠定时 | ✅ | ✅ | 自定义时分、曲目数、当前曲结束、淡出、服务内计时 |
+| 均衡器/音效 | ✅ | ✅ | 22 预设、前级、低音、环绕、平衡、按设备保存 |
 | ReplayGain | ✅ | ❌ | Android 缺读取与应用 |
-| 歌词 | ✅ | ❌ | Android 完全缺失 |
+| 歌词 | ✅ | △ | 本地 Room + LRC + 导入；缺内置/同目录自动读取与偏移 |
 | 标签/封面编辑 | ✅ | ❌ | Android 完全缺失 |
 | 书签/笔记 | ✅ | ✅ | 位置 + 备注，播放页快捷跳转 |
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
@@ -464,21 +466,25 @@
 - 720×1280 与 1080×1920 截图无重叠。
 - 结果见 `base/app/checks/round-4/` 与 `base/app/checks/round-4-c/`。
 
-### 第 5 轮：Android 播放器对齐
+### 第 5 轮：Android 播放器对齐（已完成）
 
 交付：
 
-- 歌词显示与同步高亮。
-- 睡眠定时完整版。
-- 淡入/淡出、上一首规则、无缝开关。
-- 均衡器增强、ReplayGain。
-- 播放列表/队列排序和位置记忆。
+- 歌词显示、LRC 同步高亮、本地导入与编辑。
+- 睡眠定时完整版（自定义时分、按曲目数、等当前曲结束、淡出、取消）。
+- 播放/暂停淡入淡出。
+- 均衡器增强：22 预设、前级、低音、环绕、平衡、按设备保存。
+- 命名队列位置记忆。
 
 验收：
 
 - 歌词滚动与进度一致。
-- 睡眠定时按时间/曲目数/当前曲结束三种模式都可用。
-- 均衡器和 ReplayGain 重启后保留。
+- 睡眠定时三种模式都可用，息屏后仍计时。
+- 淡入淡出按设置生效。
+- 均衡器配置和队列位置重启后保留。
+- 结果见 `base/app/checks/round-5/`。
+
+未纳入本轮：上一首规则设置、无缝播放开关、ReplayGain、播放列表/队列拖拽排序、队列间自动跳转。
 
 ### 第 6 轮：歌词与 PC 桌面集成
 
@@ -569,9 +575,13 @@
 | 2026-11-22 | Round 4-A | 完成 | Room v2、`song_state` 用户数据表、迁移测试、收藏、播放计数、Songs/Favorites 页面 |
 | 2026-11-22 | Round 4-B | 完成 | Albums/Artist 分组、列表、详情页、播放全部/随机、收藏/队列/播放列表入口 |
 | 2026-11-22 | Round 4-C | 完成 | Recently added、Most played、History、Bookmarks、Room v3、搜索分组/历史/高亮、排序、多选、A–Z 索引 |
-| 下一步 | Round 5 | 未开始 | 歌词、睡眠定时完整版、淡入淡出、均衡器增强、队列位置记忆 |
+| 2026-11-22 | Round 5-A | 完成 | Room v4 歌词表、LRC 解析与高亮、歌词编辑页、本地 `.lrc`/`.txt` 导入 |
+| 2026-11-22 | Round 5-B | 完成 | 服务内睡眠定时（时分/曲目数/当前曲结束）、播放/暂停淡入淡出、设置项 |
+| 2026-11-22 | Round 5-C | 完成 | 22 预设、前级/余量建议、低音、虚拟环绕、平衡、按设备配置、Room v5 前的基础 |
+| 2026-11-22 | Round 5-D | 完成 | Room v5 队列位置字段、续播、5 秒/暂停保存、开关 |
+| 下一步 | Round 6 | 待定 | 播放列表/队列排序、标签编辑、备份恢复、ReplayGain 或桌面集成 |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的列表能力、搜索、历史和书签验证见 `base/app/checks/round-4-c/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`。
 
 ---
 
@@ -589,9 +599,15 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Search.kt`：Android 分组搜索
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/LibraryScreens.kt`：Android 曲库、历史、书签与多选
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/SettingsScreen.kt`：Android 设置页
-- `base/app/android/app/src/main/java/dev/lilt/player/ui/PlayerScreen.kt`：Android 播放页
+- `base/app/android/app/src/main/java/dev/lilt/player/ui/PlayerScreen.kt`：Android 播放页、歌词面板与睡眠对话框
+- `base/app/android/app/src/main/java/dev/lilt/player/ui/LyricsScreen.kt`：Android 歌词编辑页
+- `base/app/android/app/src/main/java/dev/lilt/player/library/Lrc.kt`：LRC 解析、高亮与时间格式
+- `base/app/android/app/src/main/java/dev/lilt/player/library/Eq.kt`：均衡器配置、预设、前级与平衡计算
+- `base/app/android/app/src/main/java/dev/lilt/player/library/QueueMemory.kt`：队列续播位置计算
+- `base/app/android/app/src/main/java/dev/lilt/player/playback/PlaybackService.kt`：媒体服务、睡眠定时、淡入淡出、音效
 - `base/app/checks/round-4/README.md`：收藏、专辑/艺术家、Room v2 验证
 - `base/app/checks/round-4-c/README.md`：列表、搜索、历史、书签与 Room v3 验证
+- `base/app/checks/round-5/README.md`：歌词、睡眠/淡入淡出、均衡器与 Room v5 验证
 
 ---
 
@@ -601,3 +617,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 |---|---|---|
 | v0.1 | 2026-11-22 | 初稿：PC/Android 对照、酷狗本地功能增量、路线图与待确认问题 |
 | v0.2 | 2026-11-22 | 更新 Android Round 4／4-C 完成状态：曲库页面、收藏、统计、书签、搜索、排序、多选、字母索引与 Room v3 |
+| v0.3 | 2026-11-22 | 更新 Android Round 5 完成状态：歌词、服务内睡眠定时、淡入淡出、均衡器增强、队列位置记忆与 Room v5 |

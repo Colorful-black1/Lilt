@@ -1,5 +1,6 @@
 package dev.lilt.player.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -47,6 +48,8 @@ data class QueueEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val createdAt: Long,
+    @ColumnInfo(defaultValue = "0") val lastIndex: Int = 0,
+    @ColumnInfo(defaultValue = "0") val lastPositionMs: Long = 0,
 )
 
 @Entity(tableName = "queue_songs", primaryKeys = ["queueId", "mediaId"])
@@ -94,6 +97,14 @@ data class SearchHistoryEntity(
     val searchedAt: Long,
 )
 
+/** User-entered or imported LRC/plain lyrics. Kept apart from scan data. */
+@Entity(tableName = "lyrics")
+data class LyricsEntity(
+    @PrimaryKey val mediaId: Long,
+    val text: String,
+    val updatedAt: Long,
+)
+
 @Entity(tableName = "folder_rules")
 data class FolderRuleEntity(
     @PrimaryKey val path: String,
@@ -112,4 +123,6 @@ data class QueueSummary(
     val name: String,
     val createdAt: Long,
     val songCount: Int,
+    val lastIndex: Int = 0,
+    val lastPositionMs: Long = 0,
 )

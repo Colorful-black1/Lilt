@@ -29,6 +29,7 @@ class MusicRepository(
     private val songStates = db.songStateDao()
     private val bookmarks = db.bookmarkDao()
     private val searches = db.searchHistoryDao()
+    private val lyrics = db.lyricsDao()
     private val playlists = db.playlistDao()
     private val queues = db.queueDao()
 
@@ -54,6 +55,7 @@ class MusicRepository(
     fun observeBookmarksForSong(mediaId: Long): Flow<List<BookmarkEntity>> =
         bookmarks.observeForSong(mediaId)
     fun observeSearchHistory(): Flow<List<SearchHistoryEntity>> = searches.observe()
+    fun observeLyrics(mediaId: Long): Flow<LyricsEntity?> = lyrics.observe(mediaId)
 
     suspend fun song(id: Long): SongEntity? = music.song(id)
 
@@ -226,13 +228,36 @@ class MusicRepository(
         playlists.playlistSongs(id)
     }
 
-    suspend fun createQueue(name: String, mediaIds: List<Long>): Long = withContext(Dispatchers.IO) {
+    suspend fun createQueue(
+        name: String,
+        mediaIds: List<Long>,
+        lastIndex: Int = 0,
+        lastPositionMs: Long = 0,
+    ): Long = withContext(Dispatchers.IO) {
         val cleaned = name.trim().ifBlank { "Queue" }
         val merge = settings.queueConflict.value == "merge"
-        val id = queues.createQueue(cleaned, mediaIds, merge)
-        settings.setActiveQueue(id)
-        id
+        queues.createQueue(
+            cleaned,
+            mediaIds,
+            merge,
+            lastIndex = lastIndex,
+            lastPositionMs = lastPositionMs,
+        )
     }
+
+    suspend fun queue(id: Long): QueueEntity? = withContext(Dispatchers.IO) {
+        queues.queue(id)
+    }
+
+    suspend fun saveQueuePosition(id: Long, index: Int, positionMs: Long) =
+        withContext(Dispatchers.IO) {
+            if (id <= 0) return@withContext
+            queues.setQueuePosition(
+                id,
+                index.coerceAtLeast(0),
+                positionMs.coerceAtLeast(0),
+            )
+        }
 
     suspend fun renameQueue(id: Long, name: String) = withContext(Dispatchers.IO) {
         queues.renameQueue(id, name.trim())
@@ -319,6 +344,29 @@ class MusicRepository(
 
     suspend fun clearSearchHistory() = withContext(Dispatchers.IO) {
         searches.clear()
+    }
+
+    suspend fun saveLyrics(mediaId: Long, text: String) = withContext(Dispatchers.IO) {
+        if (mediaId <= 0) return@withContext
+        if (text.isBlank()) {
+            lyrics.delete(mediaId)
+        } else {
+            lyrics.put(
+                LyricsEntity(
+                    mediaId = mediaId,
+                    text = text.trim(),
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
+    suspend fun deleteLyrics(mediaId: Long) = withContext(Dispatchers.IO) {
+        lyrics.delete(mediaId)
+    }
+
+    suspend fun lyrics(mediaId: Long): LyricsEntity? = withContext(Dispatchers.IO) {
+        lyrics.get(mediaId)
     }
 
     suspend fun resolveTargets(targets: List<String>): List<SongEntity> = withContext(Dispatchers.IO) {
