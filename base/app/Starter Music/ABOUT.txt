@@ -1,0 +1,3 @@
+Lilt starter library
+
+These ten short instrumental pieces are generated locally so the player has something to scan and play on first launch. Replace this folder with your own music in Settings.

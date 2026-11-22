@@ -1,0 +1,328 @@
+{
+  "version": 1,
+  "read_from": "classes.dex (Dalvik) via android_method_show; JADX 1.5.6 used only for readability",
+  "target": {
+    "package": "in.krosbits.musicolet",
+    "apk_sha256": "2e696fd282711807a1340d0fb7d64ab668b9b8de63ada9471fa5bf7c55a031b0",
+    "note": "The APK has no readable ELF/PE/Mach-O program. Its assets/* files start with the encrypted PairIP 'IAP' header; the native reader rejects both the APK and its DEX. Addresses below are DEX code-unit offsets."
+  },
+  "values": [
+    {
+      "name": "max named queues",
+      "group": "queues",
+      "value": 20,
+      "unit": "queues",
+      "source": "MusicService.g(int,String,ArrayList) code unit 0x0050 (const/16 0x14) and 0x005b remove(0); MusicService.h(int,ArrayList) 0x002f; evidence ev_7c4e4227dd790e95e5e24e928483a0c57f366041c56060f2e041b3df00fa85b2, ev_327b2cd9302cb32c3a27ec97ccfc4a19d47aa6ac69523503c6e187bc2c6dc381"
+    },
+    {
+      "name": "queue overflow eviction",
+      "group": "queues",
+      "value": "first-created",
+      "source": "MusicService.g 0x005b: Stack.remove(0) after size > 20; the stack is pushed at the end"
+    },
+    {
+      "name": "queue name conflict default",
+      "group": "queues",
+      "value": "replace",
+      "source": "jl1.i1(Preference) 0x0051 passes default 0; MusicService.i(...) 0x008d reads key k_i_hwqwsnaex, and value 0 clears the queue at 0x0093-0x00a4; evidence ev_a036a73b716e6a0e658401521d8214577c666a568c109fa3a0b4c077ad2ab05e, ev_1e925fb7e52b10a577f8a636f7cd5c88764e207c1a3a4c475930d69700464bc4"
+    },
+    {
+      "name": "queue names are case-sensitive",
+      "group": "queues",
+      "value": true,
+      "source": "MusicService.i(ArrayList,int,String,boolean) 0x0035 compares rn1.h with String.equals (exact); the rebuild now uses exact queue-name equality too (MECHANICS.md §10.8)"
+    },
+    {
+      "name": "previous button replay threshold",
+      "group": "playback",
+      "value": 10,
+      "unit": "seconds",
+      "source": "MusicService.X() code unit 0x0039 const-wide/16 0x2710 ms; PP_PBTNBH default \"1\"; evidence ev_cf1988a51fe68cc8e1199da18e1b26145bb62b256a646573945f5f26ba4fc7ed"
+    },
+    {
+      "name": "play count threshold options",
+      "group": "stats",
+      "value": "10,30,50,90",
+      "unit": "percent",
+      "source": "array value_min_playback_req 0x7f030020; MusicService.p reads key MINPBR"
+    },
+    {
+      "name": "play count threshold default",
+      "group": "stats",
+      "value": 30,
+      "unit": "percent",
+      "source": "MusicService.p() 0x0021 const-string \"30\" and 0x003f reset 0x1e; evidence ev_2f515a402cd8c0568b0e944239b653c6618cd1a42562457897601edf608efcfe"
+    },
+    {
+      "name": "play count formula",
+      "group": "stats",
+      "value": "played_ms >= duration_ms * percent / 100 - crossfade_ms",
+      "source": "MusicService.p() 0x0049-0x0064 (mul, 100.0 double divide, getInt k_i_cfd default 0, subtract, compare); crossfade default 0"
+    },
+    {
+      "name": "playback speed default",
+      "group": "playback",
+      "value": 1.0,
+      "unit": "x",
+      "source": "h71.q() 0x0006 getInt k_f_plyspd4 default 10000, divided by 10000; evidence ev_a222412427d8dfc640a01651a0ed32768da625cc9c723c297498f21283b851f0"
+    },
+    {
+      "name": "playback speed range",
+      "group": "playback",
+      "value": "0.50..3.00",
+      "unit": "x",
+      "source": "h71.onClick 0x0010 min 0.50f, 0x0007 max 3.00f, 0x0009 step 0.01; evidence ev_52908a5da262dacacf9b7881da9a1e9b5365901f4fe50b288d3f3671e1a81076"
+    },
+    {
+      "name": "playback speed presets",
+      "group": "playback",
+      "value": "0.50,0.75,0.90,1.00,1.25,1.50,2.00",
+      "unit": "x",
+      "source": "h71.t() 0x0031-0x0048: 0x1388, 0x1d4c, 0x2328, 0x2710, 0x30d4, 0x3a98, 0x4e20; evidence ev_caa56e80b2f8def07f3373f3eb0a634a4e1398d38d0d9739549fcfaa8eb71947"
+    },
+    {
+      "name": "pitch range",
+      "group": "playback",
+      "value": "0.50..2.00",
+      "unit": "x",
+      "source": "h71.onClick 0x004a max 2.00f and shared min 0.50f, step 0.01; the desktop rebuild cannot change pitch independently of speed"
+    },
+    {
+      "name": "gapless default",
+      "group": "playback",
+      "value": true,
+      "source": "k_b_glp default true (default_preference.xml); dd tracks the flag"
+    },
+    {
+      "name": "crossfade default",
+      "group": "playback",
+      "value": 0,
+      "unit": "milliseconds",
+      "source": "k_i_cfd read with default 0 in MusicService.p 0x0057 and dd.<init>"
+    },
+    {
+      "name": "play/pause fade durations",
+      "group": "playback",
+      "value": "fade-in 0 ms, fade-out 0 ms",
+      "unit": "milliseconds",
+      "source": "k_b_fdid (Fade-in volume when play) and k_b_fdod (Fade-out volume when pause), defaultValue 0, interval 250, maxValue 4000, minValue 0 in res/xml/default_preference.xml; MusicService.W 0x003f (fdid, e0) and 0x00d2 (fdod, M); rendered by Settings -> Playback"
+    },
+    {
+      "name": "play/pause fade range and step",
+      "group": "playback",
+      "value": "0..4000",
+      "unit": "milliseconds, step 250",
+      "source": "both SeekBarPreferenceCompat rows in default_preference.xml: msbp_interval=250, msbp_maxValue=4000, msbp_minValue=0, msbp_measurementUnit=ms"
+    },
+    {
+      "name": "fade-in curve",
+      "group": "playback",
+      "value": "level = ((i*100/steps)/10)^2, steps=duration/100, one step every 100 ms, first sleep 300 ms only for odd durations",
+      "source": "ub.run 0x0000-0x0063; level 0,1,4,9..100 applied with q60.b0 only when it exceeds q60.E; final b0(100)"
+    },
+    {
+      "name": "fade-out curve",
+      "group": "playback",
+      "value": "level = start - ((start*i/steps)/10)^2, steps=duration/100; type 2 jumps to i=steps/3+1 after the first 100 ms",
+      "source": "vb.run 0x0000-0x0075; start captured with q60.E, only lowers the level, ends with b0(0) and pause; MusicService.W calls M(...,2,...)"
+    },
+    {
+      "name": "fade volume scale",
+      "group": "playback",
+      "value": "0..100 integer",
+      "source": "q60.E = round(ExoPlayer volume * 100); q60.b0(v) writes v/100.0f"
+    },
+    {
+      "name": "equalizer bands",
+      "group": "equalizer",
+      "value": 10,
+      "unit": "bands",
+      "source": "c01.a(int) 0x003a-0x0040 returns the 10-band table; c01.d(int) 0x0060-0x0071 gives Q 1.0; evidence ev_4ef7b85234557939a55928ba082ad56139ae53532c6ea73eb5cbf96b2ba82e3a, ev_7565354b7781f16b3a28ada7a3d40331289cb8f2515ae008154810fc8d1977e4"
+    },
+    {
+      "name": "equalizer frequencies",
+      "group": "equalizer",
+      "value": "31.5,63,125,250,500,1000,2000,4000,8000,16000",
+      "unit": "Hz",
+      "source": "c01.a(int) 10-band branch, code unit 0x003a"
+    },
+    {
+      "name": "equalizer band Q",
+      "group": "equalizer",
+      "value": 1.0,
+      "source": "c01.d(int) 10-band branch, code unit 0x0060-0x0071"
+    },
+    {
+      "name": "equalizer band gain range",
+      "group": "equalizer",
+      "value": "-15..15",
+      "unit": "dB",
+      "source": "s40.G0() code unit 0x0077-0x0082 fallback int[]{-1500,1500} millibels; c50.l() replaces it with the device range when available"
+    },
+    {
+      "name": "equalizer presets",
+      "group": "equalizer",
+      "value": "Flat, Bass, Mid, Treble, Bass and Treble, Full Bass, Full Mid, Full Treble, Reduced Bass, Reduced Mid, Reduced Treble, No Bass, No Mid, No Treble, Classic, Dance, Live, Speaker, Pop, Rock, Soft, Techno",
+      "source": "c50.<clinit> 10-band list at code unit 0x03b6; names decoded from d50.a..v; evidence ev_99d6681c070633d079173710694a5c18d09afc6fd37cb68ca850cfa757918007"
+    },
+    {
+      "name": "equalizer preamp modes",
+      "group": "equalizer",
+      "value": "off,headroom,boost",
+      "source": "w40.L0() reads k_i_prmd_ default 0; -1 headroom, +1 boost; evidence ev_15c1b187218183a7d0e9c17f9eabbe5e285832721863eae9a8fbaf6f6c35aa7f"
+    },
+    {
+      "name": "headroom range/default",
+      "group": "equalizer",
+      "value": "1..30",
+      "unit": "dB",
+      "source": "w40.L0 0x00d0-0x00dc clamps k_i_hdrmg_ to 1..30; default 6 dB"
+    },
+    {
+      "name": "boost range/default",
+      "group": "equalizer",
+      "value": "1..9",
+      "unit": "dB",
+      "source": "w40.L0 0x00e0-0x00ec clamps k_i_vbg_ to 1..9; default 2 dB"
+    },
+    {
+      "name": "bass boost range",
+      "group": "equalizer",
+      "value": "0..100",
+      "unit": "percent",
+      "source": "w40.I 0x0000-0x0010 displays i/10 %, calls BassBoost.setStrength(i) with 0..1000"
+    },
+    {
+      "name": "virtualizer range",
+      "group": "equalizer",
+      "value": "0..100",
+      "unit": "percent",
+      "source": "w40.I 0x0001-0x001b displays i/10 %, calls Virtualizer.setStrength(i) with 0..1000"
+    },
+    {
+      "name": "balance range/default",
+      "group": "equalizer",
+      "value": "0..200",
+      "unit": "position",
+      "source": "c50.d(int) default 100; w40.K0(int) maps 0 = hard left, 100 = centre, 200 = hard right; default 100; evidence ev_158c78bb22737f2b1e32701c1d7041b2a499b54ac20e0b9bb42be8ef0a8ffd78"
+    },
+    {
+      "name": "equalizer headroom suggestion",
+      "group": "equalizer",
+      "value": "if peak_adjusted > 6 dB: min(peak_adjusted - 6, 30) dB",
+      "source": "EqualizerActivity2.o0() code units 0x005e-0x012a; bass contributes strength*15/1000 below 200 Hz, mids are reduced 2 dB, treble 4 dB; evidence ev_179d252fb2d9b38f397a5ef82af751ce951c4efc60329d6c906721ab53448bc7"
+    },
+    {
+      "name": "equalizer device profiles",
+      "group": "equalizer",
+      "value": 5,
+      "unit": "built-in profiles",
+      "source": "EqualizerActivity2.l0() adds device types 1..5 before saved devices: built-in speakers, speakers/headphones, headset/earphones, Bluetooth, USB; evidence ev_bd5cf7d89a55eab98c226915fa042d3138ebe2d513f87b1ecb8d56d86fd02dc5"
+    },
+    {
+      "name": "sleep timer history",
+      "group": "playback",
+      "value": "time: 1:30 and 0:15; songs: 10 and 5; max 5 each",
+      "source": "wm1.<clinit> 0x000f/0x0023/0x0038/0x003e and wm1.c/d keep five; evidence ev_4eb885644f1a24b471295ecb6ae0cc80733439a17925dfa5b4d51c381f0e2fce"
+    },
+    {
+      "name": "sleep timer formula",
+      "group": "playback",
+      "value": "hours*3600000 + minutes*60000 + 1000 ms",
+      "source": "zy.a(int,int) code unit 0x002d (0xea60), 0x0032 (0x36ee80), 0x0037 (0x3e8); evidence ev_6ee458b44a6aa009b9a7186aeaea94d013112fe81150a2be44a1134dc56910c1"
+    },
+    {
+      "name": "sleep timer max songs",
+      "group": "playback",
+      "value": 99,
+      "unit": "songs",
+      "source": "zy.c(int,int,int) code unit 0x02e1 const/16 0x63; evidence ev_225299773ac6b7f4e1c219cbd40d3c262d27350f9a0c52d00b5beb5d3ffddd05"
+    },
+    {
+      "name": "sleep wait/fade defaults",
+      "group": "playback",
+      "value": "both false",
+      "source": "zy.a 0x001d-0x0024 getBoolean k_i_slptrh_gfls / k_i_slptrh_l default false"
+    },
+    {
+      "name": "sleep fade rule",
+      "group": "playback",
+      "value": "fade over the remaining current song; skip if <= 1000 ms remains",
+      "source": "dd.l0(String) code unit 0x001d-0x0035: remaining_ms = (duration - position)/speed, if > 0x3e8 fade to 0; evidence ev_2041800389d0b7951418754fcbd1f9b91cb7c909db7ba91636ebd421bda4b3d1"
+    },
+    {
+      "name": "repeat mode encoding",
+      "group": "playback",
+      "value": "off=(RSM 2,RQM 1), all=(RSM 2,RQM 3), one=(RSM 3,RQM 1)",
+      "source": "g2.L(int) code units 0x0000-0x001d; aw0.b() 0x0004-0x0023; evidence ev_bdfb5f9071b15f8293f7865fb9bb186b760a869d563edfcedb59765ebca48806, ev_99a4b4d5080a1481c1f53de00c1d3feb331ebc4c914000e292939ebef531c84e"
+    },
+    {
+      "name": "repeat button cycle",
+      "group": "playback",
+      "value": "off -> all -> one -> off",
+      "source": "MusicService.onStartCommand ACT_RPTS_TGL code units 0x3fa-0x487; g2.s returns 0/2/1 and g2.L maps them"
+    },
+    {
+      "name": "queue end default",
+      "group": "playback",
+      "value": "jump to next queue",
+      "source": "RQM default 2; R_RFLP default true (resume next queue position); R_RSFLQ default true; R_SFFQ default false"
+    },
+    {
+      "name": "shuffle scope default",
+      "group": "playback",
+      "value": "all songs in the queue",
+      "source": "k_i_sflm_ob default 0 = options_shuffle_behaviour[0] (shuffle all songs in each queue)"
+    },
+    {
+      "name": "theme modes",
+      "group": "appearance",
+      "value": "light,dark,black,day/night,follow system",
+      "source": "array option_base_theme 0x7f030003: Light, Dark, Black, Day/Night, Follow system"
+    },
+    {
+      "name": "theme default",
+      "group": "appearance",
+      "value": "black",
+      "source": "in.krosbits.musicolet.b.a(Context) code unit 0x001e writes THMR_BT = \"2\"; evidence ev_5b6b6d770cb40829d9c3c5c69f92db16dedeb72863c584e75cf409bd85bc7e19"
+    },
+    {
+      "name": "day/night window",
+      "group": "appearance",
+      "value": "06:00..17:59",
+      "source": "MyApplication.s() code units 0x0044 (k_i_dstt default 0x168 = 360 min) and 0x0050 (k_i_dedt default 0x437 = 1079 min); evidence ev_53742178b8c7cbce0d26b173aaa14726229b7dce5dbd215544c695871e1ebc45"
+    },
+    {
+      "name": "folder structure default",
+      "group": "library",
+      "value": "hierarchical",
+      "source": "in.krosbits.musicolet.b.a(Context) code unit 0x0016 writes key_folder_structure = \"1\"; array option_fldstruc is [linear, hierarchical]"
+    },
+    {
+      "name": "scan on start default",
+      "group": "library",
+      "value": true,
+      "source": "k_b_atsc default true"
+    },
+    {
+      "name": "scan hidden/nomedia/video defaults",
+      "group": "library",
+      "value": "false,false,false",
+      "source": "k_b_schdfl, k_b_scnmfl, k_b_scvfl default false"
+    },
+    {
+      "name": "minimum remembered duration",
+      "group": "library",
+      "value": 0,
+      "unit": "seconds",
+      "source": "I_E_D_SEC_SCN default 0 unless MyApplication.F.p() is true (then 5 s); desktop build uses 0"
+    },
+    {
+      "name": "starter library tracks",
+      "group": "library",
+      "value": 10,
+      "unit": "tracks",
+      "source": "original generated demo content created by this rebuild; not a target value"
+    }
+  ]
+}

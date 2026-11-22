@@ -1,0 +1,24 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.wav binary
+*.mp3 binary
+*.flac binary
+*.ogg binary
+*.opus binary
+*.m4a binary
+*.aac binary
+*.apk binary
+*.aab binary
+*.exe binary
+*.pdb binary
+*.zip binary
+*.db binary

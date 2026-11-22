@@ -1,0 +1,23 @@
+[package]
+name = "lilt"
+version = "0.1.0"
+edition = "2021"
+description = "Lilt - an offline local music player"
+
+[dependencies]
+eframe = "0.31.1"
+egui = "0.31.1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "webp"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+walkdir = "2.5"
+lofty = "0.22.4"
+rodio = { version = "0.20.1", default-features = false, features = ["symphonia-all"] }
+cpal = "0.15.3"
+rfd = "0.17.2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2

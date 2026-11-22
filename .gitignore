@@ -1,0 +1,46 @@
+# ---- Rust build output ----
+/base/app/target/
+
+# ---- Android / Gradle build output ----
+/base/app/android/.gradle/
+/base/app/android/.kotlin/
+/base/app/android/build/
+/base/app/android/app/build/
+/base/app/android/local.properties
+/base/app/android/captures/
+
+# ---- Release packages and binaries ----
+/dist/
+*.apk
+*.aab
+*.ap_
+*.exe
+*.pdb
+*.zip
+
+# ---- Logs ----
+*.log
+
+# ---- craft workspace state (tool data, not source) ----
+/base/investigation.cany/
+/base/craft.json
+/base/feed.json
+/base/transcript.json
+/base/usage.json
+/base/build-activity.log
+/base/inbox/
+/base/pinned/
+
+# ---- IDE / OS files ----
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Local signing keys and secrets ----
+*.keystore
+*.jks
+.env
+.env.*
