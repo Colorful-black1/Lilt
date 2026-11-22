@@ -26,6 +26,8 @@ musicolet_craft/
 ├─ dist/                       # 打包输出（不入库）
 ├─ base.apk                    # 目标参考 APK（不入库）
 ├─ prompt-musicolet.md         # 原始任务提示词
+├─ package.ps1                 # 一键打包脚本（PowerShell）
+├─ package.sh                  # Git Bash / WSL 入口
 ├─ .gitignore
 ├─ .gitattributes
 └─ .editorconfig
@@ -51,47 +53,54 @@ cargo build --release
 
 截图与无焦点启动等调试参数见 `base/app/README.md`。
 
-## 桌面版：打包到 `dist/`
+## 一键打包
 
-在**仓库根目录**执行下面的 PowerShell。它会先删除并重建 `dist/`，生成
-`dist/Lilt-0.1.0-win64/` 目录和 `dist/Lilt-0.1.0-win64-portable.zip` 便携包：
+在**仓库根目录**执行（PowerShell）：
 
 ```powershell
-Push-Location base/app
-
-cargo build --release
-
-$name = "Lilt-0.1.0-win64"
-$repo = (Resolve-Path "..\..").Path
-$dist = Join-Path $repo "dist"
-$stage = Join-Path $dist $name
-$zip = Join-Path $dist "$name-portable.zip"
-
-Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Path $stage -Force | Out-Null
-
-Copy-Item "target\release\lilt.exe" $stage
-Copy-Item "README.md" $stage
-Copy-Item "RUN-zh.txt" $stage
-Copy-Item "Starter Music" $stage -Recurse
-
-Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -Force
-
-Pop-Location
-Get-Item $zip | Select-Object FullName, Length
+.\package.ps1 pc     # 桌面版：构建并打包到 dist/
+.\package.ps1 apk    # Android 版：构建 debug APK
+.\package.ps1 all    # 两者都做
 ```
 
-打包内容：
+如果系统禁止运行脚本，改用：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\package.ps1 pc
+```
+
+Git Bash / WSL：
+
+```bash
+./package.sh pc
+./package.sh apk
+./package.sh all
+```
+
+### `pc`：桌面便携包
+
+从 `base/app/Cargo.toml` 读取版本号，构建 release，然后生成：
 
 ```text
-dist/Lilt-0.1.0-win64/
+dist/Lilt-<version>-win64/
 ├─ lilt.exe
 ├─ README.md
 ├─ RUN-zh.txt
 └─ Starter Music/...
+dist/Lilt-<version>-win64-portable.zip
 ```
 
-`dist/` 是可重新生成的发布产物，已加入 `.gitignore`。
+脚本只重建同名的目录和 zip，不会删除 `dist/` 中的其他文件。`dist/` 已加入 `.gitignore`。
+
+### `apk`：Android 调试包
+
+构建 `assembleDebug`，APK 输出到：
+
+```text
+base/app/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+同时复制一份到 `base/app/Lilt-<versionName>-debug.apk`（该文件不入库）。
 
 ## Android 版：构建 APK
 
