@@ -27,9 +27,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+/** A play is counted after this share of the track has been heard. */
+private const val PLAY_COUNT_PERCENT = 30L
 
 data class PlayerUiState(
     val mediaId: Long = -1,
@@ -70,6 +74,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val rules = repository.observeRules()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val favoriteIds: StateFlow<Set<Long>> = repository.observeFavoriteIds()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
     val scanState: StateFlow<ScanState> = repository.scanState.asStateFlow()
 
     val language = settings.language
@@ -93,16 +99,21 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private var controller: MediaController? = null
     private var sleepJob: Job? = null
     private var lastRecorded = -1L
+    private var countedMediaId = -1L
     private var pendingPlay: (() -> Unit)? = null
 
     private val listener = object : Player.Listener {
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            countedMediaId = -1L
+        }
+
         override fun onEvents(player: Player, events: Player.Events) {
             publish(player)
             if (player.currentMediaItemIndex != _player.value.index || player.currentMediaItem != null) {
                 val id = player.currentMediaItem?.mediaId?.toLongOrNull() ?: -1L
                 if (id > 0 && id != lastRecorded && player.isPlaying) {
                     lastRecorded = id
-                    viewModelScope.launch { repository.recordPlayed(id) }
+                    viewModelScope.launch { repository.recordHistory(id) }
                 }
             }
         }
@@ -132,9 +143,26 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         )
         viewModelScope.launch {
             while (isActive) {
-                controller?.let { if (it.isPlaying) publish(it) }
+                controller?.let {
+                    if (it.isPlaying) {
+                        publish(it)
+                        maybeCountPlay(it)
+                    }
+                }
                 delay(500)
             }
+        }
+    }
+
+    private fun maybeCountPlay(player: Player) {
+        val id = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        if (id <= 0 || id == countedMediaId) return
+        val duration = player.duration
+        if (duration <= 0) return
+        val threshold = (duration * PLAY_COUNT_PERCENT / 100).coerceAtLeast(1L)
+        if (player.currentPosition >= threshold) {
+            countedMediaId = id
+            viewModelScope.launch { repository.recordPlayed(id) }
         }
     }
 
@@ -171,6 +199,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (songs.isEmpty()) return
         if (queueId == null) settings.setActiveQueue(-1) else settings.setActiveQueue(queueId)
+        countedMediaId = -1L
         player.setMediaItems(songs.map(::mediaItem), startIndex.coerceIn(0, songs.lastIndex), 0L)
         player.prepare()
         player.play()
@@ -366,6 +395,11 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun setAccent(value: String) = settings.setAccent(value)
     fun setIncludeOnly(value: Boolean) = settings.setIncludeOnly(value)
     fun setQueueConflict(value: String) = settings.setQueueConflict(value)
+
+    fun toggleFavorite(mediaId: Long) {
+        if (mediaId <= 0) return
+        viewModelScope.launch { repository.toggleFavorite(mediaId) }
+    }
 
     fun setFolderRule(path: String, kind: String, on: Boolean) {
         viewModelScope.launch { repository.setRule(path, kind, on) }

@@ -50,6 +50,18 @@ interface MusicDao {
 }
 
 @Dao
+interface SongStateDao {
+    @Query("SELECT mediaId FROM song_state WHERE favorite = 1")
+    fun observeFavoriteIds(): Flow<List<Long>>
+
+    @Query("SELECT * FROM song_state WHERE mediaId = :id")
+    suspend fun state(id: Long): SongStateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(state: SongStateEntity)
+}
+
+@Dao
 interface PlaylistDao {
     @Query(
         """

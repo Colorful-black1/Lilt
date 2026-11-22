@@ -3,7 +3,10 @@ package dev.lilt.player
 import dev.lilt.player.data.FolderRuleEntity
 import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.SongEntity
+import dev.lilt.player.library.LibraryGroups
 import dev.lilt.player.library.M3u
+import dev.lilt.player.library.UNKNOWN_ALBUM
+import dev.lilt.player.library.UNKNOWN_ARTIST
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -83,5 +86,40 @@ class LibraryTest {
             onlyIncluded = true,
         )
         assertTrue(visible.isEmpty())
+    }
+
+    @Test
+    fun albumsGroupByTagAndOrderTracks() {
+        val songs = listOf(
+            song(1, title = "Third").copy(album = "Record", artist = "Band", track = 3),
+            song(2, title = "First").copy(album = "Record", artist = "Band", track = 1),
+            song(3, title = "Other").copy(album = "Another", artist = "Solo", track = 1),
+        )
+        val albums = LibraryGroups.albums(songs)
+        assertEquals(listOf("Another", "Record"), albums.map { it.name })
+        val record = albums.first { it.name == "Record" }
+        assertEquals(listOf("First", "Third"), record.songs.map { it.title })
+        assertEquals(2, record.trackCount)
+        assertEquals("Band", record.artist)
+    }
+
+    @Test
+    fun artistsGroupByNameAndCountAlbums() {
+        val songs = listOf(
+            song(1).copy(artist = "Band", album = "One"),
+            song(2).copy(artist = "Band", album = "Two"),
+            song(3).copy(artist = "Solo", album = "One"),
+        )
+        val artists = LibraryGroups.artists(songs)
+        assertEquals(listOf("Band", "Solo"), artists.map { it.name })
+        assertEquals(2, artists.first().trackCount)
+        assertEquals(2, artists.first().albumCount)
+    }
+
+    @Test
+    fun blankTagsGetReadableFallbacks() {
+        val songs = listOf(song(1).copy(artist = "", album = ""))
+        assertEquals(UNKNOWN_ALBUM, LibraryGroups.albums(songs).single().name)
+        assertEquals(UNKNOWN_ARTIST, LibraryGroups.artists(songs).single().name)
     }
 }

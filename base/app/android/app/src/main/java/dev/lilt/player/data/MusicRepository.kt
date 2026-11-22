@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 sealed interface ScanState {
@@ -25,6 +26,7 @@ class MusicRepository(
     private val settings: SettingsStore,
 ) {
     private val music = db.musicDao()
+    private val songStates = db.songStateDao()
     private val playlists = db.playlistDao()
     private val queues = db.queueDao()
 
@@ -38,6 +40,7 @@ class MusicRepository(
     fun observeAllSongs(): Flow<List<SongEntity>> = music.observeSongs()
 
     fun observeRules(): Flow<List<FolderRuleEntity>> = music.observeRules()
+    fun observeFavoriteIds(): Flow<Set<Long>> = songStates.observeFavoriteIds().map { it.toSet() }
     fun observePlaylists(): Flow<List<PlaylistSummary>> = playlists.observePlaylists()
     fun observePlaylistSongs(id: Long): Flow<List<SongEntity>> = playlists.observePlaylistSongs(id)
     fun observeQueues(): Flow<List<QueueSummary>> = queues.observeQueues()
@@ -220,8 +223,30 @@ class MusicRepository(
         queues.queueSongs(id)
     }
 
-    suspend fun recordPlayed(mediaId: Long) = withContext(Dispatchers.IO) {
+    suspend fun recordHistory(mediaId: Long) = withContext(Dispatchers.IO) {
         music.addHistory(HistoryEntity(mediaId = mediaId, playedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun recordPlayed(mediaId: Long) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            val current = songStates.state(mediaId)
+            val next = (current ?: SongStateEntity(mediaId = mediaId)).copy(
+                playCount = (current?.playCount ?: 0) + 1,
+                lastPlayedAt = now,
+            )
+            songStates.upsert(next)
+        }
+    }
+
+    suspend fun toggleFavorite(mediaId: Long) = withContext(Dispatchers.IO) {
+        db.withTransaction {
+            val current = songStates.state(mediaId)
+            val next = (current ?: SongStateEntity(mediaId = mediaId)).copy(
+                favorite = !(current?.favorite ?: false),
+            )
+            songStates.upsert(next)
+        }
     }
 
     suspend fun resolveTargets(targets: List<String>): List<SongEntity> = withContext(Dispatchers.IO) {

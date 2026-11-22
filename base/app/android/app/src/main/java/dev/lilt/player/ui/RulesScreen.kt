@@ -150,6 +150,7 @@ fun SearchScreen(
 ) {
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val player by vm.player.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     val needle = query.trim().lowercase()
@@ -196,6 +197,8 @@ fun SearchScreen(
                             SongRow(
                                 song = song,
                                 isCurrent = song.mediaId == player.mediaId,
+                                isFavorite = song.mediaId in favoriteIds,
+                                onToggleFavorite = { vm.toggleFavorite(song.mediaId) },
                                 onClick = {
                                     vm.playSongs(foundSongs, foundSongs.indexOf(song))
                                     onOpenPlayer()

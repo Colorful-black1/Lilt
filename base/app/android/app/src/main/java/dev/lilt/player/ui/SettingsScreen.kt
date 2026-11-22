@@ -297,6 +297,8 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             listOf(
                 t("MediaStore scan and folder browsing", "MediaStore 扫描与文件夹浏览"),
+                t("Songs, albums, artists and favourites", "歌曲、专辑、艺术家与收藏"),
+                t("Album and artist detail pages", "专辑与艺术家详情页"),
                 t("Foreground service, notification and lock-screen controls", "前台服务、通知栏与锁屏控制"),
                 t("Named queues with M3U import and export", "命名队列与 M3U 导入导出"),
                 t("Playlists, sleep timer and playback speed", "播放列表、睡眠定时与播放速度"),

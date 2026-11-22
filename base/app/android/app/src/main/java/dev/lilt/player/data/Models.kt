@@ -63,6 +63,19 @@ data class HistoryEntity(
     val playedAt: Long,
 )
 
+/**
+ * User-owned state for a scanned song. Kept separate from [SongEntity] because
+ * MediaStore scans replace the songs table; favourites and play counts must not
+ * be wiped by a rescan.
+ */
+@Entity(tableName = "song_state")
+data class SongStateEntity(
+    @PrimaryKey val mediaId: Long,
+    val favorite: Boolean = false,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0,
+)
+
 @Entity(tableName = "folder_rules")
 data class FolderRuleEntity(
     @PrimaryKey val path: String,

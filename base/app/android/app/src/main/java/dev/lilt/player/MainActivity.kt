@@ -53,7 +53,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.lilt.player.ui.AlbumDetailScreen
 import dev.lilt.player.ui.AboutScreen
+import dev.lilt.player.ui.ArtistDetailScreen
 import dev.lilt.player.ui.HomeScreen
 import dev.lilt.player.ui.LiltTheme
 import dev.lilt.player.ui.PlayerScreen
@@ -150,6 +152,8 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onOpenSettings = { nav.navigate("settings") },
                 onOpenSearch = { nav.navigate("search") },
                 onOpenPlaylist = { nav.navigate("playlist/$it") },
+                onOpenAlbum = { name, albumId -> nav.navigate("album/${Uri.encode(name)}/$albumId") },
+                onOpenArtist = { nav.navigate("artist/${Uri.encode(it)}") },
             )
         }
         composable("player") {
@@ -168,6 +172,26 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
             PlaylistScreen(
                 vm = vm,
                 playlistId = id,
+                onBack = { nav.popBackStack() },
+                onOpenPlayer = { nav.navigate("player") },
+            )
+        }
+        composable("album/{name}/{albumId}") { entry ->
+            val name = entry.arguments?.getString("name")?.let(Uri::decode) ?: return@composable
+            val albumId = entry.arguments?.getString("albumId")?.toLongOrNull() ?: -1L
+            AlbumDetailScreen(
+                vm = vm,
+                albumName = name,
+                albumId = albumId,
+                onBack = { nav.popBackStack() },
+                onOpenPlayer = { nav.navigate("player") },
+            )
+        }
+        composable("artist/{name}") { entry ->
+            val name = entry.arguments?.getString("name")?.let(Uri::decode) ?: return@composable
+            ArtistDetailScreen(
+                vm = vm,
+                artistName = name,
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
             )

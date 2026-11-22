@@ -81,9 +81,12 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenPlaylist: (Long) -> Unit,
+    onOpenAlbum: (String, Long) -> Unit,
+    onOpenArtist: (String) -> Unit,
 ) {
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val player by vm.player.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -131,6 +134,7 @@ fun HomeScreen(
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(t("Folders", "文件夹")) })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(t("Playlists", "播放列表")) })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text(t("Library", "曲库")) })
             }
             when (scan) {
                 is ScanState.Scanning -> {
@@ -169,10 +173,12 @@ fun HomeScreen(
                     node = node,
                     songs = songs,
                     player = player,
+                    favoriteIds = favoriteIds,
                     folderPath = folderPath,
                     onFolder = { folderPath = it },
                     onRescan = vm::scan,
                     onOpenPlayer = onOpenPlayer,
+                    onToggleFavorite = vm::toggleFavorite,
                     onSongAction = { song, action ->
                         when (action) {
                             SongAction.PlayNext -> vm.enqueueNext(song)
@@ -182,13 +188,31 @@ fun HomeScreen(
                     },
                     modifier = Modifier.weight(1f),
                 )
-            } else {
+            } else if (tab == 1) {
                 PlaylistBrowser(
                     vm = vm,
                     playlists = playlists,
                     onCreate = { showNewPlaylist = true },
                     onOpen = onOpenPlaylist,
                     onImport = { importPlaylist.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "text/plain", "*/*")) },
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                LibraryBrowser(
+                    vm = vm,
+                    songs = songs,
+                    player = player,
+                    favoriteIds = favoriteIds,
+                    onOpenPlayer = onOpenPlayer,
+                    onOpenAlbum = onOpenAlbum,
+                    onOpenArtist = onOpenArtist,
+                    onSongAction = { song, action ->
+                        when (action) {
+                            SongAction.PlayNext -> vm.enqueueNext(song)
+                            SongAction.AddToQueue -> vm.addToQueue(song)
+                            SongAction.AddToPlaylist -> songForPlaylist = song
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -248,10 +272,12 @@ private fun FolderBrowser(
     node: FolderNode?,
     songs: List<SongEntity>,
     player: PlayerUiState,
+    favoriteIds: Set<Long>,
     folderPath: String,
     onFolder: (String) -> Unit,
     onRescan: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onToggleFavorite: (Long) -> Unit,
     onSongAction: (SongEntity, SongAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -351,6 +377,8 @@ private fun FolderBrowser(
                 SongRow(
                     song = song,
                     isCurrent = song.mediaId == currentId,
+                    isFavorite = song.mediaId in favoriteIds,
+                    onToggleFavorite = { onToggleFavorite(song.mediaId) },
                     onClick = {
                         vm.playSongs(displaySongs, displaySongs.indexOf(song))
                         onOpenPlayer()

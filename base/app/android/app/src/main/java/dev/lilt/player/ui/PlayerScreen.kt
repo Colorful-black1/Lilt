@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -79,6 +81,7 @@ fun PlayerScreen(
     val state by vm.player.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val speed by vm.playbackSpeed.collectAsStateWithLifecycle()
     val sleepDeadline by vm.sleepDeadline.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
@@ -96,6 +99,20 @@ fun PlayerScreen(
                 title = t("Now playing", "正在播放"),
                 onBack = onBack,
                 actions = {
+                    IconButton(
+                        onClick = { if (current != null) vm.toggleFavorite(current.mediaId) },
+                        enabled = current != null,
+                    ) {
+                        Icon(
+                            if (current != null && current.mediaId in favoriteIds)
+                                Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = if (current != null && current.mediaId in favoriteIds)
+                                t("Remove favorite", "取消收藏") else t("Favorite", "收藏"),
+                            tint = if (current != null && current.mediaId in favoriteIds)
+                                MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     IconButton(onClick = onOpenQueues) {
                         Icon(Icons.Rounded.QueueMusic, t("Queues", "队列"))
                     }

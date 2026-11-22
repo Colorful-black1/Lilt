@@ -59,6 +59,7 @@ fun PlaylistScreen(
     val playlist = playlists.firstOrNull { it.id == playlistId }
     val flow = remember(playlistId) { vm.playlistSongs(playlistId) }
     val songs by flow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val player by vm.player.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
@@ -163,6 +164,8 @@ fun PlaylistScreen(
                         SongRow(
                             song = song,
                             isCurrent = song.mediaId == player.mediaId,
+                            isFavorite = song.mediaId in favoriteIds,
+                            onToggleFavorite = { vm.toggleFavorite(song.mediaId) },
                             onClick = {
                                 vm.playSongs(songs, songs.indexOf(song))
                                 onOpenPlayer()

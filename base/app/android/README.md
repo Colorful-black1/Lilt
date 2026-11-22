@@ -56,6 +56,14 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   Opening the app rescans; stale rows are removed; progress is shown.
 - Folder-first browsing with breadcrumbs, recursive play/shuffle and folder counts.
 - Include-only and exclude folder rules that rebuild the visible library immediately.
+- **Library tab with songs, albums, artists and favourites.** Album and artist detail pages
+  support play all, shuffle, queue and playlist actions. Favourite hearts appear in the
+  library, folder, playlist, search and now-playing screens.
+- **Room database v2** with a separate `song_state` table for favourites, play counts and
+  last-played time, so a MediaStore rescan cannot wipe user data. Upgrades from v1 keep the
+  existing library, playlists and queues.
+- **Play counts** are recorded after 30% of a track has been heard; history is still
+  recorded at playback start for the later history screen.
 - Playback through Media3 ExoPlayer inside a foreground `MediaSessionService`:
   notification controls, lock-screen controls, headset/Bluetooth media buttons, noisy
   headphone pause and audio focus.
