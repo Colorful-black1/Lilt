@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -93,8 +95,10 @@ fun HomeScreen(
 
     var tab by rememberSaveable { mutableStateOf(0) }
     var folderPath by rememberSaveable { mutableStateOf("") }
+    var librarySection by rememberSaveable { mutableStateOf(LibrarySection.Songs.name) }
     var showNewPlaylist by remember { mutableStateOf(false) }
     var songForPlaylist by remember { mutableStateOf<SongEntity?>(null) }
+    var locateRequest by rememberSaveable { mutableIntStateOf(0) }
 
     val tree = remember(songs) { FolderTree.build(songs) }
     val node = remember(tree, folderPath) { FolderTree.find(tree, folderPath) }
@@ -109,6 +113,19 @@ fun HomeScreen(
             AppBar(
                 title = t("Lilt", "Lilt 音乐"),
                 actions = {
+                    IconButton(
+                        onClick = {
+                            tab = 2
+                            librarySection = LibrarySection.Songs.name
+                            locateRequest += 1
+                        },
+                        enabled = player.mediaId > 0,
+                    ) {
+                        Icon(
+                            Icons.Rounded.MyLocation,
+                            contentDescription = t("Locate current song", "定位当前歌曲"),
+                        )
+                    }
                     IconButton(onClick = onOpenSearch) {
                         Icon(Icons.Rounded.Search, contentDescription = t("Search", "搜索"))
                     }
@@ -203,6 +220,10 @@ fun HomeScreen(
                     songs = songs,
                     player = player,
                     favoriteIds = favoriteIds,
+                    sectionName = librarySection,
+                    onSectionChange = { librarySection = it },
+                    locateRequest = locateRequest,
+                    onLocateConsumed = { locateRequest = 0 },
                     onOpenPlayer = onOpenPlayer,
                     onOpenAlbum = onOpenAlbum,
                     onOpenArtist = onOpenArtist,

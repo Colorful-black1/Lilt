@@ -335,6 +335,23 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Plays a queue from an explicit row, ignoring the saved resume position. */
+    fun playQueueAt(queueId: Long, index: Int) {
+        viewModelScope.launch {
+            val songs = repository.queueSongs(queueId)
+            if (songs.isEmpty()) return@launch
+            playSongs(songs, index.coerceIn(0, songs.lastIndex), queueId)
+        }
+    }
+
+    fun moveQueueSong(queueId: Long, from: Int, to: Int) {
+        viewModelScope.launch { repository.moveQueueSong(queueId, from, to) }
+    }
+
+    fun removeQueueSong(queueId: Long, mediaId: Long) {
+        viewModelScope.launch { repository.removeQueueSong(queueId, mediaId) }
+    }
+
     fun enqueueNext(song: SongEntity) {
         val player = controller ?: return
         val index = player.currentMediaItemIndex
@@ -392,6 +409,10 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removeFromPlaylist(playlistId: Long, song: SongEntity) {
         viewModelScope.launch { repository.removeFromPlaylist(playlistId, song.mediaId) }
+    }
+
+    fun movePlaylistSong(playlistId: Long, from: Int, to: Int) {
+        viewModelScope.launch { repository.movePlaylistSong(playlistId, from, to) }
     }
 
     fun playlistSongs(id: Long) = repository.observePlaylistSongs(id)

@@ -16,6 +16,7 @@ import dev.lilt.player.library.UNKNOWN_ARTIST
 import dev.lilt.player.library.activeLrcLine
 import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.letterOf
+import dev.lilt.player.library.movedItem
 import dev.lilt.player.library.parseLrc
 import dev.lilt.player.library.presetNameFor
 import dev.lilt.player.library.queueStart
@@ -300,6 +301,17 @@ class LibraryTest {
         )
         assertEquals("Rock", presetNameFor(EQ_PRESETS.getValue("Rock")))
         assertEquals("Custom", presetNameFor(listOf(9f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)))
+    }
+
+    @Test
+    fun movedItemReordersAndIgnoresInvalidPositions() {
+        val source = listOf("A", "B", "C", "D")
+        assertEquals(listOf("B", "A", "C", "D"), movedItem(source, 0, 1))
+        assertEquals(listOf("A", "C", "D", "B"), movedItem(source, 1, 3))
+        assertEquals(source, movedItem(source, 2, 2))
+        assertEquals(source, movedItem(source, -1, 3))
+        assertEquals(source, movedItem(source, 0, 4))
+        assertEquals(emptyList<String>(), movedItem<String>(emptyList(), 0, 0))
     }
 
     @Test

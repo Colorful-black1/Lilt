@@ -61,6 +61,7 @@ import dev.lilt.player.ui.LiltTheme
 import dev.lilt.player.ui.LyricsScreen
 import dev.lilt.player.ui.PlayerScreen
 import dev.lilt.player.ui.PlaylistScreen
+import dev.lilt.player.ui.QueueDetailScreen
 import dev.lilt.player.ui.QueuesScreen
 import dev.lilt.player.ui.RulesScreen
 import dev.lilt.player.ui.SearchScreen
@@ -171,7 +172,20 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
             LyricsScreen(vm = vm, mediaId = id, onBack = { nav.popBackStack() })
         }
         composable("queues") {
-            QueuesScreen(vm, onBack = { nav.popBackStack() })
+            QueuesScreen(
+                vm,
+                onBack = { nav.popBackStack() },
+                onOpenQueue = { nav.navigate("queue/$it") },
+            )
+        }
+        composable("queue/{id}") { entry ->
+            val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+            QueueDetailScreen(
+                vm = vm,
+                queueId = id,
+                onBack = { nav.popBackStack() },
+                onOpenPlayer = { nav.navigate("player") },
+            )
         }
         composable("playlist/{id}") { entry ->
             val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable

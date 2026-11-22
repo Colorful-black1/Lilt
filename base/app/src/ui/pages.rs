@@ -376,6 +376,17 @@ fn songs_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
                 let name = app.t("All songs", "所有歌曲").to_owned();
                 app.play_context(keys.clone(), 0, &name);
             }
+            if app.current_song().is_some()
+                && widgets::ghost_button(
+                    ui,
+                    app.t("Locate", "定位"),
+                    Some(Icon::Locate),
+                    palette,
+                )
+                .clicked()
+            {
+                app.locate_current_song();
+            }
             sort_menu(app, ui, palette);
         },
     );

@@ -149,7 +149,7 @@ fn top_bar(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: bool) {
             });
             ui.add_space(18.0);
 
-            let right_reserve = if compact { 118.0 } else { 208.0 };
+            let right_reserve = if compact { 154.0 } else { 244.0 };
             let search_width = (ui.available_width() - right_reserve).clamp(150.0, 410.0);
             let frame = egui::Frame::NONE
                 .fill(palette.surface)
@@ -253,6 +253,19 @@ fn top_bar(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: bool) {
                         Language::Zh => Language::En,
                     };
                     app.mark_dirty();
+                }
+                if app.current_song().is_some()
+                    && icons::icon_button(
+                        ui,
+                        Icon::Locate,
+                        30.0,
+                        palette.accent,
+                        palette.surface_hi,
+                        app.t("Locate current song", "定位当前歌曲"),
+                    )
+                    .clicked()
+                {
+                    app.locate_current_song();
                 }
                 if !compact {
                     ui.add_space(6.0);

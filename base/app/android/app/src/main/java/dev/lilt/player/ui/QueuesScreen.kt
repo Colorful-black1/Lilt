@@ -54,7 +54,11 @@ import dev.lilt.player.LiltViewModel
 import dev.lilt.player.data.QueueSummary
 
 @Composable
-fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
+fun QueuesScreen(
+    vm: LiltViewModel,
+    onBack: () -> Unit,
+    onOpenQueue: (Long) -> Unit,
+) {
     val queues by vm.queues.collectAsStateWithLifecycle()
     val player by vm.player.collectAsStateWithLifecycle()
     val active by vm.activeQueueId.collectAsStateWithLifecycle()
@@ -107,8 +111,8 @@ fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
             Text(
                 if (rememberPositions) {
                     t(
-                        "Queue positions are remembered. Tapping a queue resumes where you stopped.",
-                        "队列位置已记忆。点击队列会从上次停止处继续。",
+                        "Queue positions are remembered. The play button resumes where you stopped; tap a queue to see its songs.",
+                        "队列位置已记忆。播放按钮会从上次停止处继续；点击队列可查看歌曲。",
                     )
                 } else {
                     t(
@@ -135,6 +139,7 @@ fun QueuesScreen(vm: LiltViewModel, onBack: () -> Unit) {
                             queue = queue,
                             active = queue.id == active && player.itemCount > 0,
                             rememberPositions = rememberPositions,
+                            onOpen = { onOpenQueue(queue.id) },
                             onPlay = { vm.playQueue(queue.id) },
                             onRename = { renameTarget = queue },
                             onDelete = { deleteTarget = queue },
@@ -187,6 +192,7 @@ private fun QueueRow(
     queue: QueueSummary,
     active: Boolean,
     rememberPositions: Boolean,
+    onOpen: () -> Unit,
     onPlay: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -196,7 +202,7 @@ private fun QueueRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onPlay)
+            .clickable(onClick = onOpen)
             .background(
                 if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                 else Color.Transparent

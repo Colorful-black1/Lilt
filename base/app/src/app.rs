@@ -2510,6 +2510,22 @@ impl LiltApp {
         self.search.clear();
         self.now_playing = false;
         self.queue_drawer = false;
+        self.scroll_to_current = false;
+    }
+
+    /// Opens the complete song list and asks the table to scroll the playing
+    /// row into view. The flag is consumed by `song_table` so later refreshes
+    /// do not move the list again.
+    pub fn locate_current_song(&mut self) {
+        if self.current_song().is_none() {
+            self.notify(self.t("Nothing is playing", "暂无播放歌曲").to_owned());
+            return;
+        }
+        self.navigate(Page::Songs);
+        self.favorites_only = false;
+        self.selection_mode = false;
+        self.jump_letter = None;
+        self.scroll_to_current = true;
     }
 
     pub fn open_album(&mut self, name: String) {

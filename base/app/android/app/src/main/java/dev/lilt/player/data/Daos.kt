@@ -152,6 +152,12 @@ interface PlaylistDao {
     @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_songs WHERE playlistId = :id")
     suspend fun nextPosition(id: Long): Int
 
+    @Query("SELECT mediaId FROM playlist_songs WHERE playlistId = :id ORDER BY position")
+    suspend fun playlistMediaIds(id: Long): List<Long>
+
+    @Query("UPDATE playlist_songs SET position = :position WHERE playlistId = :id AND mediaId = :mediaId")
+    suspend fun setSongPosition(id: Long, mediaId: Long, position: Int)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addSong(entry: PlaylistSongEntity)
 
@@ -211,6 +217,15 @@ interface QueueDao {
 
     @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM queue_songs WHERE queueId = :id")
     suspend fun nextPosition(id: Long): Int
+
+    @Query("SELECT mediaId FROM queue_songs WHERE queueId = :id ORDER BY position")
+    suspend fun queueMediaIds(id: Long): List<Long>
+
+    @Query("UPDATE queue_songs SET position = :position WHERE queueId = :id AND mediaId = :mediaId")
+    suspend fun setSongPosition(id: Long, mediaId: Long, position: Int)
+
+    @Query("DELETE FROM queue_songs WHERE queueId = :id AND mediaId = :mediaId")
+    suspend fun removeSong(id: Long, mediaId: Long)
 
     @Query("SELECT COUNT(*) FROM queue_songs WHERE queueId = :id")
     suspend fun songCount(id: Long): Int

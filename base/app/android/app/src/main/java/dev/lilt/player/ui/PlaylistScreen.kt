@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Checklist
@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +71,7 @@ fun PlaylistScreen(
     var confirmDelete by remember { mutableStateOf(false) }
     var selecting by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var reordering by rememberSaveable { mutableStateOf(false) }
     val selectedSongs = songs.filter { it.mediaId in selectedIds }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/x-mpegurl")) { uri ->
         uri?.let { vm.exportPlaylist(playlistId, it) }
@@ -78,17 +81,19 @@ fun PlaylistScreen(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
         topBar = {
             AppBar(
-                title = if (selecting) {
-                    t("${selectedSongs.size} selected", "已选择 ${selectedSongs.size} 首")
-                } else {
-                    playlist?.name ?: t("Playlist", "播放列表")
+                title = when {
+                    selecting -> t("${selectedSongs.size} selected", "已选择 ${selectedSongs.size} 首")
+                    reordering -> t("Reorder playlist", "调整播放列表顺序")
+                    else -> playlist?.name ?: t("Playlist", "播放列表")
                 },
                 onBack = {
-                    if (selecting) {
-                        selecting = false
-                        selectedIds = emptySet()
-                    } else {
-                        onBack()
+                    when {
+                        selecting -> {
+                            selecting = false
+                            selectedIds = emptySet()
+                        }
+                        reordering -> reordering = false
+                        else -> onBack()
                     }
                 },
                 actions = {
@@ -129,7 +134,17 @@ fun PlaylistScreen(
                                     t("None", "全不选") else t("All", "全选"),
                             )
                         }
+                    } else if (reordering) {
+                        TextButton(onClick = { reordering = false }) {
+                            Text(t("Done", "完成"))
+                        }
                     } else {
+                        IconButton(
+                            onClick = { reordering = true },
+                            enabled = songs.isNotEmpty(),
+                        ) {
+                            Icon(Icons.Rounded.SwapVert, t("Reorder", "调整顺序"))
+                        }
                         IconButton(
                             onClick = { selecting = true },
                             enabled = songs.isNotEmpty(),
@@ -138,7 +153,7 @@ fun PlaylistScreen(
                         }
                     }
                     androidx.compose.foundation.layout.Box {
-                        if (!selecting) {
+                        if (!selecting && !reordering) {
                             IconButton(onClick = { menu = true }) {
                                 Icon(Icons.Rounded.MoreVert, t("More", "更多"))
                             }
@@ -223,23 +238,42 @@ fun PlaylistScreen(
                     ),
                 )
             } else {
+                if (reordering) {
+                    Text(
+                        t(
+                            "Use the arrows to change the order. Changes save immediately.",
+                            "使用箭头调整顺序，修改会立即保存。",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
+                    )
+                }
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(songs, key = { it.mediaId }) { song ->
+                    itemsIndexed(songs, key = { _, song -> song.mediaId }) { index, song ->
                         SongRow(
                             song = song,
                             isCurrent = song.mediaId == player.mediaId,
                             isFavorite = song.mediaId in favoriteIds,
-                            onToggleFavorite = { vm.toggleFavorite(song.mediaId) },
+                            onToggleFavorite = if (reordering) {
+                                null
+                            } else {
+                                { vm.toggleFavorite(song.mediaId) }
+                            },
                             onClick = {
-                                if (selecting) {
-                                    selectedIds = if (song.mediaId in selectedIds) {
-                                        selectedIds - song.mediaId
-                                    } else {
-                                        selectedIds + song.mediaId
+                                when {
+                                    selecting -> {
+                                        selectedIds = if (song.mediaId in selectedIds) {
+                                            selectedIds - song.mediaId
+                                        } else {
+                                            selectedIds + song.mediaId
+                                        }
                                     }
-                                } else {
-                                    vm.playSongs(songs, songs.indexOf(song))
-                                    onOpenPlayer()
+                                    reordering -> Unit
+                                    else -> {
+                                        vm.playSongs(songs, index)
+                                        onOpenPlayer()
+                                    }
                                 }
                             },
                             onAction = { action ->
@@ -249,9 +283,23 @@ fun PlaylistScreen(
                                     SongAction.AddToPlaylist -> Unit
                                 }
                             },
-                            onRemove = { vm.removeFromPlaylist(playlistId, song) },
+                            onRemove = if (reordering) {
+                                null
+                            } else {
+                                { vm.removeFromPlaylist(playlistId, song) }
+                            },
                             selectionMode = selecting,
                             selected = song.mediaId in selectedIds,
+                            onMoveUp = if (reordering && index > 0) {
+                                { vm.movePlaylistSong(playlistId, index, index - 1) }
+                            } else {
+                                null
+                            },
+                            onMoveDown = if (reordering && index < songs.lastIndex) {
+                                { vm.movePlaylistSong(playlistId, index, index + 1) }
+                            } else {
+                                null
+                            },
                         )
                     }
                     item { Spacer(Modifier.height(24.dp)) }

@@ -28,6 +28,8 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
@@ -247,6 +249,8 @@ fun SongRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     highlight: String? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -300,6 +304,15 @@ fun SongRow(
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+        if (onMoveUp != null || onMoveDown != null) {
+            IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {
+                Icon(Icons.Rounded.KeyboardArrowUp, t("Move up", "上移"))
+            }
+            IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
+                Icon(Icons.Rounded.KeyboardArrowDown, t("Move down", "下移"))
+            }
+            return@Row
         }
         Box {
             if (onRemove != null) {

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.QueueMusic
@@ -39,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -118,11 +120,15 @@ fun LibraryBrowser(
     songs: List<SongEntity>,
     player: PlayerUiState,
     favoriteIds: Set<Long>,
+    sectionName: String,
+    onSectionChange: (String) -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenAlbum: (String, Long) -> Unit,
     onOpenArtist: (String) -> Unit,
     onSongAction: (SongEntity, SongAction) -> Unit,
     modifier: Modifier = Modifier,
+    locateRequest: Int = 0,
+    onLocateConsumed: () -> Unit = {},
 ) {
     val states by vm.songStates.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
@@ -130,7 +136,6 @@ fun LibraryBrowser(
     val sortId by vm.songSort.collectAsStateWithLifecycle()
     val descending by vm.songSortDescending.collectAsStateWithLifecycle()
 
-    var sectionName by rememberSaveable { mutableStateOf(LibrarySection.Songs.name) }
     val section = LibrarySection.valueOf(sectionName)
     var selectionMode by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
@@ -206,7 +211,7 @@ fun LibraryBrowser(
                         LibrarySection.Bookmarks -> t("Bookmarks", "书签")
                     },
                     selected = section == entry,
-                    onClick = { sectionName = entry.name },
+                    onClick = { onSectionChange(entry.name) },
                 )
             }
         }
@@ -239,6 +244,8 @@ fun LibraryBrowser(
                 onPlay = { list, index -> vm.playSongs(list, index); onOpenPlayer() },
                 onToggleFavorite = vm::toggleFavorite,
                 onSongAction = onSongAction,
+                locateRequest = locateRequest,
+                onLocateConsumed = onLocateConsumed,
             )
 
             LibrarySection.Favorites -> SongListSection(
@@ -377,6 +384,8 @@ private fun SongListSection(
     onPlay: (List<SongEntity>, Int) -> Unit,
     onToggleFavorite: (Long) -> Unit,
     onSongAction: (SongEntity, SongAction) -> Unit,
+    locateRequest: Int = 0,
+    onLocateConsumed: () -> Unit = {},
 ) {
     if (songs.isEmpty()) {
         EmptyState(title = emptyTitle, body = emptyBody)
@@ -391,6 +400,20 @@ private fun SongListSection(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var sortMenu by remember { mutableStateOf(false) }
+    var handledLocate by remember { mutableIntStateOf(0) }
+    val currentIndex = ordered.indexOfFirst { it.mediaId == player.mediaId }
+
+    LaunchedEffect(locateRequest, currentIndex) {
+        if (locateRequest == 0) {
+            handledLocate = 0
+        } else if (locateRequest > handledLocate) {
+            handledLocate = locateRequest
+            if (currentIndex >= 0) {
+                listState.animateScrollToItem(currentIndex + 1)
+            }
+            onLocateConsumed()
+        }
+    }
     val indexable = sort == SongSort.Title
     val letterStarts = remember(ordered, indexable) {
         if (!indexable) emptyMap()
@@ -427,6 +450,21 @@ private fun SongListSection(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f),
                         )
+                        if (currentIndex >= 0) {
+                            IconButton(
+                                onClick = {
+                                    scope.launch {
+                                        listState.animateScrollToItem(currentIndex + 1)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Rounded.MyLocation,
+                                    contentDescription = t("Locate current song", "定位当前歌曲"),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                         if (sort != null) {
                             Box {
                                 IconButton(onClick = { sortMenu = true }) {

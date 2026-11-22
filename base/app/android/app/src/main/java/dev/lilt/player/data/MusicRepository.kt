@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.room.withTransaction
+import dev.lilt.player.library.movedItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -228,6 +229,18 @@ class MusicRepository(
         playlists.playlistSongs(id)
     }
 
+    suspend fun movePlaylistSong(playlistId: Long, from: Int, to: Int) =
+        withContext(Dispatchers.IO) {
+            db.withTransaction {
+                val ids = playlists.playlistMediaIds(playlistId)
+                val reordered = movedItem(ids, from, to)
+                if (reordered === ids) return@withTransaction
+                reordered.forEachIndexed { index, mediaId ->
+                    playlists.setSongPosition(playlistId, mediaId, index)
+                }
+            }
+        }
+
     suspend fun createQueue(
         name: String,
         mediaIds: List<Long>,
@@ -273,6 +286,22 @@ class MusicRepository(
 
     suspend fun queueSongs(id: Long): List<SongEntity> = withContext(Dispatchers.IO) {
         queues.queueSongs(id)
+    }
+
+    suspend fun moveQueueSong(queueId: Long, from: Int, to: Int) =
+        withContext(Dispatchers.IO) {
+            db.withTransaction {
+                val ids = queues.queueMediaIds(queueId)
+                val reordered = movedItem(ids, from, to)
+                if (reordered === ids) return@withTransaction
+                reordered.forEachIndexed { index, mediaId ->
+                    queues.setSongPosition(queueId, mediaId, index)
+                }
+            }
+        }
+
+    suspend fun removeQueueSong(queueId: Long, mediaId: Long) = withContext(Dispatchers.IO) {
+        queues.removeSong(queueId, mediaId)
     }
 
     suspend fun recordHistory(mediaId: Long) = withContext(Dispatchers.IO) {

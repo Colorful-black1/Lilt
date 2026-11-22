@@ -91,6 +91,9 @@ Set `LILT_DATA_DIR` to use a different data folder.
   and history views, bookmarks/notes, tag editing (including batch), lyrics from
   embedded tags / `.lrc` / editor, and live search across songs, albums, artists, folders
   and playlists.
+- **Locate current song** from the top bar, the Songs header or the now-playing overlay.
+  It opens the complete song list and scrolls the playing row into view; the one-shot
+  scroll does not fight later manual scrolling.
 - 10-band equalizer at the target's exact frequencies and Q, 22 target presets, three
   preamp modes, bass boost, virtualizer, 0–200 balance, headroom suggestion and five
   stored device profiles; changes apply to the live audio source and persist after

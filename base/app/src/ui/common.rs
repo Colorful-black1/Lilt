@@ -233,6 +233,10 @@ pub fn song_table(
         let selected = app.selected.contains(&song.key);
         let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 48.0), Sense::click());
         let hovered = response.hovered();
+        if is_current && app.scroll_to_current {
+            ui.scroll_to_rect(rect, Some(Align::Center));
+            app.scroll_to_current = false;
+        }
         if selected {
             ui.painter()
                 .rect_filled(rect, 7.0, with_alpha(palette.accent, 18));

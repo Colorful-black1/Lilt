@@ -45,6 +45,7 @@ pub enum Icon {
     Home,
     Sparkle,
     Library,
+    Locate,
 }
 
 pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32, thickness: f32) {
@@ -476,6 +477,14 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32, thicknes
                 color,
             );
             line((0.14, -0.44), (0.34, 0.44));
+        }
+        Icon::Locate => {
+            painter.circle_stroke(c, h * 0.34, stroke);
+            painter.circle_filled(c, h * 0.09, color);
+            line((-0.62, 0.0), (-0.40, 0.0));
+            line((0.40, 0.0), (0.62, 0.0));
+            line((0.0, -0.62), (0.0, -0.40));
+            line((0.0, 0.40), (0.0, 0.62));
         }
     }
 }

@@ -63,7 +63,8 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **List tools** on the song views: title, artist, album, duration, date added, play count,
   last played, track number and file name sorting with an ascending/descending toggle that
   survives restarts; multi-select for batch favourite, queue and playlist actions; an A–Z
-  index strip when sorted by title; and per-playlist multi-select removal.
+  index strip when sorted by title; per-playlist multi-select removal; and a **locate
+  current song** button in the app bar and song-list header.
 - **Search** is grouped into songs, albums, artists, folders and playlists, highlights the
   matching text, and keeps the last 12 queries for one-tap reuse.
 - **Lyrics** are stored per song in Room, support LRC timestamps with the current line
@@ -90,8 +91,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - Gapless-ready contiguous queue, previous-restarts-after-10-seconds, shuffle and the
   three repeat modes.
 - Up to 20 named queues, same-name Replace/Merge policy, M3U export and import with a
-  tested round trip.
-- Playlists with create, rename, delete, add/remove songs and M3U export/import.
+  tested round trip. Tapping a queue opens its song list; the play button still resumes the
+  saved position.
+- Playlists with create, rename, delete, add/remove songs and M3U export/import. Playlist
+  and queue detail screens have a reorder mode with up/down controls that save immediately.
 - Ten-band equalizer (31.5 Hz to 16 kHz, ±15 dB) with all 22 desktop presets, preamp
   Off/Headroom/Boost, a peak-based headroom suggestion, bass boost, virtual surround where
   supported, left/right balance and one saved profile per output device. On Android 9+
@@ -103,9 +106,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 
 ## Deliberately not in this build
 
-Tag editing, embedded ReplayGain writing, drag-to-reorder playlists and queues, pinyin
-letter buckets, home-screen widgets, quick-settings tile, Android Auto, Chromecast, audio
-trimming and backup/restore are later rounds. They are not simulated with fake data.
+Tag editing, embedded ReplayGain writing, drag-to-reorder (the playlist and queue up/down
+controls are available), pinyin letter buckets, home-screen widgets, quick-settings tile,
+Android Auto, Chromecast, audio trimming and backup/restore are later rounds. They are not
+simulated with fake data.
 
 ## Privacy and permissions
 
@@ -117,12 +121,14 @@ its library manifest; Lilt removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 20 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 21 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
-  index, LRC parsing and lyrics timing, EQ curves/profiles and queue resume positions.
+  index, LRC parsing and lyrics timing, EQ curves/profiles, queue resume positions and
+  list reordering.
 - `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4 and 4→5 migration
   tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
+  `../checks/round-6/README.md` for locate-current and playlist/queue reorder evidence,
   `../checks/round-5/README.md` for lyrics, sleep/fade, equalizer and queue-memory
   evidence, `../checks/round-4-c/README.md` for the library evidence, and
   `../checks/round-3/README.md` for the remaining unverified items (headset unplug and

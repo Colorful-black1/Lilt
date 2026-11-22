@@ -81,6 +81,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     let mut open_tags = false;
     let mut open_speed = false;
     let mut open_lyrics_editor = false;
+    let mut locate_current = false;
 
     egui::Area::new(egui::Id::new("now_playing_overlay"))
         .fixed_pos(screen.min)
@@ -285,6 +286,16 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 .clicked()
                                                 {
                                                     toggle_lyrics = true;
+                                                }
+                                                if widgets::ghost_button(
+                                                    ui,
+                                                    app.t("Locate", "定位"),
+                                                    Some(Icon::Locate),
+                                                    &op,
+                                                )
+                                                .clicked()
+                                                {
+                                                    locate_current = true;
                                                 }
                                             });
                                             ui.add_space(12.0);
@@ -726,6 +737,9 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     }
     if open_lyrics_editor {
         app.open_lyrics_editor();
+    }
+    if locate_current {
+        app.locate_current_song();
     }
     if open_speed {
         app.modal = Some(Modal::Speed {
