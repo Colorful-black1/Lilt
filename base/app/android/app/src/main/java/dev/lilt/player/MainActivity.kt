@@ -220,6 +220,8 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
                 onOpenPlaylist = { nav.navigate("playlist/$it") },
+                onOpenAlbum = { name, albumId -> nav.navigate("album/${Uri.encode(name)}/$albumId") },
+                onOpenArtist = { nav.navigate("artist/${Uri.encode(it)}") },
             )
         }
     }

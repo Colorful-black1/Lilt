@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -61,8 +62,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -194,6 +198,43 @@ fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
 enum class SongAction { PlayNext, AddToQueue, AddToPlaylist }
 
 @Composable
+private fun SongTitle(title: String, highlight: String?, isCurrent: Boolean) {
+    val color = if (isCurrent) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.onSurface
+    val needle = highlight.orEmpty().trim()
+    val index = if (needle.isEmpty()) -1 else title.indexOf(needle, ignoreCase = true)
+    if (index < 0) {
+        Text(
+            title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium,
+            color = color,
+        )
+        return
+    }
+    val marked = buildAnnotatedString {
+        append(title.substring(0, index))
+        withStyle(
+            SpanStyle(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
+            )
+        ) {
+            append(title.substring(index, index + needle.length))
+        }
+        append(title.substring(index + needle.length))
+    }
+    Text(
+        marked,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = MaterialTheme.typography.titleMedium,
+        color = color,
+    )
+}
+
+@Composable
 fun SongRow(
     song: SongEntity,
     isCurrent: Boolean,
@@ -202,6 +243,10 @@ fun SongRow(
     onClick: () -> Unit,
     onAction: (SongAction) -> Unit,
     onRemove: (() -> Unit)? = null,
+    subtitle: String? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    highlight: String? = null,
 ) {
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -209,8 +254,11 @@ fun SongRow(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .background(
-                if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                else Color.Transparent
+                when {
+                    selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                    isCurrent -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                    else -> Color.Transparent
+                }
             )
             .padding(horizontal = 16.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -218,21 +266,24 @@ fun SongRow(
         AlbumArt(albumId = song.albumId, modifier = Modifier.size(46.dp), corner = 8.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                song.title,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface,
+            SongTitle(
+                title = song.title,
+                highlight = highlight,
+                isCurrent = isCurrent,
             )
             Text(
-                listOf(song.artist, song.album).filter { it.isNotBlank() }.joinToString(" · "),
+                subtitle ?: listOf(song.artist, song.album)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" · "),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        if (selectionMode) {
+            Checkbox(checked = selected, onCheckedChange = null)
+            return@Row
         }
         Text(
             formatDuration(song.durationMs),
@@ -311,10 +362,7 @@ fun FolderRow(
         Column(Modifier.weight(1f)) {
             Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
             Text(
-                t(
-                    "$trackCount tracks · ${formatDuration(durationMs)}",
-                    "$trackCount 首 · ${formatDuration(durationMs)}",
-                ),
+                "${trackCountLabel(trackCount)} · ${formatDuration(durationMs)}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -352,7 +400,7 @@ fun PlaylistRow(playlist: PlaylistSummary, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(playlist.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
             Text(
-                t("${playlist.songCount} tracks", "${playlist.songCount} 首"),
+                trackCountLabel(playlist.songCount),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

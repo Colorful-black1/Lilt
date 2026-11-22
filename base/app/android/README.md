@@ -56,14 +56,25 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   Opening the app rescans; stale rows are removed; progress is shown.
 - Folder-first browsing with breadcrumbs, recursive play/shuffle and folder counts.
 - Include-only and exclude folder rules that rebuild the visible library immediately.
-- **Library tab with songs, albums, artists and favourites.** Album and artist detail pages
-  support play all, shuffle, queue and playlist actions. Favourite hearts appear in the
-  library, folder, playlist, search and now-playing screens.
-- **Room database v2** with a separate `song_state` table for favourites, play counts and
-  last-played time, so a MediaStore rescan cannot wipe user data. Upgrades from v1 keep the
-  existing library, playlists and queues.
-- **Play counts** are recorded after 30% of a track has been heard; history is still
-  recorded at playback start for the later history screen.
+- **Library tab with songs, albums, artists, favourites, recently added, most played,
+  history and bookmarks.** Album and artist detail pages support play all, shuffle, queue
+  and playlist actions. Favourite hearts appear in the library, folder, playlist, search
+  and now-playing screens.
+- **List tools** on the song views: title, artist, album, duration, date added, play count,
+  last played, track number and file name sorting with an ascending/descending toggle that
+  survives restarts; multi-select for batch favourite, queue and playlist actions; an A–Z
+  index strip when sorted by title; and per-playlist multi-select removal.
+- **Search** is grouped into songs, albums, artists, folders and playlists, highlights the
+  matching text, and keeps the last 12 queries for one-tap reuse.
+- **History and bookmarks.** Playback history keeps the latest 200 starts and can be
+  cleared. A bookmark stores a song position plus an optional note; bookmarks are listed
+  in the library and as one-tap chips on the now-playing screen.
+- **Room database v3** with a separate `song_state` table for favourites, play counts and
+  last-played time, so a MediaStore rescan cannot wipe user data. It also stores bookmarks
+  and search history. Upgrades from v1/v2 keep the existing library, playlists, queues and
+  user state.
+- **Play counts** are recorded after 30% of a track has been heard; history is recorded at
+  playback start.
 - Playback through Media3 ExoPlayer inside a foreground `MediaSessionService`:
   notification controls, lock-screen controls, headset/Bluetooth media buttons, noisy
   headphone pause and audio focus.
@@ -80,9 +91,9 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 
 ## Deliberately not in this build
 
-Tag editing, lyrics editing, embedded ReplayGain writing, bookmarks/notes, home-screen
-widgets, quick-settings tile, Android Auto, Chromecast, audio trimming and backup/restore
-are later rounds. They are not simulated with fake data.
+Tag editing, lyrics editing, embedded ReplayGain writing, drag-to-reorder playlists and
+queues, home-screen widgets, quick-settings tile, Android Auto, Chromecast, audio trimming
+and backup/restore are later rounds. They are not simulated with fake data.
 
 ## Privacy and permissions
 
@@ -94,8 +105,12 @@ its library manifest; Lilt removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes five unit tests for M3U round trips, path imports,
-  and include/exclude filtering.
+- `./gradlew testDebugUnitTest` passes 13 unit tests for M3U round trips, path imports,
+  include/exclude filtering, album/artist grouping, sorting, search grouping and the
+  letter index.
+- `./gradlew connectedDebugAndroidTest` passes the Room 1→2 and 2→3 migration tests on an
+  Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
-  `../checks/round-3/README.md` for commands, screenshots and the remaining unverified
-  items (headset unplug and real-phone audio routing).
+  `../checks/round-4-c/README.md` for the library evidence, and
+  `../checks/round-3/README.md` for the remaining unverified items (headset unplug and
+  real-phone audio routing).

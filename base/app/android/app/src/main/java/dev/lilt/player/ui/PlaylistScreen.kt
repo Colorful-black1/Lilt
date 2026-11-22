@@ -21,11 +21,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -64,6 +67,9 @@ fun PlaylistScreen(
     var menu by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var selecting by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val selectedSongs = songs.filter { it.mediaId in selectedIds }
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/x-mpegurl")) { uri ->
         uri?.let { vm.exportPlaylist(playlistId, it) }
     }
@@ -72,12 +78,70 @@ fun PlaylistScreen(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
         topBar = {
             AppBar(
-                title = playlist?.name ?: t("Playlist", "播放列表"),
-                onBack = onBack,
+                title = if (selecting) {
+                    t("${selectedSongs.size} selected", "已选择 ${selectedSongs.size} 首")
+                } else {
+                    playlist?.name ?: t("Playlist", "播放列表")
+                },
+                onBack = {
+                    if (selecting) {
+                        selecting = false
+                        selectedIds = emptySet()
+                    } else {
+                        onBack()
+                    }
+                },
                 actions = {
+                    if (selecting) {
+                        IconButton(
+                            onClick = { vm.setFavorite(selectedIds, true) },
+                            enabled = selectedSongs.isNotEmpty(),
+                        ) {
+                            Icon(Icons.Rounded.Favorite, t("Favorite", "收藏"))
+                        }
+                        IconButton(
+                            onClick = { vm.addSongsToQueue(selectedSongs) },
+                            enabled = selectedSongs.isNotEmpty(),
+                        ) {
+                            Icon(Icons.Rounded.QueueMusic, t("Add to queue", "加入队列"))
+                        }
+                        IconButton(
+                            onClick = {
+                                vm.removeSongsFromPlaylist(playlistId, selectedSongs)
+                                selecting = false
+                                selectedIds = emptySet()
+                            },
+                            enabled = selectedSongs.isNotEmpty(),
+                        ) {
+                            Icon(Icons.Rounded.Delete, t("Remove selected", "移除所选"))
+                        }
+                        TextButton(
+                            onClick = {
+                                selectedIds = if (selectedSongs.size == songs.size) {
+                                    emptySet()
+                                } else {
+                                    songs.map { it.mediaId }.toSet()
+                                }
+                            },
+                        ) {
+                            Text(
+                                if (selectedSongs.size == songs.size && songs.isNotEmpty())
+                                    t("None", "全不选") else t("All", "全选"),
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = { selecting = true },
+                            enabled = songs.isNotEmpty(),
+                        ) {
+                            Icon(Icons.Rounded.Checklist, t("Select songs", "多选歌曲"))
+                        }
+                    }
                     androidx.compose.foundation.layout.Box {
-                        IconButton(onClick = { menu = true }) {
-                            Icon(Icons.Rounded.MoreVert, t("More", "更多"))
+                        if (!selecting) {
+                            IconButton(onClick = { menu = true }) {
+                                Icon(Icons.Rounded.MoreVert, t("More", "更多"))
+                            }
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
@@ -123,7 +187,7 @@ fun PlaylistScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        t("${songs.size} tracks · ${formatDuration(totalDuration(songs))}", "${songs.size} 首 · ${formatDuration(totalDuration(songs))}"),
+                        "${trackCountLabel(songs.size)} · ${formatDuration(totalDuration(songs))}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -167,8 +231,16 @@ fun PlaylistScreen(
                             isFavorite = song.mediaId in favoriteIds,
                             onToggleFavorite = { vm.toggleFavorite(song.mediaId) },
                             onClick = {
-                                vm.playSongs(songs, songs.indexOf(song))
-                                onOpenPlayer()
+                                if (selecting) {
+                                    selectedIds = if (song.mediaId in selectedIds) {
+                                        selectedIds - song.mediaId
+                                    } else {
+                                        selectedIds + song.mediaId
+                                    }
+                                } else {
+                                    vm.playSongs(songs, songs.indexOf(song))
+                                    onOpenPlayer()
+                                }
                             },
                             onAction = { action ->
                                 when (action) {
@@ -178,6 +250,8 @@ fun PlaylistScreen(
                                 }
                             },
                             onRemove = { vm.removeFromPlaylist(playlistId, song) },
+                            selectionMode = selecting,
+                            selected = song.mediaId in selectedIds,
                         )
                     }
                     item { Spacer(Modifier.height(24.dp)) }

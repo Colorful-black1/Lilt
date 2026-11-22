@@ -20,13 +20,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,7 +36,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
-import dev.lilt.player.data.SongEntity
 import dev.lilt.player.library.FolderNode
 import dev.lilt.player.library.FolderTree
 
@@ -139,89 +135,4 @@ private fun RuleChip(label: String, active: Boolean, activeColor: Color, onClick
         style = MaterialTheme.typography.bodyMedium,
         color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-@Composable
-fun SearchScreen(
-    vm: LiltViewModel,
-    onBack: () -> Unit,
-    onOpenPlayer: () -> Unit,
-    onOpenPlaylist: (Long) -> Unit,
-) {
-    val songs by vm.songs.collectAsStateWithLifecycle()
-    val playlists by vm.playlists.collectAsStateWithLifecycle()
-    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
-    val player by vm.player.collectAsStateWithLifecycle()
-    var query by remember { mutableStateOf("") }
-    val needle = query.trim().lowercase()
-    val foundSongs = remember(songs, needle) {
-        if (needle.isEmpty()) emptyList() else songs.filter {
-            it.title.lowercase().contains(needle) ||
-                it.artist.lowercase().contains(needle) ||
-                it.album.lowercase().contains(needle) ||
-                it.folder.lowercase().contains(needle)
-        }
-    }
-    val foundPlaylists = remember(playlists, needle) {
-        if (needle.isEmpty()) emptyList() else playlists.filter { it.name.lowercase().contains(needle) }
-    }
-
-    Scaffold(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
-        topBar = { AppBar(title = t("Search", "搜索"), onBack = onBack) },
-    ) { inner ->
-        Column(Modifier.fillMaxSize().padding(inner)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                placeholder = { Text(t("Songs, albums, artists, folders", "歌曲、专辑、艺术家、文件夹")) },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                singleLine = true,
-            )
-            if (needle.isEmpty()) {
-                EmptyState(
-                    title = t("Type to filter", "输入以筛选"),
-                    body = t("Results come from the scanned phone library.", "结果来自已扫描的手机曲库。"),
-                )
-            } else if (foundSongs.isEmpty() && foundPlaylists.isEmpty()) {
-                EmptyState(
-                    title = t("No matches", "没有匹配项"),
-                    body = t("Try a shorter word.", "试试更短的关键词。"),
-                )
-            } else {
-                LazyColumn(Modifier.fillMaxSize()) {
-                    if (foundSongs.isNotEmpty()) {
-                        item { SectionTitle(t("Songs", "歌曲")) }
-                        items(foundSongs, key = { it.mediaId }) { song ->
-                            SongRow(
-                                song = song,
-                                isCurrent = song.mediaId == player.mediaId,
-                                isFavorite = song.mediaId in favoriteIds,
-                                onToggleFavorite = { vm.toggleFavorite(song.mediaId) },
-                                onClick = {
-                                    vm.playSongs(foundSongs, foundSongs.indexOf(song))
-                                    onOpenPlayer()
-                                },
-                                onAction = { action ->
-                                    when (action) {
-                                        SongAction.PlayNext -> vm.enqueueNext(song)
-                                        SongAction.AddToQueue -> vm.addToQueue(song)
-                                        SongAction.AddToPlaylist -> Unit
-                                    }
-                                },
-                            )
-                        }
-                    }
-                    if (foundPlaylists.isNotEmpty()) {
-                        item { SectionTitle(t("Playlists", "播放列表")) }
-                        items(foundPlaylists, key = { "p${it.id}" }) { playlist ->
-                            PlaylistRow(playlist, onClick = { onOpenPlaylist(playlist.id) })
-                        }
-                    }
-                    item { Spacer(Modifier.height(24.dp)) }
-                }
-            }
-        }
-    }
 }

@@ -2,6 +2,7 @@ package dev.lilt.player.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BookmarkAdd
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -82,6 +84,7 @@ fun PlayerScreen(
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
+    val bookmarks by vm.bookmarks.collectAsStateWithLifecycle()
     val speed by vm.playbackSpeed.collectAsStateWithLifecycle()
     val sleepDeadline by vm.sleepDeadline.collectAsStateWithLifecycle()
     var menu by remember { mutableStateOf(false) }
@@ -89,8 +92,13 @@ fun PlayerScreen(
     var showSpeed by remember { mutableStateOf(false) }
     var showSaveQueue by remember { mutableStateOf(false) }
     var showPlaylistPicker by remember { mutableStateOf(false) }
+    var showBookmark by remember { mutableStateOf(false) }
+    var bookmarkPosition by remember { mutableStateOf(0L) }
 
     val current = songs.firstOrNull { it.mediaId == state.mediaId }
+    val currentBookmarks = remember(bookmarks, state.mediaId) {
+        bookmarks.filter { it.mediaId == state.mediaId }.sortedBy { it.positionMs }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
@@ -121,6 +129,16 @@ fun PlayerScreen(
                             Icon(Icons.Rounded.MoreVert, t("More", "更多"))
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(t("Add bookmark", "添加书签")) },
+                                leadingIcon = { Icon(Icons.Rounded.BookmarkAdd, null) },
+                                enabled = current != null,
+                                onClick = {
+                                    menu = false
+                                    bookmarkPosition = state.positionMs
+                                    showBookmark = true
+                                },
+                            )
                             DropdownMenuItem(
                                 text = { Text(t("Sleep timer", "睡眠定时")) },
                                 leadingIcon = { Icon(Icons.Rounded.Timer, null) },
@@ -247,13 +265,43 @@ fun PlayerScreen(
                 }
                 Spacer(Modifier.height(20.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     QuickAction(t("Sleep", "定时"), Icons.Rounded.Timer) { showSleep = true }
                     QuickAction(t("Speed", "速度"), Icons.Rounded.Speed) { showSpeed = true }
+                    QuickAction(t("Bookmark", "书签"), Icons.Rounded.BookmarkAdd) {
+                        bookmarkPosition = state.positionMs
+                        showBookmark = true
+                    }
                     QuickAction(t("Queues", "队列"), Icons.Rounded.QueueMusic, onOpenQueues)
                 }
+                if (currentBookmarks.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        currentBookmarks.forEach { bookmark ->
+                            val label = bookmark.note.ifBlank {
+                                formatDuration(bookmark.positionMs)
+                            }
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable { vm.seekTo(bookmark.positionMs) }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(18.dp))
             }
         }
     }
@@ -272,6 +320,20 @@ fun PlayerScreen(
         SpeedDialog(
             initial = speed,
             onDismiss = { value -> showSpeed = false; value?.let(vm::setSpeed) },
+        )
+    }
+    if (showBookmark) {
+        TextPromptDialog(
+            title = t(
+                "Add bookmark at ${formatDuration(bookmarkPosition)}",
+                "在 ${formatDuration(bookmarkPosition)} 添加书签",
+            ),
+            label = t("Note (optional)", "备注（可选）"),
+            onDismiss = { showBookmark = false },
+            onConfirm = {
+                vm.addBookmark(bookmarkPosition, it)
+                showBookmark = false
+            },
         )
     }
     if (showSaveQueue) {

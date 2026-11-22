@@ -17,6 +17,10 @@ class SettingsStore(context: Context) {
         MutableStateFlow(prefs.getString("queue_conflict", "replace") ?: "replace")
     val playbackSpeed: StateFlow<Float> = MutableStateFlow(prefs.getFloat("speed", 1f))
     val activeQueueId: StateFlow<Long> = MutableStateFlow(prefs.getLong("active_queue", -1L))
+    val songSort: StateFlow<String> =
+        MutableStateFlow(prefs.getString("song_sort", "title") ?: "title")
+    val songSortDescending: StateFlow<Boolean> =
+        MutableStateFlow(prefs.getBoolean("song_sort_desc", false))
 
     fun setLanguage(value: String) {
         prefs.edit { putString("language", value) }
@@ -51,5 +55,15 @@ class SettingsStore(context: Context) {
     fun setActiveQueue(id: Long) {
         prefs.edit { putLong("active_queue", id) }
         (activeQueueId as MutableStateFlow).value = id
+    }
+
+    fun setSongSort(value: String) {
+        prefs.edit { putString("song_sort", value) }
+        (songSort as MutableStateFlow).value = value
+    }
+
+    fun setSongSortDescending(value: Boolean) {
+        prefs.edit { putBoolean("song_sort_desc", value) }
+        (songSortDescending as MutableStateFlow).value = value
     }
 }

@@ -76,6 +76,24 @@ data class SongStateEntity(
     val lastPlayedAt: Long = 0,
 )
 
+@Entity(
+    tableName = "bookmarks",
+    indices = [Index(value = ["mediaId", "positionMs"], unique = true)],
+)
+data class BookmarkEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val mediaId: Long,
+    val positionMs: Long,
+    val note: String,
+    val createdAt: Long,
+)
+
+@Entity(tableName = "search_history")
+data class SearchHistoryEntity(
+    @PrimaryKey val query: String,
+    val searchedAt: Long,
+)
+
 @Entity(tableName = "folder_rules")
 data class FolderRuleEntity(
     @PrimaryKey val path: String,

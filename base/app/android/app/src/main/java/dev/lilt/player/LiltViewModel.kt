@@ -15,11 +15,15 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import dev.lilt.player.data.BookmarkEntity
+import dev.lilt.player.data.HistoryEntity
 import dev.lilt.player.data.LiltDatabase
 import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.ScanState
+import dev.lilt.player.data.SearchHistoryEntity
 import dev.lilt.player.data.SettingsStore
 import dev.lilt.player.data.SongEntity
+import dev.lilt.player.data.SongStateEntity
 import dev.lilt.player.playback.PlaybackService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -76,6 +80,14 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val favoriteIds: StateFlow<Set<Long>> = repository.observeFavoriteIds()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+    val songStates: StateFlow<Map<Long, SongStateEntity>> = repository.observeSongStates()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+    val history: StateFlow<List<HistoryEntity>> = repository.observeHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val bookmarks: StateFlow<List<BookmarkEntity>> = repository.observeBookmarks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val searchHistory: StateFlow<List<SearchHistoryEntity>> = repository.observeSearchHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val scanState: StateFlow<ScanState> = repository.scanState.asStateFlow()
 
     val language = settings.language
@@ -85,6 +97,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val queueConflict = settings.queueConflict
     val playbackSpeed = settings.playbackSpeed
     val activeQueueId = settings.activeQueueId
+    val songSort = settings.songSort
+    val songSortDescending = settings.songSortDescending
 
     private val _player = MutableStateFlow(PlayerUiState())
     val player: StateFlow<PlayerUiState> = _player.asStateFlow()
@@ -191,20 +205,34 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.scan() }
     }
 
-    fun playSongs(songs: List<SongEntity>, startIndex: Int, queueId: Long? = null) {
+    fun playSongs(
+        songs: List<SongEntity>,
+        startIndex: Int,
+        queueId: Long? = null,
+        startPositionMs: Long = 0L,
+    ) {
         val player = controller
         if (player == null) {
-            pendingPlay = { playSongs(songs, startIndex, queueId) }
+            pendingPlay = { playSongs(songs, startIndex, queueId, startPositionMs) }
             return
         }
         if (songs.isEmpty()) return
         if (queueId == null) settings.setActiveQueue(-1) else settings.setActiveQueue(queueId)
         countedMediaId = -1L
-        player.setMediaItems(songs.map(::mediaItem), startIndex.coerceIn(0, songs.lastIndex), 0L)
+        player.setMediaItems(
+            songs.map(::mediaItem),
+            startIndex.coerceIn(0, songs.lastIndex),
+            startPositionMs.coerceAtLeast(0),
+        )
         player.prepare()
         player.play()
         player.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
         publish(player)
+    }
+
+    /** Starts a song at a stored bookmark position. */
+    fun playAt(song: SongEntity, positionMs: Long) {
+        playSongs(listOf(song), 0, startPositionMs = positionMs)
     }
 
     fun playQueue(queueId: Long) {
@@ -395,10 +423,57 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun setAccent(value: String) = settings.setAccent(value)
     fun setIncludeOnly(value: Boolean) = settings.setIncludeOnly(value)
     fun setQueueConflict(value: String) = settings.setQueueConflict(value)
+    fun setSongSort(value: String) = settings.setSongSort(value)
+    fun setSongSortDescending(value: Boolean) = settings.setSongSortDescending(value)
 
     fun toggleFavorite(mediaId: Long) {
         if (mediaId <= 0) return
         viewModelScope.launch { repository.toggleFavorite(mediaId) }
+    }
+
+    fun setFavorite(mediaIds: Collection<Long>, favorite: Boolean) {
+        val ids = mediaIds.filter { it > 0 }.distinct()
+        if (ids.isEmpty()) return
+        viewModelScope.launch { repository.setFavorite(ids, favorite) }
+    }
+
+    fun addSongsToQueue(songs: List<SongEntity>) {
+        if (songs.isEmpty()) return
+        controller?.addMediaItems(songs.map(::mediaItem))
+    }
+
+    fun addSongsToPlaylist(playlistId: Long, songs: List<SongEntity>) {
+        if (songs.isEmpty()) return
+        viewModelScope.launch { repository.addToPlaylist(playlistId, songs.map { it.mediaId }) }
+    }
+
+    fun removeSongsFromPlaylist(playlistId: Long, songs: List<SongEntity>) {
+        if (songs.isEmpty()) return
+        viewModelScope.launch { repository.removeFromPlaylist(playlistId, songs.map { it.mediaId }) }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch { repository.clearHistory() }
+    }
+
+    fun addBookmark(positionMs: Long, note: String) {
+        val mediaId = _player.value.mediaId
+        if (mediaId <= 0) return
+        viewModelScope.launch {
+            repository.addBookmark(mediaId, positionMs, note)
+        }
+    }
+
+    fun deleteBookmark(id: Long) {
+        viewModelScope.launch { repository.deleteBookmark(id) }
+    }
+
+    fun recordSearch(query: String) {
+        viewModelScope.launch { repository.recordSearch(query) }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch { repository.clearSearchHistory() }
     }
 
     fun setFolderRule(path: String, kind: String, on: Boolean) {

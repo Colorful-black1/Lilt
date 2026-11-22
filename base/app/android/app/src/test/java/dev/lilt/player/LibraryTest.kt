@@ -2,11 +2,17 @@ package dev.lilt.player
 
 import dev.lilt.player.data.FolderRuleEntity
 import dev.lilt.player.data.MusicRepository
+import dev.lilt.player.data.PlaylistSummary
 import dev.lilt.player.data.SongEntity
+import dev.lilt.player.data.SongStateEntity
 import dev.lilt.player.library.LibraryGroups
 import dev.lilt.player.library.M3u
+import dev.lilt.player.library.SongSort
 import dev.lilt.player.library.UNKNOWN_ALBUM
 import dev.lilt.player.library.UNKNOWN_ARTIST
+import dev.lilt.player.library.letterOf
+import dev.lilt.player.library.searchLibrary
+import dev.lilt.player.library.sortSongs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -121,5 +127,76 @@ class LibraryTest {
         val songs = listOf(song(1).copy(artist = "", album = ""))
         assertEquals(UNKNOWN_ALBUM, LibraryGroups.albums(songs).single().name)
         assertEquals(UNKNOWN_ARTIST, LibraryGroups.artists(songs).single().name)
+    }
+
+    @Test
+    fun sortByTitleSwitchesDirection() {
+        val songs = listOf(
+            song(1, title = "Beta"),
+            song(2, title = "alpha"),
+            song(3, title = "Gamma"),
+        )
+        val ascending = sortSongs(songs, emptyMap(), SongSort.Title, descending = false)
+        assertEquals(listOf("alpha", "Beta", "Gamma"), ascending.map { it.title })
+        val descending = sortSongs(songs, emptyMap(), SongSort.Title, descending = true)
+        assertEquals(listOf("Gamma", "Beta", "alpha"), descending.map { it.title })
+    }
+
+    @Test
+    fun sortByPlayCountUsesUserState() {
+        val songs = listOf(song(1), song(2), song(3))
+        val states = mapOf(
+            1L to SongStateEntity(1, playCount = 2, lastPlayedAt = 100),
+            2L to SongStateEntity(2, playCount = 9, lastPlayedAt = 300),
+        )
+        val sorted = sortSongs(songs, states, SongSort.PlayCount, descending = true)
+        assertEquals(listOf(2L, 1L, 3L), sorted.map { it.mediaId })
+    }
+
+    @Test
+    fun sortByDateAddedPutsNewestFirst() {
+        val songs = listOf(
+            song(1).copy(dateAdded = 100),
+            song(2).copy(dateAdded = 300),
+            song(3).copy(dateAdded = 200),
+        )
+        val sorted = sortSongs(songs, emptyMap(), SongSort.DateAdded, descending = true)
+        assertEquals(listOf(2L, 3L, 1L), sorted.map { it.mediaId })
+    }
+
+    @Test
+    fun letterIndexBucketsLatinAndEverythingElse() {
+        assertEquals('G', letterOf("glass horizon"))
+        assertEquals('A', letterOf("  Aurora"))
+        assertEquals('#', letterOf("北方的风"))
+        assertEquals('#', letterOf("42"))
+        assertEquals('#', letterOf("   "))
+    }
+
+    @Test
+    fun searchGroupsSongsAlbumsArtistsFoldersAndPlaylists() {
+        val songs = listOf(
+            song(1, folder = "Music/LiltTest", title = "Glass Horizon")
+                .copy(artist = "Aurora Drift", album = "Demo Album"),
+            song(2, folder = "Music/LiltTest", title = "Last Train")
+                .copy(artist = "Night Transit", album = "Night Tracks"),
+            song(3, folder = "Music/Other", title = "Northlight")
+                .copy(artist = "Aurora Drift", album = "Demo Album"),
+        )
+        val playlists = listOf(PlaylistSummary(1, "Night list", 1, 2))
+
+        val night = searchLibrary(songs, playlists, "night")
+        assertEquals(listOf(2L), night.songs.map { it.mediaId })
+        assertEquals(listOf("Night Tracks"), night.albums.map { it.name })
+        assertEquals(listOf("Night Transit"), night.artists.map { it.name })
+        assertEquals(listOf("Night list"), night.playlists.map { it.name })
+        assertTrue(night.folders.isEmpty())
+
+        val music = searchLibrary(songs, playlists, "music")
+        assertEquals(3, music.songs.size)
+        assertEquals(listOf("Music/LiltTest", "Music/Other"), music.folders.map { it.path })
+        assertEquals(listOf(2, 1), music.folders.map { it.songs.size })
+
+        assertTrue(searchLibrary(songs, playlists, "   ").isEmpty)
     }
 }

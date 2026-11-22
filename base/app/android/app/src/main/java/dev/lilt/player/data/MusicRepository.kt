@@ -27,6 +27,8 @@ class MusicRepository(
 ) {
     private val music = db.musicDao()
     private val songStates = db.songStateDao()
+    private val bookmarks = db.bookmarkDao()
+    private val searches = db.searchHistoryDao()
     private val playlists = db.playlistDao()
     private val queues = db.queueDao()
 
@@ -41,11 +43,17 @@ class MusicRepository(
 
     fun observeRules(): Flow<List<FolderRuleEntity>> = music.observeRules()
     fun observeFavoriteIds(): Flow<Set<Long>> = songStates.observeFavoriteIds().map { it.toSet() }
+    fun observeSongStates(): Flow<Map<Long, SongStateEntity>> =
+        songStates.observeStates().map { states -> states.associateBy { it.mediaId } }
     fun observePlaylists(): Flow<List<PlaylistSummary>> = playlists.observePlaylists()
     fun observePlaylistSongs(id: Long): Flow<List<SongEntity>> = playlists.observePlaylistSongs(id)
     fun observeQueues(): Flow<List<QueueSummary>> = queues.observeQueues()
     fun observeQueueSongs(id: Long): Flow<List<SongEntity>> = queues.observeQueueSongs(id)
     fun observeHistory(): Flow<List<HistoryEntity>> = music.observeHistory()
+    fun observeBookmarks(): Flow<List<BookmarkEntity>> = bookmarks.observeAll()
+    fun observeBookmarksForSong(mediaId: Long): Flow<List<BookmarkEntity>> =
+        bookmarks.observeForSong(mediaId)
+    fun observeSearchHistory(): Flow<List<SearchHistoryEntity>> = searches.observe()
 
     suspend fun song(id: Long): SongEntity? = music.song(id)
 
@@ -191,9 +199,28 @@ class MusicRepository(
         playlists.addSong(PlaylistSongEntity(playlistId, mediaId, position))
     }
 
+    suspend fun addToPlaylist(playlistId: Long, mediaIds: Collection<Long>) =
+        withContext(Dispatchers.IO) {
+            if (mediaIds.isEmpty()) return@withContext
+            db.withTransaction {
+                var position = playlists.nextPosition(playlistId)
+                mediaIds.forEach { id ->
+                    playlists.addSong(PlaylistSongEntity(playlistId, id, position))
+                    position += 1
+                }
+            }
+        }
+
     suspend fun removeFromPlaylist(playlistId: Long, mediaId: Long) = withContext(Dispatchers.IO) {
         playlists.removeSong(playlistId, mediaId)
     }
+
+    suspend fun removeFromPlaylist(playlistId: Long, mediaIds: Collection<Long>) =
+        withContext(Dispatchers.IO) {
+            db.withTransaction {
+                mediaIds.forEach { playlists.removeSong(playlistId, it) }
+            }
+        }
 
     suspend fun playlistSongs(id: Long): List<SongEntity> = withContext(Dispatchers.IO) {
         playlists.playlistSongs(id)
@@ -247,6 +274,51 @@ class MusicRepository(
             )
             songStates.upsert(next)
         }
+    }
+
+    suspend fun setFavorite(mediaIds: Collection<Long>, favorite: Boolean) =
+        withContext(Dispatchers.IO) {
+            if (mediaIds.isEmpty()) return@withContext
+            db.withTransaction {
+                mediaIds.forEach { mediaId ->
+                    val current = songStates.state(mediaId)
+                    val next = (current ?: SongStateEntity(mediaId = mediaId)).copy(
+                        favorite = favorite,
+                    )
+                    songStates.upsert(next)
+                }
+            }
+        }
+
+    suspend fun clearHistory() = withContext(Dispatchers.IO) {
+        music.clearHistory()
+    }
+
+    suspend fun addBookmark(mediaId: Long, positionMs: Long, note: String) =
+        withContext(Dispatchers.IO) {
+            bookmarks.upsert(
+                BookmarkEntity(
+                    mediaId = mediaId,
+                    positionMs = positionMs.coerceAtLeast(0),
+                    note = note.trim(),
+                    createdAt = System.currentTimeMillis(),
+                ),
+            )
+        }
+
+    suspend fun deleteBookmark(id: Long) = withContext(Dispatchers.IO) {
+        bookmarks.delete(id)
+    }
+
+    suspend fun recordSearch(query: String) = withContext(Dispatchers.IO) {
+        val cleaned = query.trim()
+        if (cleaned.isEmpty()) return@withContext
+        searches.remove(cleaned)
+        searches.put(SearchHistoryEntity(cleaned, System.currentTimeMillis()))
+    }
+
+    suspend fun clearSearchHistory() = withContext(Dispatchers.IO) {
+        searches.clear()
     }
 
     suspend fun resolveTargets(targets: List<String>): List<SongEntity> = withContext(Dispatchers.IO) {

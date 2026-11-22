@@ -47,6 +47,9 @@ interface MusicDao {
 
     @Query("SELECT * FROM history ORDER BY playedAt DESC LIMIT 200")
     fun observeHistory(): Flow<List<HistoryEntity>>
+
+    @Query("DELETE FROM history")
+    suspend fun clearHistory()
 }
 
 @Dao
@@ -57,8 +60,41 @@ interface SongStateDao {
     @Query("SELECT * FROM song_state WHERE mediaId = :id")
     suspend fun state(id: Long): SongStateEntity?
 
+    @Query("SELECT * FROM song_state")
+    fun observeStates(): Flow<List<SongStateEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: SongStateEntity)
+}
+
+@Dao
+interface BookmarkDao {
+    @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<BookmarkEntity>>
+
+    @Query("SELECT * FROM bookmarks WHERE mediaId = :mediaId ORDER BY positionMs ASC")
+    fun observeForSong(mediaId: Long): Flow<List<BookmarkEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(bookmark: BookmarkEntity)
+
+    @Query("DELETE FROM bookmarks WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Dao
+interface SearchHistoryDao {
+    @Query("SELECT * FROM search_history ORDER BY searchedAt DESC LIMIT 12")
+    fun observe(): Flow<List<SearchHistoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(entry: SearchHistoryEntity)
+
+    @Query("DELETE FROM search_history WHERE query = :query COLLATE NOCASE")
+    suspend fun remove(query: String)
+
+    @Query("DELETE FROM search_history")
+    suspend fun clear()
 }
 
 @Dao
