@@ -16,6 +16,12 @@ Build only:
 cargo build
 ```
 
+Release builds use the Windows GUI subsystem, so double-clicking `lilt.exe` does not open
+a terminal. For diagnostics, enable **Settings → Developer → Developer mode**; Lilt opens a
+separate `Lilt developer console` window that tails `developer.log`. Closing that window
+does not stop playback, and logs live in the data folder below. Command-line flags such as
+`--list-audio` still print to the terminal they are launched from.
+
 Screenshot mode (starts without stealing focus, draws 120 frames, writes a PNG and exits):
 
 ```

@@ -610,6 +610,9 @@ pub struct Settings {
     pub sound_check: bool,
     pub scan_small_files: bool,
     pub min_duration_seconds: u32,
+    /// Shows the developer console window. Off by default; release builds are
+    /// GUI-subsystem executables and do not open a terminal unless this is on.
+    pub developer_mode: bool,
 }
 
 impl Default for Settings {
@@ -664,6 +667,7 @@ impl Default for Settings {
             sound_check: true,
             scan_small_files: false,
             min_duration_seconds: 0,
+            developer_mode: false,
         }
     }
 }
@@ -1098,5 +1102,15 @@ mod tests {
         assert!((fade_out_level(1.0, 1000, 100) - 0.84).abs() < 0.001);
         assert!((fade_out_level(1.0, 1000, 500) - 0.36).abs() < 0.001);
         assert_eq!(fade_out_level(1.0, 1000, 1000), 0.0);
+    }
+
+    #[test]
+    fn developer_mode_defaults_off_and_survives_old_state_files() {
+        assert!(!Settings::default().developer_mode);
+        let parsed: Persisted = serde_json::from_str("{}").unwrap();
+        assert!(!parsed.settings.developer_mode);
+        let parsed: Persisted =
+            serde_json::from_str(r#"{"settings":{"developer_mode":true}}"#).unwrap();
+        assert!(parsed.settings.developer_mode);
     }
 }

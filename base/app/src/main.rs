@@ -1,5 +1,8 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 mod app;
 mod audio;
+mod console;
 mod i18n;
 mod icons;
 mod library;
@@ -12,6 +15,12 @@ use eframe::egui;
 use std::path::PathBuf;
 
 fn main() -> eframe::Result {
+    if std::env::args_os().len() > 1 {
+        // Release builds use the Windows GUI subsystem, so attach to the calling
+        // terminal for CLI flags such as --list-audio and --help.
+        console::attach_parent_for_cli();
+    }
+
     let mut screenshot: Option<PathBuf> = None;
     let mut size = [1180.0f32, 780.0f32];
     let mut args = std::env::args().skip(1);

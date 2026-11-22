@@ -53,6 +53,14 @@ cargo build --release
 
 截图与无焦点启动等调试参数见 `base/app/README.md`。
 
+### 控制台与开发者模式
+
+- release 构建和打包后的 `lilt.exe` 使用 Windows GUI 子系统，双击时不会弹出终端；关闭终端也不会影响播放。
+- 需要查看诊断信息时，打开 **Settings → Developer → Developer mode**（设置 → 开发者 → 开发者模式）。开启后会打开独立的 `Lilt developer console` 窗口，实时显示日志。
+- 开发者控制台窗口可以随时关闭，不会停止播放器；关闭开发者模式时窗口会自动退出。
+- 日志文件：`%APPDATA%\Lilt\developer.log`（或 `LILT_DATA_DIR` 指定目录下的 `developer.log`）。
+- `--list-audio`、`--help` 等命令行参数仍会输出到启动它的终端。
+
 ## 一键打包
 
 在**仓库根目录**执行（PowerShell）：

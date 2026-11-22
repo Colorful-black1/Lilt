@@ -226,6 +226,12 @@ impl LiltApp {
         theme::install_fonts(&cc.egui_ctx);
         let system_dark = cc.egui_ctx.theme() == egui::Theme::Dark;
         let mut state = library::load_state();
+        crate::console::set_enabled(state.settings.developer_mode);
+        crate::console::log(format!("Lilt {} starting", APP_VERSION));
+        crate::console::log(format!(
+            "Data directory: {}",
+            library::data_dir().display()
+        ));
         let minute = theme::local_minute_of_day();
         let daylight =
             minute >= state.settings.day_start_minutes && minute < state.settings.day_end_minutes;
@@ -411,6 +417,7 @@ impl LiltApp {
         let only_included = self.state.settings.only_included;
         let settings = self.state.settings.clone();
         let extras = self.state.songs.clone();
+        crate::console::log(format!("Scanning {} root(s)", roots.len()));
         let (tx, rx) = channel();
         self.scan_rx = Some(rx);
         self.scanning = true;
@@ -463,6 +470,7 @@ impl LiltApp {
                 ScanEvent::Failed(error) => {
                     done = true;
                     self.scanning = false;
+                    crate::console::log(format!("Scan failed: {error}"));
                     self.scan_error = Some(error);
                 }
             }
@@ -472,7 +480,7 @@ impl LiltApp {
         }
     }
 
-    fn apply_scan(&mut self, songs: Vec<Song>, _stats: library::ScanStats) -> bool {
+    fn apply_scan(&mut self, songs: Vec<Song>, stats: library::ScanStats) -> bool {
         if songs.is_empty() && self.state.starter_library && !self.fallback_attempted {
             if let Some(demo) = library::bundled_demo_dir() {
                 self.fallback_attempted = true;
@@ -486,6 +494,12 @@ impl LiltApp {
         self.songs = songs;
         self.scanning = false;
         self.last_scan = Some(now_secs());
+        crate::console::log(format!(
+            "Scan finished: {} songs, {} files seen, {} skipped",
+            self.songs.len(),
+            stats.files_seen,
+            stats.skipped
+        ));
         self.rebuild_groups();
         let roots: Vec<PathBuf> = self
             .state
@@ -2908,6 +2922,7 @@ impl eframe::App for LiltApp {
 impl Drop for LiltApp {
     fn drop(&mut self) {
         let _ = library::save_state(&self.state);
+        crate::console::shutdown();
     }
 }
 

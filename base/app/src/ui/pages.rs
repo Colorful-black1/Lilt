@@ -2249,6 +2249,42 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
             });
             ui.add_space(12.0);
             card_frame(palette).show(ui, |ui| {
+                common::section_title(
+                    ui,
+                    palette,
+                    app.t("Developer", "开发者"),
+                    app.t(
+                        "Diagnostics. Leave this off for normal use.",
+                        "诊断选项，正常使用时保持关闭。",
+                    ),
+                );
+                ui.add_space(6.0);
+                let mut developer_mode = app.state.settings.developer_mode;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Developer mode", "开发者模式"),
+                    app.t(
+                        "Show a console window for diagnostics. Closing it does not stop playback.",
+                        "显示用于诊断的控制台窗口。关闭控制台不会停止播放。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut developer_mode, palette).clicked() {
+                            app.state.settings.developer_mode = developer_mode;
+                            if developer_mode {
+                                crate::console::set_enabled(true);
+                                crate::console::log("Developer console enabled");
+                            } else {
+                                crate::console::log("Developer console disabled");
+                                crate::console::set_enabled(false);
+                            }
+                            app.mark_dirty();
+                        }
+                    },
+                );
+            });
+            ui.add_space(12.0);
+            card_frame(palette).show(ui, |ui| {
                 common::section_title(ui, palette, app.t("About", "关于"), "");
                 ui.add_space(6.0);
                 ui.label(
