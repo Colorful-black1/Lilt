@@ -14,7 +14,8 @@ to the layout KuGou uses on desktop:
   semi-transparent card and bright wallpapers.
 
 Unlocked mode uses a **semi-transparent rounded card** with a thin accent frame and
-a floating dark toolbar of 32 px buttons (favourite, previous, play/pause, next,
+a floating dark toolbar of 44 px buttons (38 px in narrow windows; favourite,
+previous, play/pause, next,
 open player, lock and close). The whole lyric body is draggable and double-click
 opens Now Playing. Locked mode draws **no card, frame or toolbar**: only the
 outlined lyrics and the small unlock puck remain, fully transparent and
@@ -33,9 +34,9 @@ hides the desktop lyrics without opening Settings.
     height. There is no wrapping or truncation.
   - `paint_outlined_line` paints a near-black outline in eight directions, then
     the accent-coloured fill.
-  - the unlocked layout draws the dark rounded card, a 38 px header with the grip
-    and a 32 px-button toolbar pill; the current line starts below it, left
-    aligned.
+  - the unlocked layout draws the dark rounded card, a header with the grip and a
+    toolbar pill of 44 px buttons (38 px when the card is narrower than 560 px);
+    the current line starts below it, left aligned.
   - the next line is painted at the bottom-right of the available body.
   - default window size is `900x190`; the minimum is `460x160`.
 - `base/app/src/desktop.rs`
@@ -86,7 +87,7 @@ scale to fit without clipping.
 
 | File | What it shows |
 |---|---|
-| `01-pc-lyrics-unlocked-900x190.png` | Semi-transparent card, current line left, next line right, 32 px toolbar |
+| `01-pc-lyrics-unlocked-900x190.png` | Semi-transparent card, current line left, next line right, 44 px toolbar |
 | `02-pc-lyrics-locked-900x190.png` | Fully transparent locked overlay: no card/toolbar, crisp outlined text, unlock puck |
 | `03-pc-lyrics-narrow-460x160.png` | Minimum width: a long line is scaled to fit completely, next line right aligned |
 | `04-pc-lyrics-narrow-680x160.png` | Reference-like width: both long lines fully visible |
@@ -100,7 +101,7 @@ scale to fit without clipping.
 
 ```text
 dist/Lilt-0.1.0-win64/Lilt.exe        11,204,096 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,193,446 bytes
+dist/Lilt-0.1.0-win64-portable.zip    18,192,670 bytes
 ```
 
 `package.ps1 pc` completed successfully after the change.
@@ -114,6 +115,6 @@ dist/Lilt-0.1.0-win64-portable.zip    18,193,446 bytes
 - The outline is painted as eight offset text layers. This is intentional and
   keeps the text sharp on both dark and bright backgrounds, but it does not
   scale like a vector stroke; very small fitted sizes use a 1 px outline.
-- The toolbar is always visible while unlocked (not hover-only), so it takes a
-  38 px strip at the top of the window.
+- The toolbar is always visible while unlocked (not hover-only), so it takes an
+  approximately 50 px strip at the top of a wide window (44 px in narrow ones).
 - Android has separate evidence in `../android-floating-lyrics-compact/`.

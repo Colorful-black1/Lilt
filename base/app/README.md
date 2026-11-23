@@ -140,7 +140,8 @@ Set `LILT_DATA_DIR` to use a different data folder.
   the bottom, and both use the same per-song offset and opacity settings as the now-playing
   panel. Lines never wrap or ellipsize; the font shrinks to fit so the full text is visible
   even in a narrow window. Text is drawn with a dark outline. When unlocked the overlay is a
-  semi-transparent rounded dark card with a thin accent frame and a floating 32 px toolbar
+  semi-transparent rounded dark card with a thin accent frame and a large floating toolbar
+  (44 px targets, 38 px in narrow windows)
   (favourite, previous, play/pause, next, open player, lock and close); the whole lyric area
   can be dragged and double-click opens Now Playing. Locking removes the card and toolbar,
   makes the window fully transparent and click-through, and leaves only the outlined lyrics

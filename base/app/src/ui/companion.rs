@@ -660,7 +660,6 @@ fn render_lyrics(
     let locked = snapshot.lyrics_locked;
     let outline = with_alpha(Color32::from_rgb(8, 7, 6), 235);
     let active_size = snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0);
-    let toolbar_button = 32.0;
 
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
@@ -673,11 +672,14 @@ fn render_lyrics(
             let mut body = inner;
 
             if lyrics_chrome_visible(locked) {
-                let header = Rect::from_min_size(inner.min, Vec2::new(inner.width(), 38.0));
+                let toolbar_button = if inner.width() >= 560.0 { 44.0 } else { 38.0 };
+                let header_height = toolbar_button + 6.0;
                 let pill_width = 7.0 * toolbar_button + 6.0 * 2.0 + 20.0;
+                let header =
+                    Rect::from_min_size(inner.min, Vec2::new(inner.width(), header_height));
                 let pill = Rect::from_min_size(
                     egui::pos2(header.right() - pill_width, header.top() + 1.0),
-                    Vec2::new(pill_width, 36.0),
+                    Vec2::new(pill_width, toolbar_button + 4.0),
                 );
                 let drag_rect = Rect::from_min_max(
                     header.min,
