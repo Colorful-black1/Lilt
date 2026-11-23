@@ -108,6 +108,7 @@ pub enum Modal {
     },
     About,
     Shortcuts,
+    MissingFiles(Vec<MissingFile>),
 }
 
 #[derive(Clone, Debug)]
@@ -138,6 +139,26 @@ pub enum ScanEvent {
 pub enum FadeKind {
     In,
     Out,
+}
+
+/// Two playback markers. `a` is always set first; `b` switches the loop on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AbLoop {
+    pub a: f64,
+    pub b: Option<f64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MissingFile {
+    pub key: String,
+    pub title: String,
+    pub path: String,
+    pub playlists: Vec<String>,
+    pub queues: Vec<String>,
+    pub favorite: bool,
+    pub lyrics: bool,
+    pub bookmarks: usize,
+    pub plays: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -184,6 +205,7 @@ pub struct LiltApp {
     pub repeat: RepeatMode,
     pub pending_next: Option<usize>,
     pub counted_current: bool,
+    pub ab_loop: Option<AbLoop>,
     pub lyrics: Option<Vec<(f64, String)>>,
     pub lyrics_for: Option<String>,
 
@@ -312,6 +334,7 @@ impl LiltApp {
             repeat: RepeatMode::Off,
             pending_next: None,
             counted_current: false,
+            ab_loop: None,
             lyrics: None,
             lyrics_for: None,
             audio: None,
@@ -566,11 +589,6 @@ impl LiltApp {
         {
             self.current_key = active_key.or_else(|| self.songs.first().map(|s| s.key.clone()));
         }
-        for playlist in &mut self.state.playlists {
-            playlist
-                .songs
-                .retain(|key| self.songs.iter().any(|s| &s.key == key));
-        }
         self.dirty = true;
         self.save_now();
         if std::env::var_os("LILT_AUTOPLAY").is_some() && !self.playing && !self.songs.is_empty() {
@@ -582,6 +600,16 @@ impl LiltApp {
             }
             if std::env::var_os("LILT_PAUSE_AFTER_SEEK").is_some() {
                 self.toggle_play();
+            }
+        }
+        if let (Ok(start), Ok(end)) = (std::env::var("LILT_AB_A"), std::env::var("LILT_AB_B")) {
+            if let (Ok(start), Ok(end)) = (start.parse::<f64>(), end.parse::<f64>()) {
+                if end > start + 0.25 {
+                    self.ab_loop = Some(AbLoop {
+                        a: start,
+                        b: Some(end),
+                    });
+                }
             }
         }
         if let Ok(offset) = std::env::var("LILT_LYRICS_OFFSET") {
@@ -676,6 +704,7 @@ impl LiltApp {
                 }
                 "about" => self.modal = Some(Modal::About),
                 "shortcuts" => self.modal = Some(Modal::Shortcuts),
+                "missing" => self.open_missing_files(),
                 _ => {}
             }
         }
@@ -1004,6 +1033,7 @@ impl LiltApp {
         let position = position.clamp(0.0, (duration - 0.15).max(0.0));
         self.current_key = Some(key.clone());
         self.pending_next = None;
+        self.ab_loop = None;
         self.counted_current = false;
         self.lyrics = None;
         self.lyrics_for = None;
@@ -1314,6 +1344,22 @@ impl LiltApp {
     }
 
     pub fn seek_to(&mut self, seconds: f64) {
+        if let Some(ab) = self.ab_loop {
+            if let Some(b) = ab.b {
+                if seconds < ab.a - 0.05 || seconds > b + 0.05 {
+                    self.ab_loop = None;
+                }
+            }
+        }
+        self.seek_to_inner(seconds);
+    }
+
+    /// Used by the loop itself; keeps the markers active.
+    fn seek_to_loop_start(&mut self, seconds: f64) {
+        self.seek_to_inner(seconds);
+    }
+
+    fn seek_to_inner(&mut self, seconds: f64) {
         let duration = self.duration();
         let seconds = seconds.clamp(0.0, (duration - 0.05).max(0.0));
         let was_playing = self.playing;
@@ -1356,6 +1402,48 @@ impl LiltApp {
 
     pub fn seek_fraction(&mut self, fraction: f64) {
         self.seek_to(fraction.clamp(0.0, 1.0) * self.duration());
+    }
+
+    pub fn toggle_ab_loop(&mut self) {
+        let position = self.position();
+        match self.ab_loop {
+            None => {
+                self.ab_loop = Some(AbLoop {
+                    a: position,
+                    b: None,
+                });
+                self.notify(format!(
+                    "{} {}",
+                    self.t("A set at", "A 点已设在"),
+                    format_duration(position)
+                ));
+            }
+            Some(ab) if ab.b.is_none() => {
+                if position <= ab.a + 0.25 {
+                    self.notify(self.t("Set B later than A", "B 点需要晚于 A 点").to_owned());
+                } else {
+                    self.ab_loop = Some(AbLoop {
+                        a: ab.a,
+                        b: Some(position),
+                    });
+                    self.notify(format!(
+                        "A-B {} – {}",
+                        format_duration(ab.a),
+                        format_duration(position)
+                    ));
+                }
+            }
+            Some(_) => {
+                self.ab_loop = None;
+                self.notify(self.t("A-B loop off", "A-B 循环已关闭").to_owned());
+            }
+        }
+    }
+
+    pub fn clear_ab_loop(&mut self) {
+        if self.ab_loop.take().is_some() {
+            self.notify(self.t("A-B loop off", "A-B 循环已关闭").to_owned());
+        }
     }
 
     pub fn set_volume(&mut self, value: f32) {
@@ -1714,6 +1802,13 @@ impl LiltApp {
                 self.next_track(true);
             }
             return;
+        }
+
+        if let Some(ab) = self.ab_loop {
+            if let Some(target) = ab_loop_target(Some(ab), pos) {
+                self.seek_to_loop_start(target);
+                return;
+            }
         }
 
         self.last_play_pos = pos;
@@ -2629,6 +2724,189 @@ impl LiltApp {
         ));
     }
 
+    pub fn missing_file_count(&self) -> usize {
+        let available: HashSet<&str> = self.songs.iter().map(|s| s.key.as_str()).collect();
+        let mut keys: HashSet<&str> = HashSet::new();
+        for playlist in &self.state.playlists {
+            for key in &playlist.songs {
+                if !available.contains(key.as_str()) {
+                    keys.insert(key);
+                }
+            }
+        }
+        for queue in &self.state.queues {
+            for key in &queue.songs {
+                if !available.contains(key.as_str()) {
+                    keys.insert(key);
+                }
+            }
+        }
+        for (key, extra) in &self.state.songs {
+            let has_user_data = extra.favorite
+                || extra.play_count > 0
+                || extra.lyrics.is_some()
+                || !extra.bookmarks.is_empty();
+            if has_user_data && !available.contains(key.as_str()) {
+                keys.insert(key);
+            }
+        }
+        keys.len()
+    }
+
+    pub fn open_missing_files(&mut self) {
+        let files = self.missing_files();
+        self.modal = Some(Modal::MissingFiles(files));
+    }
+
+    /// Playlist, queue and user-data references that no longer resolve to a
+    /// file on disk. Playlists keep their keys across rescans on purpose so a
+    /// moved file can be pointed at its new path.
+    pub fn missing_files(&self) -> Vec<MissingFile> {
+        let available: HashSet<String> = self
+            .songs
+            .iter()
+            .filter(|song| song.exists())
+            .map(|song| song.key.clone())
+            .collect();
+        let mut entries: HashMap<String, MissingFile> = HashMap::new();
+        for playlist in &self.state.playlists {
+            for key in &playlist.songs {
+                if available.contains(key) {
+                    continue;
+                }
+                let entry = entries
+                    .entry(key.clone())
+                    .or_insert_with(|| missing_file_entry(&self.state, key));
+                if !entry.playlists.contains(&playlist.name) {
+                    entry.playlists.push(playlist.name.clone());
+                }
+            }
+        }
+        for queue in &self.state.queues {
+            for key in &queue.songs {
+                if available.contains(key) {
+                    continue;
+                }
+                let entry = entries
+                    .entry(key.clone())
+                    .or_insert_with(|| missing_file_entry(&self.state, key));
+                if !entry.queues.contains(&queue.name) {
+                    entry.queues.push(queue.name.clone());
+                }
+            }
+        }
+        for song in &self.songs {
+            if song.exists() {
+                continue;
+            }
+            entries.entry(song.key.clone()).or_insert_with(|| {
+                let mut entry = missing_file_entry(&self.state, &song.key);
+                entry.title = song.display_title().to_owned();
+                entry.path = song.path.to_string_lossy().to_string();
+                entry
+            });
+        }
+        for (key, extra) in &self.state.songs {
+            if available.contains(key) {
+                continue;
+            }
+            let has_user_data = extra.favorite
+                || extra.play_count > 0
+                || extra.lyrics.is_some()
+                || !extra.bookmarks.is_empty();
+            if has_user_data {
+                entries
+                    .entry(key.clone())
+                    .or_insert_with(|| missing_file_entry(&self.state, key));
+            }
+        }
+        let mut out: Vec<MissingFile> = entries.into_values().collect();
+        out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        out
+    }
+
+    pub fn relink_missing_file(&mut self, old_key: &str) {
+        let file_name = Path::new(old_key)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("audio");
+        let mut dialog = rfd::FileDialog::new()
+            .add_filter("Audio", crate::library::AUDIO_EXTENSIONS)
+            .set_file_name(file_name);
+        if let Some(parent) = Path::new(old_key).parent() {
+            if parent.is_dir() {
+                dialog = dialog.set_directory(parent);
+            }
+        }
+        let Some(path) = dialog.pick_file() else {
+            return;
+        };
+        match self.relink_missing_file_to(old_key, &path) {
+            Ok(()) => self.notify(self.t("File re-linked", "文件已重新关联").to_owned()),
+            Err(error) => self.notify(error),
+        }
+    }
+
+    /// Replaces every reference to `old_key` with the chosen local audio file.
+    /// The file must be inside one of the configured library roots so the next
+    /// scan keeps it in the library.
+    pub fn relink_missing_file_to(&mut self, old_key: &str, path: &Path) -> Result<(), String> {
+        if !library::is_audio(path) {
+            return Err(self
+                .t(
+                    "Choose an audio file Lilt can scan.",
+                    "请选择 Lilt 可以扫描的音频文件。",
+                )
+                .to_owned());
+        }
+        let canonical = canonical_clean(path);
+        if !canonical.is_file() {
+            return Err(self
+                .t("That file no longer exists.", "该文件已不存在。")
+                .to_owned());
+        }
+        let roots: Vec<PathBuf> = self
+            .state
+            .library_roots
+            .iter()
+            .map(|root| canonical_clean(Path::new(root)))
+            .collect();
+        if !roots.is_empty() && !roots.iter().any(|root| path_under(&canonical, root)) {
+            return Err(self
+                .t(
+                    "Choose a file inside one of the library folders.",
+                    "请选择曲库文件夹内的文件。",
+                )
+                .to_owned());
+        }
+        let new_key = normalize_key(&canonical);
+        let mut extras = self.state.songs.clone();
+        if let Some(extra) = extras.remove(old_key) {
+            extras.entry(new_key.clone()).or_insert(extra);
+        }
+        let Some(song) = library::read_song(&canonical, &extras) else {
+            return Err(self
+                .t(
+                    "That file could not be read as audio.",
+                    "无法将该文件读取为音频。",
+                )
+                .to_owned());
+        };
+        apply_relink(
+            &mut self.state,
+            &mut self.songs,
+            &mut self.current_key,
+            &mut self.selected,
+            old_key,
+            song,
+        );
+        self.rebuild_groups();
+        self.folders = FolderIndex::build(&self.songs, &roots);
+        self.dirty = true;
+        self.save_now();
+        Ok(())
+    }
+
     pub fn folder_song_keys(&self, path: &Path) -> Vec<String> {
         self.songs
             .iter()
@@ -3501,6 +3779,111 @@ impl Drop for LiltApp {
     }
 }
 
+fn missing_file_entry(state: &Persisted, key: &str) -> MissingFile {
+    let extra = state.songs.get(key);
+    let file_name = Path::new(key)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(key);
+    MissingFile {
+        key: key.to_owned(),
+        title: extra
+            .and_then(|extra| extra.title.clone())
+            .unwrap_or_else(|| file_name.to_owned()),
+        path: key.to_owned(),
+        playlists: Vec::new(),
+        queues: Vec::new(),
+        favorite: extra.map(|extra| extra.favorite).unwrap_or(false),
+        lyrics: extra.map(|extra| extra.lyrics.is_some()).unwrap_or(false),
+        bookmarks: extra.map(|extra| extra.bookmarks.len()).unwrap_or(0),
+        plays: extra.map(|extra| extra.play_count).unwrap_or(0),
+    }
+}
+
+fn apply_relink(
+    state: &mut Persisted,
+    songs: &mut Vec<Song>,
+    current_key: &mut Option<String>,
+    selected: &mut HashSet<String>,
+    old_key: &str,
+    song: Song,
+) {
+    let new_key = song.key.clone();
+    replace_missing_reference(state, old_key, &new_key);
+    if let Some(extra) = state.songs.remove(old_key) {
+        state.songs.entry(new_key.clone()).or_insert(extra);
+    }
+    if current_key.as_deref() == Some(old_key) {
+        *current_key = Some(new_key.clone());
+    }
+    if selected.remove(old_key) {
+        selected.insert(new_key.clone());
+    }
+    songs.retain(|existing| existing.key != old_key && existing.key != new_key);
+    songs.push(song);
+}
+
+/// Rewrites playlist and queue references without touching the scanned songs.
+pub fn replace_missing_reference(state: &mut Persisted, old_key: &str, new_key: &str) -> bool {
+    let mut any = false;
+    for playlist in &mut state.playlists {
+        if replace_key(&mut playlist.songs, old_key, new_key) {
+            playlist.updated = now_secs();
+            any = true;
+        }
+    }
+    for queue in &mut state.queues {
+        let current = queue.songs.get(queue.index).cloned();
+        if !replace_key(&mut queue.songs, old_key, new_key) {
+            continue;
+        }
+        any = true;
+        queue.updated = now_secs();
+        let target = match current {
+            Some(key) if key == old_key => new_key.to_owned(),
+            Some(key) => key,
+            None => continue,
+        };
+        if let Some(index) = queue.songs.iter().position(|key| key == &target) {
+            queue.index = index;
+        }
+        if queue.index >= queue.songs.len() {
+            queue.index = 0;
+        }
+    }
+    any
+}
+
+fn replace_key(keys: &mut Vec<String>, old_key: &str, new_key: &str) -> bool {
+    if !keys.iter().any(|key| key == old_key) {
+        return false;
+    }
+    let mut seen = HashSet::new();
+    let mut out = Vec::with_capacity(keys.len());
+    for key in keys.drain(..) {
+        let key = if key == old_key {
+            new_key.to_owned()
+        } else {
+            key
+        };
+        if seen.insert(key.clone()) {
+            out.push(key);
+        }
+    }
+    *keys = out;
+    true
+}
+
+fn ab_loop_target(ab: Option<AbLoop>, position: f64) -> Option<f64> {
+    let ab = ab?;
+    let end = ab.b?;
+    if position >= end {
+        Some(ab.a)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3529,5 +3912,130 @@ mod tests {
     #[test]
     fn max_queue_matches_target() {
         assert_eq!(MAX_QUEUES, 20);
+    }
+
+    #[test]
+    fn ab_loop_waits_for_b_and_jumps_at_the_end() {
+        assert_eq!(ab_loop_target(None, 5.0), None);
+        assert_eq!(
+            ab_loop_target(Some(AbLoop { a: 10.0, b: None }), 12.0),
+            None
+        );
+        assert_eq!(
+            ab_loop_target(
+                Some(AbLoop {
+                    a: 10.0,
+                    b: Some(20.0)
+                }),
+                19.9
+            ),
+            None
+        );
+        assert_eq!(
+            ab_loop_target(
+                Some(AbLoop {
+                    a: 10.0,
+                    b: Some(20.0)
+                }),
+                20.0
+            ),
+            Some(10.0)
+        );
+    }
+
+    #[test]
+    fn relinking_rewrites_playlists_and_queues_without_duplicates() {
+        let mut state = Persisted::default();
+        state.playlists.push(Playlist {
+            id: 1,
+            name: "Moved".to_owned(),
+            songs: vec![
+                "old.mp3".to_owned(),
+                "keep.mp3".to_owned(),
+                "old.mp3".to_owned(),
+            ],
+            created: 1,
+            updated: 2,
+        });
+        state.queues.push(Queue {
+            id: 2,
+            name: "Evening".to_owned(),
+            songs: vec!["keep.mp3".to_owned(), "old.mp3".to_owned()],
+            index: 1,
+            position: 12.0,
+            updated: 3,
+        });
+        assert!(replace_missing_reference(&mut state, "old.mp3", "new.mp3"));
+        assert_eq!(state.playlists[0].songs, vec!["new.mp3", "keep.mp3"]);
+        assert_eq!(state.queues[0].songs, vec!["keep.mp3", "new.mp3"]);
+        assert_eq!(state.queues[0].index, 1);
+        assert!(!replace_missing_reference(&mut state, "old.mp3", "new.mp3"));
+    }
+
+    #[test]
+    fn relinking_a_real_file_moves_references_and_song_state() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("Starter Music")
+            .join("Aurora Drift")
+            .join("01 - Glass Horizon.wav");
+        let Some(song) = library::read_song(&path, &HashMap::new()) else {
+            return;
+        };
+        let new_key = song.key.clone();
+        let old_key = "z:\\gone\\missing.mp3".to_owned();
+        let mut state = Persisted::default();
+        state.playlists.push(Playlist {
+            id: 1,
+            name: "Moved".to_owned(),
+            songs: vec![old_key.clone(), "keep.mp3".to_owned()],
+            created: 1,
+            updated: 1,
+        });
+        state.queues.push(Queue {
+            id: 2,
+            name: "Evening".to_owned(),
+            songs: vec![old_key.clone(), "keep.mp3".to_owned()],
+            index: 1,
+            position: 4.0,
+            updated: 1,
+        });
+        state.songs.insert(
+            old_key.clone(),
+            SongExtra {
+                favorite: true,
+                play_count: 5,
+                ..SongExtra::default()
+            },
+        );
+        let mut songs = Vec::new();
+        let mut current = Some(old_key.clone());
+        let mut selected = HashSet::from([old_key.clone()]);
+        apply_relink(
+            &mut state,
+            &mut songs,
+            &mut current,
+            &mut selected,
+            &old_key,
+            song,
+        );
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].key, new_key);
+        assert_eq!(
+            state.playlists[0].songs,
+            vec![new_key.clone(), "keep.mp3".to_owned()]
+        );
+        assert_eq!(
+            state.queues[0].songs,
+            vec![new_key.clone(), "keep.mp3".to_owned()]
+        );
+        assert_eq!(state.queues[0].index, 1);
+        assert!(state
+            .songs
+            .get(&new_key)
+            .map(|extra| extra.favorite)
+            .unwrap_or(false));
+        assert!(!state.songs.contains_key(&old_key));
+        assert_eq!(current.as_deref(), Some(new_key.as_str()));
+        assert!(selected.contains(&new_key));
     }
 }

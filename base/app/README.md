@@ -100,12 +100,21 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **Locate current song** from the top bar, the Songs header or the now-playing overlay.
   It opens the complete song list and scrolls the playing row into view; the one-shot
   scroll does not fight later manual scrolling.
+- **A-B loop.** In the now-playing panel, press **A-B loop** once to set A, again to set B
+  and once more (or **Clear A-B**) to stop. Playback returns to A when it reaches B; seeking
+  outside the range or changing track clears the markers. The same panel shows both times.
+- **Missing-file re-linking.** Playlists keep entries whose file disappears instead of
+  silently dropping them. **Settings → Library** shows the missing count and opens a list
+  with the old path and the playlists, queues, favourite, lyrics and bookmarks that point at
+  it. Choose **Locate…** and pick the moved file inside a library folder; Lilt moves the song
+  state to the new key, refreshes the library immediately and rewrites playlist/queue
+  references.
 - **Local backup & restore.** **Settings → Backup & restore** exports one versioned JSON
   file with playlists, queues, favourites, play counts, last positions, bookmarks, lyrics
   and offsets, tag overrides, EQ profiles, recent searches and settings. Restore validates
   the app, format and platform, stops playback, replaces the user data, saves the state and
   rescans the library. Audio files and the scanned index are never copied into the backup;
-  playlists whose files are gone keep their keys rather than inventing replacements.
+  playlists whose files are gone keep their keys so the missing-file tool can re-link them.
 - **Lyric timing and display.** Each song keeps its own offset (`-500`, `-100`, `+100`,
   `+500` ms and reset, limited to ±60 s); positive values delay the lyrics. Clicking a
   lyric line seeks to its adjusted time. Settings has lyric font size (10–24 px) and

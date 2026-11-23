@@ -377,13 +377,8 @@ fn songs_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
                 app.play_context(keys.clone(), 0, &name);
             }
             if app.current_song().is_some()
-                && widgets::ghost_button(
-                    ui,
-                    app.t("Locate", "定位"),
-                    Some(Icon::Locate),
-                    palette,
-                )
-                .clicked()
+                && widgets::ghost_button(ui, app.t("Locate", "定位"), Some(Icon::Locate), palette)
+                    .clicked()
             {
                 app.locate_current_song();
             }
@@ -931,6 +926,11 @@ fn playlist_detail(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, id: u64) {
         .iter()
         .filter_map(|key| app.songs.iter().position(|s| &s.key == key))
         .collect();
+    let playable_keys: Vec<String> = rows
+        .iter()
+        .map(|index| app.songs[*index].key.clone())
+        .collect();
+    let missing = keys.len().saturating_sub(rows.len());
     let mut back = false;
     ui.horizontal(|ui| {
         if icons::icon_button(
@@ -979,14 +979,27 @@ fn playlist_detail(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, id: u64) {
                     .color(palette.text),
             );
             ui.label(
-                RichText::new(format!(
-                    "{}  ·  {}",
-                    tracks(app.lang(), playlist.songs.len()),
-                    crate::i18n::total_duration(
-                        app.lang(),
-                        rows.iter().map(|i| app.songs[*i].duration).sum(),
+                RichText::new(if missing > 0 {
+                    format!(
+                        "{}  ·  {}  ·  {} {}",
+                        tracks(app.lang(), rows.len()),
+                        crate::i18n::total_duration(
+                            app.lang(),
+                            rows.iter().map(|i| app.songs[*i].duration).sum(),
+                        ),
+                        missing,
+                        app.t("missing", "首失效")
                     )
-                ))
+                } else {
+                    format!(
+                        "{}  ·  {}",
+                        tracks(app.lang(), rows.len()),
+                        crate::i18n::total_duration(
+                            app.lang(),
+                            rows.iter().map(|i| app.songs[*i].duration).sum(),
+                        )
+                    )
+                })
                 .size(11.5)
                 .color(palette.muted),
             );
@@ -998,6 +1011,17 @@ fn playlist_detail(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, id: u64) {
                 {
                     let name = playlist.name.clone();
                     app.play_context(keys.clone(), 0, &name);
+                }
+                if missing > 0
+                    && widgets::ghost_button(
+                        ui,
+                        app.t("Locate missing", "定位失效文件"),
+                        Some(Icon::Locate),
+                        palette,
+                    )
+                    .clicked()
+                {
+                    app.open_missing_files();
                 }
                 if widgets::ghost_button(ui, app.t("Export", "导出"), Some(Icon::Download), palette)
                     .clicked()
@@ -1064,8 +1088,8 @@ fn playlist_detail(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, id: u64) {
                     palette,
                     &rows,
                     &playlist.name,
-                    &keys,
-                    true,
+                    &playable_keys,
+                    missing == 0,
                     Some(playlist.id),
                     None,
                     true,
@@ -2030,6 +2054,33 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                 {
                     app.add_included_folder();
                 }
+                ui.add_space(8.0);
+                let missing = app.missing_file_count();
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} {}",
+                            missing,
+                            app.t("missing file(s)", "个失效文件")
+                        ))
+                        .size(11.0)
+                        .color(if missing > 0 {
+                            palette.danger
+                        } else {
+                            palette.muted
+                        }),
+                    );
+                    if widgets::ghost_button(
+                        ui,
+                        app.t("Review missing files", "查看失效文件"),
+                        Some(Icon::Locate),
+                        palette,
+                    )
+                    .clicked()
+                    {
+                        app.open_missing_files();
+                    }
+                });
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let before = app.state.settings.min_duration_seconds;
@@ -2701,16 +2752,15 @@ fn sound_output_card(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
                                 default_label.clone(),
                             );
                             for device in &devices {
-                                ui.selectable_value(&mut chosen_device, device.clone(), device.as_str());
+                                ui.selectable_value(
+                                    &mut chosen_device,
+                                    device.clone(),
+                                    device.as_str(),
+                                );
                             }
                         });
-                    if widgets::ghost_button(
-                        ui,
-                        app.t("Test", "试听"),
-                        Some(Icon::Volume),
-                        palette,
-                    )
-                    .clicked()
+                    if widgets::ghost_button(ui, app.t("Test", "试听"), Some(Icon::Volume), palette)
+                        .clicked()
                     {
                         test_output = true;
                     }

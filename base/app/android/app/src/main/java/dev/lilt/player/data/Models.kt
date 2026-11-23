@@ -29,6 +29,23 @@ data class SongEntity(
         get() = if (albumId > 0) "content://media/external/audio/albumart/$albumId" else null
 }
 
+/**
+ * Last-known metadata for a track that disappeared from MediaStore. Scans
+ * delete stale rows from `songs` but keep this snapshot so the missing-files
+ * screen can name the track and reconnect it to a new media id.
+ */
+@Entity(tableName = "missing_songs")
+data class MissingSongEntity(
+    @PrimaryKey val mediaId: Long,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val folder: String,
+    val displayName: String,
+    val durationMs: Long,
+    val lastSeen: Long,
+)
+
 @Entity(tableName = "playlists")
 data class PlaylistEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

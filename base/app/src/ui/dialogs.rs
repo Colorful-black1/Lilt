@@ -1,4 +1,4 @@
-use crate::app::{ConfirmAction, LiltApp, Modal, TagEditorState};
+use crate::app::{AbLoop, ConfirmAction, LiltApp, Modal, TagEditorState};
 use crate::icons::{self, Icon};
 use crate::library;
 use crate::model::*;
@@ -91,6 +91,8 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     let mut open_speed = false;
     let mut open_lyrics_editor = false;
     let mut locate_current = false;
+    let mut toggle_ab = false;
+    let mut clear_ab = false;
 
     egui::Area::new(egui::Id::new("now_playing_overlay"))
         .fixed_pos(screen.min)
@@ -406,6 +408,47 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                             });
                                             ui.add_space(10.0);
                                             ui.horizontal_wrapped(|ui| {
+                                                let ab_label = match app.ab_loop {
+                                                    Some(AbLoop { a, b: Some(b) }) => format!(
+                                                        "A-B {} – {}",
+                                                        format_duration(a),
+                                                        format_duration(b)
+                                                    ),
+                                                    Some(AbLoop { a, b: None }) => format!(
+                                                        "{} {} · {}",
+                                                        app.t("A", "A"),
+                                                        format_duration(a),
+                                                        app.t("set B", "设置 B")
+                                                    ),
+                                                    None => {
+                                                        app.t("A-B loop", "A-B 循环").to_owned()
+                                                    }
+                                                };
+                                                if widgets::ghost_button(
+                                                    ui,
+                                                    &ab_label,
+                                                    Some(Icon::Repeat),
+                                                    &op,
+                                                )
+                                                .on_hover_text(app.t(
+                                                    "Tap once for A, again for B, once more to clear.",
+                                                    "按一次设 A，再按设 B，再按关闭。",
+                                                ))
+                                                .clicked()
+                                                {
+                                                    toggle_ab = true;
+                                                }
+                                                if app.ab_loop.is_some()
+                                                    && widgets::ghost_button(
+                                                        ui,
+                                                        app.t("Clear A-B", "清除 A-B"),
+                                                        Some(Icon::Close),
+                                                        &op,
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    clear_ab = true;
+                                                }
                                                 if widgets::ghost_button(
                                                     ui,
                                                     app.t("Equalizer", "均衡器"),
@@ -829,6 +872,12 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
         app.modal = Some(Modal::Speed {
             value: app.state.settings.playback_speed,
         });
+    }
+    if toggle_ab {
+        app.toggle_ab_loop();
+    }
+    if clear_ab {
+        app.clear_ab_loop();
     }
 }
 
@@ -1536,6 +1585,149 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                                     close = true;
                                 }
                                 if widgets::ghost_button(ui, app.t("Cancel", "取消"), None, &palette).clicked() {
+                                    close = true;
+                                }
+                            });
+                        }
+                        Modal::MissingFiles(missing) => {
+                            let mut refresh_missing = false;
+                            modal_header(
+                                ui,
+                                &palette,
+                                app.t("Missing files", "失效文件"),
+                                &mut close,
+                            );
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new(app.t(
+                                    "Playlists and saved song data keep their place when a file moves. Choose the new file to reconnect it; audio files are never changed.",
+                                    "文件移动后，播放列表和歌曲数据仍会保留。选择新文件即可重新关联；不会修改音频文件本身。",
+                                ))
+                                .size(10.5)
+                                .color(palette.muted),
+                            );
+                            ui.add_space(10.0);
+                            if missing.is_empty() {
+                                ui.label(
+                                    RichText::new(app.t(
+                                        "No missing files. Everything in the library resolves.",
+                                        "没有失效文件，曲库中的引用都能找到。",
+                                    ))
+                                    .size(11.5)
+                                    .color(palette.text),
+                                );
+                            } else {
+                                ScrollArea::vertical()
+                                    .id_salt("missing_files_scroll")
+                                    .max_height(330.0)
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        for file in missing.iter() {
+                                            egui::Frame::NONE
+                                                .fill(palette.surface_hi)
+                                                .corner_radius(10.0)
+                                                .inner_margin(Margin::symmetric(10, 8))
+                                                .show(ui, |ui| {
+                                                    ui.set_width(400.0);
+                                                    ui.horizontal(|ui| {
+                                                        ui.vertical(|ui| {
+                                                            ui.label(
+                                                                RichText::new(&file.title)
+                                                                    .size(12.0)
+                                                                    .color(palette.text)
+                                                                    .strong(),
+                                                            );
+                                                            ui.label(
+                                                                RichText::new(&file.path)
+                                                                    .size(9.0)
+                                                                    .color(palette.faint),
+                                                            );
+                                                            let mut refs = Vec::new();
+                                                            if !file.playlists.is_empty() {
+                                                                refs.push(format!(
+                                                                    "{}: {}",
+                                                                    app.t("Playlists", "播放列表"),
+                                                                    file.playlists.join(", ")
+                                                                ));
+                                                            }
+                                                            if !file.queues.is_empty() {
+                                                                refs.push(format!(
+                                                                    "{}: {}",
+                                                                    app.t("Queues", "队列"),
+                                                                    file.queues.join(", ")
+                                                                ));
+                                                            }
+                                                            if file.favorite {
+                                                                refs.push(
+                                                                    app.t("Favourite", "收藏")
+                                                                        .to_owned(),
+                                                                );
+                                                            }
+                                                            if file.lyrics {
+                                                                refs.push(
+                                                                    app.t("Lyrics", "歌词")
+                                                                        .to_owned(),
+                                                                );
+                                                            }
+                                                            if file.bookmarks > 0 {
+                                                                refs.push(format!(
+                                                                    "{} {}",
+                                                                    file.bookmarks,
+                                                                    app.t("bookmarks", "个书签")
+                                                                ));
+                                                            }
+                                                            if file.plays > 0 {
+                                                                refs.push(format!(
+                                                                    "{} {}",
+                                                                    file.plays,
+                                                                    app.t("plays", "次播放")
+                                                                ));
+                                                            }
+                                                            if !refs.is_empty() {
+                                                                ui.label(
+                                                                    RichText::new(refs.join(" · "))
+                                                                        .size(9.5)
+                                                                        .color(palette.muted),
+                                                                );
+                                                            }
+                                                        });
+                                                        ui.with_layout(
+                                                            Layout::right_to_left(Align::Center),
+                                                            |ui| {
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("Locate…", "定位…"),
+                                                                    Some(Icon::Locate),
+                                                                    &palette,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    app.relink_missing_file(
+                                                                        &file.key,
+                                                                    );
+                                                                    refresh_missing = true;
+                                                                }
+                                                            },
+                                                        );
+                                                    });
+                                                });
+                                            ui.add_space(6.0);
+                                        }
+                                    });
+                            }
+                            if refresh_missing {
+                                *missing = app.missing_files();
+                            }
+                            ui.add_space(12.0);
+                            ui.horizontal(|ui| {
+                                if widgets::primary_button(
+                                    ui,
+                                    app.t("Close", "关闭"),
+                                    Some(Icon::Check),
+                                    &palette,
+                                )
+                                .clicked()
+                                {
                                     close = true;
                                 }
                             });

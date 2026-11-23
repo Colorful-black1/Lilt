@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -81,6 +82,7 @@ fun SettingsScreen(
     vm: LiltViewModel,
     onBack: () -> Unit,
     onOpenRules: () -> Unit,
+    onOpenMissingFiles: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenEqualizer: () -> Unit,
 ) {
@@ -100,9 +102,11 @@ fun SettingsScreen(
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val allSongs by vm.allSongs.collectAsStateWithLifecycle()
+    val missingFiles by vm.missingFiles.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
+    LaunchedEffect(Unit) { vm.refreshMissingFiles() }
     val isChinese = language == "zh"
     fun countText(count: Int, one: String, many: String, zh: String): String =
         "$count " + if (isChinese) zh else if (count == 1) one else many
@@ -243,6 +247,19 @@ fun SettingsScreen(
                     title = t("Folder rules", "文件夹规则"),
                     body = t("Exclude a folder or include just a few.", "排除整个文件夹，或只保留少数几个。"),
                     onClick = onOpenRules,
+                )
+                SettingLink(
+                    title = t("Missing files", "失效文件"),
+                    body = if (missingFiles.isEmpty()) {
+                        t("No orphaned playlists or saved song data.", "没有失效的歌单引用或歌曲数据。")
+                    } else {
+                        countText(missingFiles.size, "track", "tracks", "首歌曲") + " " +
+                            t(
+                                "can be reconnected to files in the library.",
+                                "可以重新关联到曲库文件。",
+                            )
+                    },
+                    onClick = onOpenMissingFiles,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),

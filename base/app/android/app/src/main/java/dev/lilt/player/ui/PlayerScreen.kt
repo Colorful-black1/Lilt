@@ -108,6 +108,7 @@ fun PlayerScreen(
     val lyrics by remember(state.mediaId) { vm.lyricsFor(state.mediaId) }
         .collectAsStateWithLifecycle(initialValue = null)
     val sleep by vm.sleep.collectAsStateWithLifecycle()
+    val abLoop by vm.abLoop.collectAsStateWithLifecycle()
     val defaultHours by vm.sleepHours.collectAsStateWithLifecycle()
     val defaultMinutes by vm.sleepMinutes.collectAsStateWithLifecycle()
     val defaultTracks by vm.sleepTracks.collectAsStateWithLifecycle()
@@ -302,6 +303,40 @@ fun PlayerScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
+                }
+                val abStart = abLoop.startMs
+                val abEnd = abLoop.endMs
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        t("A-B", "A-B"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = vm::markAbStart) {
+                        Text(
+                            if (abStart != null) "A ${formatDuration(abStart)}"
+                            else t("Set A", "设置 A"),
+                            color = if (abStart != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    TextButton(onClick = vm::markAbEnd, enabled = abStart != null) {
+                        Text(
+                            if (abEnd != null) "B ${formatDuration(abEnd)}"
+                            else t("Set B", "设置 B"),
+                            color = if (abEnd != null) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    if (abStart != null) {
+                        TextButton(onClick = vm::clearAbLoop) {
+                            Text(t("Clear", "清除"))
+                        }
+                    }
                 }
                 if (sleep.active) {
                     SleepStatus(sleep)

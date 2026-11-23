@@ -59,6 +59,7 @@ import dev.lilt.player.ui.ArtistDetailScreen
 import dev.lilt.player.ui.HomeScreen
 import dev.lilt.player.ui.LiltTheme
 import dev.lilt.player.ui.LyricsScreen
+import dev.lilt.player.ui.MissingFilesScreen
 import dev.lilt.player.ui.PlayerScreen
 import dev.lilt.player.ui.PlaylistScreen
 import dev.lilt.player.ui.QueueDetailScreen
@@ -240,9 +241,13 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 vm = vm,
                 onBack = { nav.popBackStack() },
                 onOpenRules = { nav.navigate("rules") },
+                onOpenMissingFiles = { nav.navigate("missing") },
                 onOpenAbout = { nav.navigate("about") },
                 onOpenEqualizer = { nav.navigate("equalizer") },
             )
+        }
+        composable("missing") {
+            MissingFilesScreen(vm, onBack = { nav.popBackStack() })
         }
         composable("equalizer") {
             dev.lilt.player.ui.EqualizerScreen(vm, onBack = { nav.popBackStack() })

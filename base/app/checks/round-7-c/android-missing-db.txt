@@ -1,0 +1,34 @@
+Android missing-file flow: database before and after re-linking
+
+Setup: a fake MediaStore row (mediaId 999000001, "Missing Evidence") was
+inserted into `songs` and referenced by playlist "Missing Test", a favourite
+with 9 plays, a lyric at +250 ms and a bookmark. The app then scanned with
+the real 32-song library.
+
+After scan (before re-link)
+  songs with mediaId 999000001: 0
+  missing_songs:
+    999000001  Missing Evidence  Music/LiltTest/99 - Missing Evidence.mp3
+  playlist_songs:
+    (playlist 1, 999000001, position 0)
+    (playlist 1, 1000000017, position 1)
+  song_state: 999000001 favorite=1 plays=9
+  lyrics:     999000001 offset=250 ms
+  bookmarks:  999000001 "Missing chorus" at 8000 ms
+
+The scan moved the stale row into missing_songs and deleted it from songs,
+while the playlist and all user data kept the old id.
+
+After choosing "Glass Horizon" (mediaId 1000000017) in the re-link dialog
+  missing_songs: []
+  playlist_songs:
+    (playlist 1, 1000000017, position 1)
+  song_state: 1000000017 favorite=1 plays=9
+  lyrics:     1000000017 offset=250 ms
+  bookmarks:  1000000017 "Missing chorus" at 8000 ms
+
+The playlist already contained Glass Horizon at position 1. The UPDATE OR
+IGNORE + delete-old step kept that row instead of creating a duplicate, so
+the playlist now contains one occurrence of the same song. Favourite, play
+count, lyric offset and bookmark all moved to the new media id. The missing
+screen then reported "Nothing is missing".

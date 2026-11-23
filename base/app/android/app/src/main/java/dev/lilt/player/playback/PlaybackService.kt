@@ -33,6 +33,8 @@ import dev.lilt.player.library.EQ_FREQUENCIES
 import dev.lilt.player.library.EqProfile
 import dev.lilt.player.library.LrcDocument
 import dev.lilt.player.library.PreampMode
+import dev.lilt.player.library.abLoopReady
+import dev.lilt.player.library.abLoopShouldJump
 import dev.lilt.player.library.accentArgb
 import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.bassBoostDb
@@ -83,6 +85,9 @@ class PlaybackService : MediaSessionService() {
     }
     private var fadeRunnable: Runnable? = null
     private var sleep = SleepState()
+    private var abStartMs = -1L
+    private var abEndMs = -1L
+    private var abLastJumpAt = 0L
 
     private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var overlay: FloatingLyricsOverlay? = null
@@ -146,6 +151,20 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+    private val abTicker = object : Runnable {
+        override fun run() {
+            val exo = player ?: return
+            if (!abLoopReady(abStartMs, abEndMs)) return
+            if (exo.isPlaying && abLoopShouldJump(abStartMs, abEndMs, exo.currentPosition)) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - abLastJumpAt > 300L) {
+                    abLastJumpAt = now
+                    exo.seekTo(abStartMs)
+                }
+            }
+            mainHandler.postDelayed(this, 100)
+        }
+    }
     private val settingsListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             when (key) {
@@ -193,6 +212,7 @@ class PlaybackService : MediaSessionService() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 loadOverlayLyrics(mediaItem?.mediaId?.toLongOrNull() ?: -1L)
+                clearAbLoop()
                 overlay?.applyState(overlayState())
                 WidgetRenderer.update(this@PlaybackService, exo)
                 if (sleep.mode == MODE_OFF) return
@@ -243,6 +263,9 @@ class PlaybackService : MediaSessionService() {
                         .add(SessionCommand(CMD_SLEEP_SET, Bundle.EMPTY))
                         .add(SessionCommand(CMD_SLEEP_GET, Bundle.EMPTY))
                         .add(SessionCommand(CMD_SLEEP_CANCEL, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_AB_SET, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_AB_GET, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_AB_CLEAR, Bundle.EMPTY))
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(commands)
@@ -319,6 +342,27 @@ class PlaybackService : MediaSessionService() {
                             cancelSleep()
                             return Futures.immediateFuture(
                                 SessionResult(SessionResult.RESULT_SUCCESS, sleepExtras())
+                            )
+                        }
+                        CMD_AB_SET -> {
+                            val start = args.getLong("startMs", -1L)
+                            val end = args.getLong("endMs", -1L)
+                            if (start >= 0L) {
+                                setAbLoop(start, end)
+                            } else {
+                                clearAbLoop()
+                            }
+                            return Futures.immediateFuture(
+                                SessionResult(SessionResult.RESULT_SUCCESS, abExtras())
+                            )
+                        }
+                        CMD_AB_GET -> return Futures.immediateFuture(
+                            SessionResult(SessionResult.RESULT_SUCCESS, abExtras())
+                        )
+                        CMD_AB_CLEAR -> {
+                            clearAbLoop()
+                            return Futures.immediateFuture(
+                                SessionResult(SessionResult.RESULT_SUCCESS, abExtras())
                             )
                         }
                     }
@@ -636,6 +680,25 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    private fun setAbLoop(startMs: Long, endMs: Long) {
+        abStartMs = startMs.coerceAtLeast(0L)
+        abEndMs = if (endMs > abStartMs) endMs else -1L
+        abLastJumpAt = 0L
+        mainHandler.removeCallbacks(abTicker)
+        if (abEndMs > abStartMs) mainHandler.post(abTicker)
+    }
+
+    private fun clearAbLoop() {
+        abStartMs = -1L
+        abEndMs = -1L
+        mainHandler.removeCallbacks(abTicker)
+    }
+
+    private fun abExtras(): Bundle = Bundle().apply {
+        putLong("startMs", abStartMs)
+        putLong("endMs", abEndMs)
+    }
+
     private fun loadEffectState() {
         val gains = prefs.getString("gains", null)
             ?.split(',')
@@ -886,6 +949,7 @@ class PlaybackService : MediaSessionService() {
         cancelFade()
         stopSleepTicker()
         stopWidgetTicker()
+        mainHandler.removeCallbacks(abTicker)
         mainHandler.removeCallbacks(overlayTicker)
         overlayLyricsJob?.cancel()
         overlayLyricsJob = null
@@ -937,6 +1001,9 @@ class PlaybackService : MediaSessionService() {
         const val CMD_SLEEP_SET = "dev.lilt.player.SLEEP_SET"
         const val CMD_SLEEP_GET = "dev.lilt.player.SLEEP_GET"
         const val CMD_SLEEP_CANCEL = "dev.lilt.player.SLEEP_CANCEL"
+        const val CMD_AB_SET = "dev.lilt.player.AB_SET"
+        const val CMD_AB_GET = "dev.lilt.player.AB_GET"
+        const val CMD_AB_CLEAR = "dev.lilt.player.AB_CLEAR"
         const val ACTION_FLOATING_REFRESH = "dev.lilt.player.FLOATING_REFRESH"
     }
 }

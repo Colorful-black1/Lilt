@@ -1,0 +1,13 @@
+Desktop test run (cargo test)
+
+running 32 tests
+test result: ok. 32 passed; 0 failed; 0 ignored
+
+New this round:
+- ab_loop_waits_for_b_and_jumps_at_the_end
+- relinking_rewrites_playlists_and_queues_without_duplicates
+- relinking_a_real_file_moves_references_and_song_state
+
+The last test reads an actual Starter Music WAV, rewrites a playlist and a
+queue, moves SongExtra (favourite + play count), and checks the current song
+and selection keys.

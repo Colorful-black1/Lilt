@@ -1,0 +1,13 @@
+Android test run
+
+testDebugUnitTest: 41 tests, 0 failures
+  (37 previous + 2 A-B bounds + 2 missing-reference grouping)
+connectedDebugAndroidTest: 7 Room migration tests, 0 failures
+assembleDebug: BUILD SUCCESSFUL
+
+New this round:
+- PlaybackToolsTest.abLoopNeedsAAndLaterB
+- PlaybackToolsTest.abLoopJumpsOnlyAtTheEnd
+- MissingFilesTest.groupsPlaylistsQueuesAndSavedDataPerMissingTrack
+- MissingFilesTest.currentIdsAreNotReportedAndUnreferencedRowsStillAppear
+- LiltDatabaseMigrationTest.migrate7To8AddsMissingSongsAndKeepsUserData

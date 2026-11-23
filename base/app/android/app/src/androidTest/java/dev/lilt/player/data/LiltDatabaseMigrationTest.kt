@@ -243,6 +243,66 @@ class LiltDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate7To8AddsMissingSongsAndKeepsUserData() {
+        val name = "lilt-migration-7-8.db"
+        helper.createDatabase(name, 7).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO songs
+                    (mediaId, title, artist, album, albumId, folder, displayName,
+                     durationMs, track, year, mime, dateAdded, size, lastSeen)
+                VALUES
+                    (42, 'Track', 'Artist', 'Album', 7, 'Music/Rock', 'track.mp3',
+                     185000, 1, 2020, 'audio/mpeg', 1, 10, 1)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "INSERT INTO song_state (mediaId, favorite, playCount, lastPlayedAt) " +
+                    "VALUES (42, 1, 5, 123)",
+            )
+            db.execSQL(
+                "INSERT INTO playlist_songs (playlistId, mediaId, position) VALUES (1, 42, 0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            8,
+            true,
+            LiltDatabase.MIGRATION_7_8,
+        ).use { db ->
+            db.query("SELECT COUNT(*) FROM missing_songs").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(0, cursor.getInt(0))
+            }
+            db.execSQL(
+                """
+                INSERT INTO missing_songs
+                    (mediaId, title, artist, album, folder, displayName, durationMs, lastSeen)
+                VALUES
+                    (42, 'Track', 'Artist', 'Album', 'Music/Rock', 'track.mp3', 185000, 1)
+                """.trimIndent(),
+            )
+            db.query(
+                "SELECT title, folder FROM missing_songs WHERE mediaId = 42",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Track", cursor.getString(0))
+                assertEquals("Music/Rock", cursor.getString(1))
+            }
+            db.query("SELECT favorite, playCount FROM song_state WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+                assertEquals(5, cursor.getInt(1))
+            }
+            db.query("SELECT mediaId FROM playlist_songs WHERE playlistId = 1").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(42L, cursor.getLong(0))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2KeepsLibraryAndAddsSongState() {
         helper.createDatabase(databaseName, 1).use { db ->
             db.execSQL(

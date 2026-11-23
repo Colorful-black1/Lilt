@@ -25,6 +25,7 @@ import dev.lilt.player.data.LiltBackup
 import dev.lilt.player.data.LiltDatabase
 import dev.lilt.player.data.LyricsEntity
 import dev.lilt.player.data.MusicRepository
+import dev.lilt.player.data.MissingReference
 import dev.lilt.player.data.RestoreSummary
 import dev.lilt.player.data.ScanState
 import dev.lilt.player.data.toProfile
@@ -90,6 +91,13 @@ data class SleepUiState(
     val active: Boolean get() = mode != "off"
 }
 
+data class AbLoopUiState(
+    val startMs: Long? = null,
+    val endMs: Long? = null,
+) {
+    val active: Boolean get() = startMs != null && endMs != null
+}
+
 class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val db = LiltDatabase.get(application)
@@ -148,6 +156,12 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val _sleep = MutableStateFlow(SleepUiState())
     val sleep: StateFlow<SleepUiState> = _sleep.asStateFlow()
 
+    private val _abLoop = MutableStateFlow(AbLoopUiState())
+    val abLoop: StateFlow<AbLoopUiState> = _abLoop.asStateFlow()
+
+    private val _missingFiles = MutableStateFlow<List<MissingReference>>(emptyList())
+    val missingFiles: StateFlow<List<MissingReference>> = _missingFiles.asStateFlow()
+
     private val _eq = MutableStateFlow(EqUiState())
     val eq: StateFlow<EqUiState> = _eq.asStateFlow()
 
@@ -164,6 +178,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val listener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             countedMediaId = -1L
+            _abLoop.value = AbLoopUiState()
             if (SystemClock.elapsedRealtime() >= queueSaveGuardUntil) {
                 saveActiveQueuePosition(force = true)
             }
@@ -199,6 +214,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                     c.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
                     refreshEq(c)
                     refreshSleep(c)
+                    refreshAbLoop(c)
                     pendingPlay?.invoke()
                     pendingPlay = null
                 } catch (_: Exception) {
@@ -294,7 +310,23 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun scan() {
-        viewModelScope.launch { repository.scan() }
+        viewModelScope.launch {
+            repository.scan()
+            refreshMissingFiles()
+        }
+    }
+
+    fun refreshMissingFiles() {
+        viewModelScope.launch {
+            _missingFiles.value = repository.missingReferences()
+        }
+    }
+
+    fun relinkMissing(oldId: Long, newId: Long) {
+        viewModelScope.launch {
+            repository.relinkMissing(oldId, newId)
+            _missingFiles.value = repository.missingReferences()
+        }
     }
 
     fun playSongs(
@@ -502,6 +534,12 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun seekTo(positionMs: Long) {
+        val ab = _abLoop.value
+        val start = ab.startMs
+        val end = ab.endMs
+        if (start != null && end != null && (positionMs < start || positionMs > end)) {
+            clearAbLoop()
+        }
         controller?.seekTo(positionMs)
         controller?.let(::publish)
     }
@@ -578,6 +616,71 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshEq() {
         controller?.let(::refreshEq)
+    }
+
+    fun markAbStart() {
+        val player = controller ?: return
+        val start = player.currentPosition.coerceAtLeast(0L)
+        _abLoop.value = AbLoopUiState(startMs = start)
+        sendAbLoop(player, start, -1L)
+    }
+
+    fun markAbEnd() {
+        val player = controller ?: return
+        val start = _abLoop.value.startMs ?: return
+        val end = player.currentPosition.coerceAtLeast(0L)
+        if (end <= start + 250L) {
+            _abLoop.value = AbLoopUiState(startMs = start)
+            return
+        }
+        _abLoop.value = AbLoopUiState(startMs = start, endMs = end)
+        sendAbLoop(player, start, end)
+    }
+
+    fun clearAbLoop() {
+        if (_abLoop.value.startMs == null && _abLoop.value.endMs == null) return
+        _abLoop.value = AbLoopUiState()
+        val player = controller ?: return
+        player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_AB_CLEAR, Bundle.EMPTY),
+            Bundle.EMPTY,
+        )
+    }
+
+    private fun sendAbLoop(player: MediaController, start: Long, end: Long) {
+        val args = Bundle().apply {
+            putLong("startMs", start)
+            putLong("endMs", end)
+        }
+        player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_AB_SET, Bundle.EMPTY),
+            args,
+        )
+    }
+
+    private fun refreshAbLoop(player: MediaController) {
+        val future = player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_AB_GET, Bundle.EMPTY),
+            Bundle.EMPTY,
+        )
+        future.addListener(
+            {
+                runCatching {
+                    val extras = future.get().extras
+                    val start = extras.getLong("startMs", -1L)
+                    val end = extras.getLong("endMs", -1L)
+                    _abLoop.value = if (start >= 0L) {
+                        AbLoopUiState(
+                            startMs = start,
+                            endMs = end.takeIf { it > start },
+                        )
+                    } else {
+                        AbLoopUiState()
+                    }
+                }
+            },
+            ContextCompat.getMainExecutor(app),
+        )
     }
 
     private fun updateEqProfile(profile: EqProfile) {
@@ -778,6 +881,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         }
         controller?.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
         refreshFloatingOverlay()
+        _missingFiles.value = repository.missingReferences()
         return result.summary
     }
 

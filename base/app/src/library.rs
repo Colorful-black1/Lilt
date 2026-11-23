@@ -181,7 +181,7 @@ where
     (songs, stats)
 }
 
-fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Song> {
+pub fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Song> {
     let canonical = canonical_clean(path);
     let key = normalize_key(&canonical);
     let meta = fs::metadata(&canonical).ok()?;

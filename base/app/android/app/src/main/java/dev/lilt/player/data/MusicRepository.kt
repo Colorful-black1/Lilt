@@ -110,6 +110,48 @@ class MusicRepository(
         tagOverrides.delete(mediaId)
     }
 
+    /** Orphaned MediaStore rows plus the playlists, queues and user data that point at them. */
+    suspend fun missingReferences(): List<MissingReference> = withContext(Dispatchers.IO) {
+        buildMissingReferences(
+            missingSongs = music.allMissing(),
+            currentSongIds = music.allSongs().mapTo(mutableSetOf()) { it.mediaId },
+            playlists = playlists.allPlaylists(),
+            playlistSongs = playlists.allPlaylistSongs(),
+            queues = queues.allQueues(),
+            queueSongs = queues.allQueueSongs(),
+            states = songStates.all(),
+            lyrics = lyrics.all(),
+            bookmarks = bookmarks.all(),
+            tags = tagOverrides.all(),
+        )
+    }
+
+    /**
+     * Re-points every user-owned reference from an old MediaStore id to a song
+     * that exists now. Conflicts keep the existing row for the new id, then the
+     * stale row is removed. Runs in one transaction so a failure cannot leave a
+     * half-relinked library.
+     */
+    suspend fun relinkMissing(oldId: Long, newId: Long) = withContext(Dispatchers.IO) {
+        if (oldId == newId) return@withContext
+        db.withTransaction {
+            playlists.remapSong(oldId, newId)
+            playlists.deleteSongReferences(oldId)
+            queues.remapSong(oldId, newId)
+            queues.deleteSongReferences(oldId)
+            songStates.remap(oldId, newId)
+            songStates.deleteReferences(oldId)
+            lyrics.remap(oldId, newId)
+            lyrics.deleteReferences(oldId)
+            tagOverrides.remap(oldId, newId)
+            tagOverrides.deleteReferences(oldId)
+            bookmarks.remap(oldId, newId)
+            bookmarks.deleteReferences(oldId)
+            music.remapHistory(oldId, newId)
+            music.deleteMissing(oldId)
+        }
+    }
+
     suspend fun scan() = withContext(Dispatchers.IO) {
         if (scanState.value is ScanState.Scanning) return@withContext
         scanState.value = ScanState.Scanning(0)
@@ -118,8 +160,26 @@ class MusicRepository(
             val found = queryMediaStore(token)
             found.chunked(250).forEach { chunk ->
                 music.upsertSongs(chunk)
+                music.deleteMissing(chunk.map { it.mediaId })
                 scanState.value = ScanState.Scanning(
                     (scanState.value as? ScanState.Scanning)?.seen?.plus(chunk.size) ?: chunk.size
+                )
+            }
+            val stale = music.staleSongs(token)
+            if (stale.isNotEmpty()) {
+                music.upsertMissingSongs(
+                    stale.map { song ->
+                        MissingSongEntity(
+                            mediaId = song.mediaId,
+                            title = song.title,
+                            artist = song.artist,
+                            album = song.album,
+                            folder = song.folder,
+                            displayName = song.displayName,
+                            durationMs = song.durationMs,
+                            lastSeen = song.lastSeen,
+                        )
+                    },
                 )
             }
             music.deleteStale(token)

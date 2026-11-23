@@ -92,6 +92,18 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   notification stay in step. Add it from **Settings → Floating lyrics → Add home screen
   widget**. The launcher's pin support varies; a fallback instruction is shown when pinning
   is unavailable.
+- **A-B loop.** The now-playing screen has A, B and Clear controls. A marker uses the
+  current position, B must be later than A, and the playback service checks the position
+  every 100 ms so the loop also works with the screen off or the app in the background.
+  Changing tracks clears the markers. The loop state travels over MediaSession custom
+  commands; no second player is created.
+- **Missing-file re-linking.** A MediaStore rescan deletes rows for files that moved, but
+  playlists, queues, favourites, lyrics, bookmarks and history keep their old ids. Room v8
+  stores the last-known title, artist, album, folder and file name in `missing_songs`
+  before the stale overview row is removed. **Settings → Missing files** lists each orphan
+  with the playlists/queues and saved data that point at it. Pick a replacement from the
+  current library and one Room transaction rewrites every reference and removes the old
+  missing row; conflicts keep the existing row for the new id.
 - **Local backup and restore.** **Settings → Backup & restore** writes one versioned JSON
   file through the system file picker. It contains playlists, queues, favourites, play
   counts, history, bookmarks, lyrics and offsets, tag overrides, folder rules, recent
@@ -115,11 +127,11 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **History and bookmarks.** Playback history keeps the latest 200 starts and can be
   cleared. A bookmark stores a song position plus an optional note; bookmarks are listed
   in the library and as one-tap chips on the now-playing screen.
-- **Room database v7** with a separate `song_state` table for favourites, play counts and
+- **Room database v8** with a separate `song_state` table for favourites, play counts and
   last-played time, so a MediaStore rescan cannot wipe user data. It also stores bookmarks,
-  search history, lyrics with a per-song offset, named queue positions and virtual tag
-  overrides. Upgrades from v1/v2/v3/v4/v5/v6 keep the existing library, playlists, queues
-  and user state.
+  search history, lyrics with a per-song offset, named queue positions, virtual tag
+  overrides and `missing_songs` metadata for relocated files. Upgrades from v1/v2/v3/v4/v5/v6/v7
+  keep the existing library, playlists, queues and user state.
 - **Play counts** are recorded after 30% of a track has been heard; history is recorded at
   playback start.
 - Playback through Media3 ExoPlayer inside a foreground `MediaSessionService`:
@@ -162,15 +174,16 @@ removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 37 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 41 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
   index, LRC parsing, lyric offsets, floating lyric line windows and font clamping, widget
   progress/time formatting, backup JSON round trips, platform/format rejection, song
-  reference resolution, EQ curves/profiles, queue resume positions, list reordering and
-  virtual tag merging.
-- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6 and 6→7
-  migration tests on an Android 15 emulator.
+  reference resolution, A-B loop bounds, missing-reference grouping, EQ curves/profiles,
+  queue resume positions, list reordering and virtual tag merging.
+- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6, 6→7 and
+  7→8 migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
+  `../checks/round-7-c/README.md` for A-B loop and missing-file re-link evidence,
   `../checks/round-7-b/README.md` for backup export, restore confirmation and restored
   playlist/favourite evidence, `../checks/round-7-a/README.md` for floating lyric and
   home-screen widget evidence,

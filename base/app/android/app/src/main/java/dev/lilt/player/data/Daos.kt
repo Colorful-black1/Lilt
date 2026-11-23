@@ -27,6 +27,24 @@ interface MusicDao {
     @Query("DELETE FROM songs WHERE lastSeen != :token")
     suspend fun deleteStale(token: Long)
 
+    @Query("SELECT * FROM songs WHERE lastSeen != :token")
+    suspend fun staleSongs(token: Long): List<SongEntity>
+
+    @Query("SELECT * FROM missing_songs ORDER BY title COLLATE NOCASE")
+    suspend fun allMissing(): List<MissingSongEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertMissingSongs(songs: List<MissingSongEntity>)
+
+    @Query("DELETE FROM missing_songs WHERE mediaId = :mediaId")
+    suspend fun deleteMissing(mediaId: Long)
+
+    @Query("DELETE FROM missing_songs WHERE mediaId IN (:mediaIds)")
+    suspend fun deleteMissing(mediaIds: List<Long>)
+
+    @Query("UPDATE history SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remapHistory(oldId: Long, newId: Long)
+
     @Query("SELECT COUNT(*) FROM songs")
     suspend fun count(): Int
 
@@ -83,6 +101,12 @@ interface SongStateDao {
 
     @Query("DELETE FROM song_state")
     suspend fun clear()
+
+    @Query("UPDATE OR IGNORE song_state SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remap(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM song_state WHERE mediaId = :oldId")
+    suspend fun deleteReferences(oldId: Long)
 }
 
 @Dao
@@ -107,6 +131,12 @@ interface TagOverrideDao {
 
     @Query("DELETE FROM tag_overrides")
     suspend fun clear()
+
+    @Query("UPDATE OR IGNORE tag_overrides SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remap(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM tag_overrides WHERE mediaId = :oldId")
+    suspend fun deleteReferences(oldId: Long)
 
     @Query("DELETE FROM tag_overrides WHERE mediaId = :mediaId")
     suspend fun delete(mediaId: Long)
@@ -134,6 +164,12 @@ interface BookmarkDao {
 
     @Query("DELETE FROM bookmarks WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("UPDATE OR IGNORE bookmarks SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remap(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM bookmarks WHERE mediaId = :oldId")
+    suspend fun deleteReferences(oldId: Long)
 }
 
 @Dao
@@ -179,6 +215,12 @@ interface LyricsDao {
 
     @Query("DELETE FROM lyrics WHERE mediaId = :mediaId")
     suspend fun delete(mediaId: Long)
+
+    @Query("UPDATE OR IGNORE lyrics SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remap(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM lyrics WHERE mediaId = :oldId")
+    suspend fun deleteReferences(oldId: Long)
 }
 
 @Dao
@@ -244,6 +286,12 @@ interface PlaylistDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addSongs(entries: List<PlaylistSongEntity>)
+
+    @Query("UPDATE OR IGNORE playlist_songs SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remapSong(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM playlist_songs WHERE mediaId = :oldId")
+    suspend fun deleteSongReferences(oldId: Long)
 
     @Query("DELETE FROM playlist_songs WHERE playlistId = :id AND mediaId = :mediaId")
     suspend fun removeSong(id: Long, mediaId: Long)
@@ -331,6 +379,12 @@ interface QueueDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addQueueSongs(entries: List<QueueSongEntity>)
+
+    @Query("UPDATE OR IGNORE queue_songs SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remapSong(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM queue_songs WHERE mediaId = :oldId")
+    suspend fun deleteSongReferences(oldId: Long)
 
     @Query(
         """
