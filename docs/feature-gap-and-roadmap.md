@@ -92,6 +92,7 @@
 - 20 个命名队列、同名替换/合并、M3U 导入导出。
 - 播放列表增删改、M3U 导入导出。
 - 本地歌词：Room 存储、LRC 时间轴高亮、纯文本、从本地 `.lrc`/`.txt` 导入。
+- 单曲虚拟标签编辑：Room v6 保存标题、艺术家、专辑、年份、音轨号；扫描数据只读，支持恢复扫描标签，播放页和 MediaSession metadata 同步更新。
 - 完整睡眠定时：自定义时分、按曲目数、等当前曲结束、淡出、倒计时、取消；定时器在播放服务中运行。
 - 播放/暂停淡入淡出，0–4 秒、250 ms 步进。
 - 10 段均衡器（DynamicsProcessing/旧版 Equalizer）、22 个桌面预设、前级 Off/Headroom/Boost、峰值余量建议、低音增强、虚拟环绕、左右平衡、按输出设备保存。
@@ -103,7 +104,7 @@
 
 - 播放列表/队列拖拽排序、队列间自动跳转。
 - 内置/同目录 `.lrc` 自动读取、歌词偏移微调、逐字歌词。
-- 标签编辑、封面编辑。
+- 批量标签编辑、封面编辑。
 - ReplayGain。
 - 上一首规则设置、无缝播放开关。
 - 昼夜主题。
@@ -135,7 +136,7 @@
 | 均衡器/音效 | ✅ | ✅ | 22 预设、前级、低音、环绕、平衡、按设备保存 |
 | ReplayGain | ✅ | ❌ | Android 缺读取与应用 |
 | 歌词 | ✅ | △ | 本地 Room + LRC + 导入；缺内置/同目录自动读取与偏移 |
-| 标签/封面编辑 | ✅ | ❌ | Android 完全缺失 |
+| 标签/封面编辑 | ✅ | △ | Android 已支持单曲虚拟标签编辑；缺批量与封面编辑 |
 | 书签/笔记 | ✅ | ✅ | 位置 + 备注，播放页快捷跳转 |
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
 | 主题/语言 | ✅ | △ | Android 缺昼夜主题 |
@@ -159,11 +160,11 @@
 - `lastPlayedAt`：最后播放时间。
 - `lyrics` / `lyricsOffsetMs`：歌词缓存与偏移。
 - `bookmarks`：位置 + 备注 + 创建时间。
-- `tagOverrides`：标题、艺术家、专辑、音轨、年份、流派、封面。
+- `tagOverrides`：标题、艺术家、专辑、音轨、年份；封面编辑留给后续轮次。
 - 最近添加、最近播放所需的时间字段。
 - Room 数据库版本升级与迁移测试。
 
-落库状态（2026-11-22）：`favorite`、`playCount`、`lastPlayedAt`、`bookmarks`、`searchHistory` 已在 Room v3 完成；`lyrics`、`tagOverrides` 留给后续轮次。
+落库状态（2026-11-23）：`favorite`、`playCount`、`lastPlayedAt`、`bookmarks`、`searchHistory` 已在 Room v3 完成；`lyrics` 在 Room v4 完成；`tagOverrides` 在 Room v6 完成（单曲虚拟覆盖）。
 
 验收：
 
@@ -263,13 +264,15 @@
 
 ### 4.2 P1：内容管理
 
-- 标签编辑：单曲和批量。
+- 标签编辑：单曲和批量。单曲虚拟覆盖已完成（Room v6）；批量编辑仍待做。
 - 封面选择：内嵌封面、本地图片、恢复默认。
 - 歌词编辑：纯文本/LRC，保存到本地。
 - Most Played CSV 导出。
 - 备份/恢复：设置、播放列表、队列、收藏、标签覆盖。
 - 导入/导出 M3U 的往返一致性测试。
 - 批量加入/移除播放列表。
+
+状态（2026-11-23）：单曲虚拟标签编辑已完成，修改后列表、搜索、专辑/艺术家分组、播放页和 MediaSession metadata 同步更新；批量编辑和封面选择仍待做。
 
 验收：
 
@@ -506,7 +509,27 @@
 - 720×1280/1080×1920 无控件重叠。
 - 结果见 `base/app/checks/round-6/`。
 
-未纳入本轮：拖拽手势排序、队列间自动跳转、标签编辑。
+未纳入本轮：拖拽手势排序、队列间自动跳转、标签编辑（已在 Round 6-B 完成单曲编辑）。
+
+### 第 6-B 轮：Android 虚拟标签编辑（已完成）
+
+交付：
+
+- Room v6 `tag_overrides` 表，按 `mediaId` 保存标题、艺术家、专辑、年份和音轨号。
+- 扫描数据保持只读；列表、搜索、专辑/艺术家分组、播放列表、队列和播放 metadata 统一合并覆盖值。
+- 每首歌的三点菜单和正在播放页新增“编辑标签”；支持保存与“恢复扫描标签”。
+- 编辑当前播放歌曲时同步刷新 Media3 item 与 MediaSession metadata，并恢复播放位置。
+- 24 个单元测试、5 个 Room 迁移测试。
+
+验收：
+
+- 保存后列表、搜索、专辑/艺术家分组立即更新。
+- 编辑当前歌曲时播放页和 MediaSession 标题同步更新。
+- 重启和 MediaStore 重扫后覆盖值保留。
+- 恢复扫描标签后还原原始值。
+- 结果见 `base/app/checks/round-6-b/`。
+
+未纳入本轮：批量标签编辑、封面替换、写回音频文件。
 
 ### 第 6 轮：歌词与 PC 桌面集成
 
@@ -579,7 +602,7 @@
 
 ## 9. 待确认问题
 
-1. Android 标签编辑先做“虚拟覆盖”还是直接写回文件？
+1. Android 标签编辑先做“虚拟覆盖”还是直接写回文件？（已选择虚拟覆盖，Room v6；文件写回未做）
 2. 歌词是否只支持 LRC/内嵌，还是也要支持 VTT/KRC？
 3. PC 全局热键的默认组合是否采用本文建议？
 4. Android 小部件、磁贴、Android Auto 的优先级是否高于音频工具？
@@ -602,7 +625,8 @@
 | 2026-11-22 | Round 5-C | 完成 | 22 预设、前级/余量建议、低音、虚拟环绕、平衡、按设备配置、Room v5 前的基础 |
 | 2026-11-22 | Round 5-D | 完成 | Room v5 队列位置字段、续播、5 秒/暂停保存、开关 |
 | 2026-11-22 | Round 6-A | 完成 | PC/Android 当前歌曲定位、Android 播放列表/队列上下移动、队列详情页、21 个单元测试 |
-| 下一步 | Round 6 | 待定 | 歌词偏移/桌面集成、拖拽排序、标签编辑、备份恢复或 ReplayGain |
+| 2026-11-23 | Round 6-B | 完成 | Room v6 虚拟标签覆盖、单曲标签编辑、统一读取合并、当前播放 metadata 刷新、24 个单元测试 |
+| 下一步 | Round 6 | 待定 | 批量标签/封面、歌词偏移/桌面集成、拖拽排序、备份恢复或 ReplayGain |
 
 Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`。
 
@@ -628,12 +652,15 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Eq.kt`：均衡器配置、预设、前级与平衡计算
 - `base/app/android/app/src/main/java/dev/lilt/player/library/QueueMemory.kt`：队列续播位置计算
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Reordering.kt`：列表上下移动算法
+- `base/app/android/app/src/main/java/dev/lilt/player/library/TagEditing.kt`：虚拟标签合并与数字解析
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/QueueDetailScreen.kt`：队列详情、播放与排序
+- `base/app/android/app/src/main/java/dev/lilt/player/ui/TagEditorScreen.kt`：单曲标签编辑
 - `base/app/android/app/src/main/java/dev/lilt/player/playback/PlaybackService.kt`：媒体服务、睡眠定时、淡入淡出、音效
 - `base/app/checks/round-4/README.md`：收藏、专辑/艺术家、Room v2 验证
 - `base/app/checks/round-4-c/README.md`：列表、搜索、历史、书签与 Room v3 验证
 - `base/app/checks/round-5/README.md`：歌词、睡眠/淡入淡出、均衡器与 Room v5 验证
 - `base/app/checks/round-6/README.md`：当前歌曲定位、播放列表/队列排序验证
+- `base/app/checks/round-6-b/README.md`：单曲虚拟标签编辑与 Room v6 验证
 
 ---
 
@@ -645,3 +672,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.2 | 2026-11-22 | 更新 Android Round 4／4-C 完成状态：曲库页面、收藏、统计、书签、搜索、排序、多选、字母索引与 Room v3 |
 | v0.3 | 2026-11-22 | 更新 Android Round 5 完成状态：歌词、服务内睡眠定时、淡入淡出、均衡器增强、队列位置记忆与 Room v5 |
 | v0.4 | 2026-11-22 | Round 6-A：PC/Android 当前歌曲定位、Android 播放列表/队列上下移动、队列详情页 |
+| v0.5 | 2026-11-23 | Round 6-B：Android Room v6 虚拟标签覆盖、单曲标签编辑、统一读取合并与播放 metadata 刷新 |

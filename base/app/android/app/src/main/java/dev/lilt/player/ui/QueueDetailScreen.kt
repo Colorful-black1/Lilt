@@ -48,6 +48,7 @@ fun QueueDetailScreen(
     queueId: Long,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val queues by vm.queues.collectAsStateWithLifecycle()
     val queue = queues.firstOrNull { it.id == queueId }
@@ -175,6 +176,7 @@ fun QueueDetailScreen(
                                     SongAction.PlayNext -> vm.enqueueNext(song)
                                     SongAction.AddToQueue -> vm.addToQueue(song)
                                     SongAction.AddToPlaylist -> Unit
+                                    SongAction.EditTags -> onEditTags(song.mediaId)
                                 }
                             },
                             onRemove = if (reordering) {

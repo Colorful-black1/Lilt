@@ -7,6 +7,8 @@ import android.os.Build
 import android.provider.MediaStore
 import androidx.room.withTransaction
 import dev.lilt.player.library.movedItem
+import dev.lilt.player.library.withTagOverride
+import dev.lilt.player.library.withTagOverrides
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,7 @@ class MusicRepository(
 ) {
     private val music = db.musicDao()
     private val songStates = db.songStateDao()
+    private val tagOverrides = db.tagOverrideDao()
     private val bookmarks = db.bookmarkDao()
     private val searches = db.searchHistoryDao()
     private val lyrics = db.lyricsDao()
@@ -37,20 +40,37 @@ class MusicRepository(
     val scanState = MutableStateFlow<ScanState>(ScanState.Idle)
 
     fun observeSongs(): Flow<List<SongEntity>> =
-        combine(music.observeSongs(), music.observeRules(), settings.includeOnly) { songs, rules, only ->
-            filterSongs(songs, rules, only)
+        combine(
+            music.observeSongs(),
+            tagOverrides.observeAll(),
+            music.observeRules(),
+            settings.includeOnly,
+        ) { songs, overrides, rules, only ->
+            filterSongs(songs.withTagOverrides(overrides.associateBy { it.mediaId }), rules, only)
         }
 
-    fun observeAllSongs(): Flow<List<SongEntity>> = music.observeSongs()
+    fun observeAllSongs(): Flow<List<SongEntity>> =
+        combine(music.observeSongs(), tagOverrides.observeAll()) { songs, overrides ->
+            songs.withTagOverrides(overrides.associateBy { it.mediaId })
+        }
+
+    fun observeTagOverride(mediaId: Long): Flow<TagOverrideEntity?> =
+        tagOverrides.observe(mediaId)
 
     fun observeRules(): Flow<List<FolderRuleEntity>> = music.observeRules()
     fun observeFavoriteIds(): Flow<Set<Long>> = songStates.observeFavoriteIds().map { it.toSet() }
     fun observeSongStates(): Flow<Map<Long, SongStateEntity>> =
         songStates.observeStates().map { states -> states.associateBy { it.mediaId } }
     fun observePlaylists(): Flow<List<PlaylistSummary>> = playlists.observePlaylists()
-    fun observePlaylistSongs(id: Long): Flow<List<SongEntity>> = playlists.observePlaylistSongs(id)
+    fun observePlaylistSongs(id: Long): Flow<List<SongEntity>> =
+        combine(playlists.observePlaylistSongs(id), tagOverrides.observeAll()) { songs, overrides ->
+            songs.withTagOverrides(overrides.associateBy { it.mediaId })
+        }
     fun observeQueues(): Flow<List<QueueSummary>> = queues.observeQueues()
-    fun observeQueueSongs(id: Long): Flow<List<SongEntity>> = queues.observeQueueSongs(id)
+    fun observeQueueSongs(id: Long): Flow<List<SongEntity>> =
+        combine(queues.observeQueueSongs(id), tagOverrides.observeAll()) { songs, overrides ->
+            songs.withTagOverrides(overrides.associateBy { it.mediaId })
+        }
     fun observeHistory(): Flow<List<HistoryEntity>> = music.observeHistory()
     fun observeBookmarks(): Flow<List<BookmarkEntity>> = bookmarks.observeAll()
     fun observeBookmarksForSong(mediaId: Long): Flow<List<BookmarkEntity>> =
@@ -59,6 +79,35 @@ class MusicRepository(
     fun observeLyrics(mediaId: Long): Flow<LyricsEntity?> = lyrics.observe(mediaId)
 
     suspend fun song(id: Long): SongEntity? = music.song(id)
+
+    suspend fun songWithTags(id: Long): SongEntity? = withContext(Dispatchers.IO) {
+        music.song(id)?.withTagOverride(tagOverrides.get(id))
+    }
+
+    suspend fun saveTagOverride(
+        mediaId: Long,
+        title: String,
+        artist: String,
+        album: String,
+        year: Int,
+        track: Int,
+    ) = withContext(Dispatchers.IO) {
+        tagOverrides.upsert(
+            TagOverrideEntity(
+                mediaId = mediaId,
+                title = title.trim(),
+                artist = artist.trim(),
+                album = album.trim(),
+                year = year.coerceAtLeast(0),
+                track = track.coerceAtLeast(0),
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    suspend fun deleteTagOverride(mediaId: Long) = withContext(Dispatchers.IO) {
+        tagOverrides.delete(mediaId)
+    }
 
     suspend fun scan() = withContext(Dispatchers.IO) {
         if (scanState.value is ScanState.Scanning) return@withContext
@@ -226,7 +275,8 @@ class MusicRepository(
         }
 
     suspend fun playlistSongs(id: Long): List<SongEntity> = withContext(Dispatchers.IO) {
-        playlists.playlistSongs(id)
+        val overrides = tagOverrides.all().associateBy { it.mediaId }
+        playlists.playlistSongs(id).withTagOverrides(overrides)
     }
 
     suspend fun movePlaylistSong(playlistId: Long, from: Int, to: Int) =
@@ -285,7 +335,8 @@ class MusicRepository(
     }
 
     suspend fun queueSongs(id: Long): List<SongEntity> = withContext(Dispatchers.IO) {
-        queues.queueSongs(id)
+        val overrides = tagOverrides.all().associateBy { it.mediaId }
+        queues.queueSongs(id).withTagOverrides(overrides)
     }
 
     suspend fun moveQueueSong(queueId: Long, from: Int, to: Int) =

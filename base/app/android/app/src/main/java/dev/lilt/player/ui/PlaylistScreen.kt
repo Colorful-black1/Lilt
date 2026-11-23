@@ -59,6 +59,7 @@ fun PlaylistScreen(
     playlistId: Long,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val playlist = playlists.firstOrNull { it.id == playlistId }
@@ -281,6 +282,7 @@ fun PlaylistScreen(
                                     SongAction.PlayNext -> vm.enqueueNext(song)
                                     SongAction.AddToQueue -> vm.addToQueue(song)
                                     SongAction.AddToPlaylist -> Unit
+                                    SongAction.EditTags -> onEditTags(song.mediaId)
                                 }
                             },
                             onRemove = if (reordering) {

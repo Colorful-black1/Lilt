@@ -25,6 +25,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Folder
@@ -197,7 +198,7 @@ fun SectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
     }
 }
 
-enum class SongAction { PlayNext, AddToQueue, AddToPlaylist }
+enum class SongAction { PlayNext, AddToQueue, AddToPlaylist, EditTags }
 
 @Composable
 private fun SongTitle(title: String, highlight: String?, isCurrent: Boolean) {
@@ -335,6 +336,11 @@ fun SongRow(
                 DropdownMenuItem(
                     text = { Text(t("Add to playlist", "加入播放列表")) },
                     onClick = { menu = false; onAction(SongAction.AddToPlaylist) },
+                )
+                DropdownMenuItem(
+                    text = { Text(t("Edit tags", "编辑标签")) },
+                    leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                    onClick = { menu = false; onAction(SongAction.EditTags) },
                 )
             }
         }

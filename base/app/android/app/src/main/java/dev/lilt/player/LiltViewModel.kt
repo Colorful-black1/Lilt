@@ -418,6 +418,49 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun playlistSongs(id: Long) = repository.observePlaylistSongs(id)
     fun queueSongs(id: Long) = repository.observeQueueSongs(id)
 
+    fun tagOverride(mediaId: Long) = repository.observeTagOverride(mediaId)
+
+    fun saveTagOverride(
+        mediaId: Long,
+        title: String,
+        artist: String,
+        album: String,
+        year: Int,
+        track: Int,
+    ) {
+        viewModelScope.launch {
+            repository.saveTagOverride(mediaId, title, artist, album, year, track)
+            refreshCurrentMetadata(mediaId)
+        }
+    }
+
+    fun resetTagOverride(mediaId: Long) {
+        viewModelScope.launch {
+            repository.deleteTagOverride(mediaId)
+            refreshCurrentMetadata(mediaId)
+        }
+    }
+
+    /**
+     * Re-applies the current listing metadata if the edited song is already
+     * playing, without rebuilding the queue. Position is restored after the
+     * item replacement.
+     */
+    private suspend fun refreshCurrentMetadata(mediaId: Long) {
+        val player = controller ?: return
+        val index = player.currentMediaItemIndex
+        if (index < 0 || player.currentMediaItem?.mediaId?.toLongOrNull() != mediaId) return
+        val song = repository.songWithTags(mediaId) ?: return
+        val position = player.currentPosition.coerceAtLeast(0)
+        val wasPlaying = player.isPlaying
+        runCatching {
+            player.replaceMediaItem(index, mediaItem(song))
+            player.seekTo(index, position)
+            if (wasPlaying) player.play()
+        }
+        publish(player)
+    }
+
     fun togglePlayPause() {
         val player = controller
         if (player == null) {

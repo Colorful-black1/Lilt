@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -92,6 +93,7 @@ fun PlayerScreen(
     onOpenQueues: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onOpenLyrics: (Long) -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val state by vm.player.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
@@ -194,6 +196,15 @@ fun PlayerScreen(
                                 leadingIcon = { Icon(Icons.Rounded.PlaylistAdd, null) },
                                 enabled = current != null,
                                 onClick = { menu = false; showPlaylistPicker = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(t("Edit tags", "编辑标签")) },
+                                leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                                enabled = current != null,
+                                onClick = {
+                                    menu = false
+                                    current?.let { onEditTags(it.mediaId) }
+                                },
                             )
                         }
                     }

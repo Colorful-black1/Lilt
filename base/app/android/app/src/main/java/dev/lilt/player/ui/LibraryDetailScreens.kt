@@ -54,6 +54,7 @@ fun AlbumDetailScreen(
     albumId: Long,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val songs by vm.songs.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
@@ -116,6 +117,7 @@ fun AlbumDetailScreen(
                             SongAction.PlayNext -> vm.enqueueNext(song)
                             SongAction.AddToQueue -> vm.addToQueue(song)
                             SongAction.AddToPlaylist -> songForPlaylist = song
+                            SongAction.EditTags -> onEditTags(song.mediaId)
                         }
                     },
                 )
@@ -133,6 +135,7 @@ fun ArtistDetailScreen(
     artistName: String,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val songs by vm.songs.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
@@ -193,6 +196,7 @@ fun ArtistDetailScreen(
                             SongAction.PlayNext -> vm.enqueueNext(song)
                             SongAction.AddToQueue -> vm.addToQueue(song)
                             SongAction.AddToPlaylist -> songForPlaylist = song
+                            SongAction.EditTags -> onEditTags(song.mediaId)
                         }
                     },
                 )

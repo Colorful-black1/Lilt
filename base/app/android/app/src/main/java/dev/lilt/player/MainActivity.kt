@@ -66,6 +66,7 @@ import dev.lilt.player.ui.QueuesScreen
 import dev.lilt.player.ui.RulesScreen
 import dev.lilt.player.ui.SearchScreen
 import dev.lilt.player.ui.SettingsScreen
+import dev.lilt.player.ui.TagEditorScreen
 import dev.lilt.player.ui.t
 
 class MainActivity : ComponentActivity() {
@@ -156,6 +157,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onOpenPlaylist = { nav.navigate("playlist/$it") },
                 onOpenAlbum = { name, albumId -> nav.navigate("album/${Uri.encode(name)}/$albumId") },
                 onOpenArtist = { nav.navigate("artist/${Uri.encode(it)}") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("player") {
@@ -165,11 +167,16 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onOpenQueues = { nav.navigate("queues") },
                 onOpenEqualizer = { nav.navigate("equalizer") },
                 onOpenLyrics = { nav.navigate("lyrics/$it") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("lyrics/{id}") { entry ->
             val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
             LyricsScreen(vm = vm, mediaId = id, onBack = { nav.popBackStack() })
+        }
+        composable("tags/{id}") { entry ->
+            val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+            TagEditorScreen(vm = vm, mediaId = id, onBack = { nav.popBackStack() })
         }
         composable("queues") {
             QueuesScreen(
@@ -185,6 +192,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 queueId = id,
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("playlist/{id}") { entry ->
@@ -194,6 +202,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 playlistId = id,
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("album/{name}/{albumId}") { entry ->
@@ -205,6 +214,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 albumId = albumId,
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("artist/{name}") { entry ->
@@ -214,6 +224,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 artistName = name,
                 onBack = { nav.popBackStack() },
                 onOpenPlayer = { nav.navigate("player") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("settings") {
@@ -242,6 +253,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onOpenPlaylist = { nav.navigate("playlist/$it") },
                 onOpenAlbum = { name, albumId -> nav.navigate("album/${Uri.encode(name)}/$albumId") },
                 onOpenArtist = { nav.navigate("artist/${Uri.encode(it)}") },
+                onEditTags = { nav.navigate("tags/$it") },
             )
         }
     }

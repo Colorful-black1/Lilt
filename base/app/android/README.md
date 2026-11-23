@@ -69,6 +69,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   matching text, and keeps the last 12 queries for one-tap reuse.
 - **Lyrics** are stored per song in Room, support LRC timestamps with the current line
   highlighted in the player, plain text, and import from a local `.lrc`/`.txt` document.
+- **Single-song tag editing** for title, artist, album, year and track. Tags are a
+  non-destructive Room overlay: the audio file is not rewritten, the values survive
+  MediaStore rescans, and **Reset to scanned tags** removes the override. The edit entry
+  is in every song menu and in the now-playing menu.
 - **Sleep timer** runs in the playback service: custom hours/minutes, stop after a number
   of songs, “after this track”, fade-out, countdown and cancellation. It keeps running
   with the screen off.
@@ -79,10 +83,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **History and bookmarks.** Playback history keeps the latest 200 starts and can be
   cleared. A bookmark stores a song position plus an optional note; bookmarks are listed
   in the library and as one-tap chips on the now-playing screen.
-- **Room database v5** with a separate `song_state` table for favourites, play counts and
+- **Room database v6** with a separate `song_state` table for favourites, play counts and
   last-played time, so a MediaStore rescan cannot wipe user data. It also stores bookmarks,
-  search history, lyrics and named queue positions. Upgrades from v1/v2/v3/v4 keep the
-  existing library, playlists, queues and user state.
+  search history, lyrics, named queue positions and virtual tag overrides. Upgrades from
+  v1/v2/v3/v4/v5 keep the existing library, playlists, queues and user state.
 - **Play counts** are recorded after 30% of a track has been heard; history is recorded at
   playback start.
 - Playback through Media3 ExoPlayer inside a foreground `MediaSessionService`:
@@ -106,10 +110,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 
 ## Deliberately not in this build
 
-Tag editing, embedded ReplayGain writing, drag-to-reorder (the playlist and queue up/down
-controls are available), pinyin letter buckets, home-screen widgets, quick-settings tile,
-Android Auto, Chromecast, audio trimming and backup/restore are later rounds. They are not
-simulated with fake data.
+Batch tag editing, cover replacement, embedded ReplayGain writing, drag-to-reorder (the
+playlist and queue up/down controls are available), pinyin letter buckets, home-screen
+widgets, quick-settings tile, Android Auto, Chromecast, audio trimming and backup/restore
+are later rounds. They are not simulated with fake data.
 
 ## Privacy and permissions
 
@@ -121,15 +125,16 @@ its library manifest; Lilt removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 21 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 24 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
-  index, LRC parsing and lyrics timing, EQ curves/profiles, queue resume positions and
-  list reordering.
-- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4 and 4→5 migration
-  tests on an Android 15 emulator.
+  index, LRC parsing and lyrics timing, EQ curves/profiles, queue resume positions, list
+  reordering and virtual tag merging.
+- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5 and 5→6
+  migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
-  `../checks/round-6/README.md` for locate-current and playlist/queue reorder evidence,
-  `../checks/round-5/README.md` for lyrics, sleep/fade, equalizer and queue-memory
-  evidence, `../checks/round-4-c/README.md` for the library evidence, and
+  `../checks/round-6-b/README.md` for virtual tag editing, `../checks/round-6/README.md`
+  for locate-current and playlist/queue reorder evidence, `../checks/round-5/README.md`
+  for lyrics, sleep/fade, equalizer and queue-memory evidence,
+  `../checks/round-4-c/README.md` for the library evidence, and
   `../checks/round-3/README.md` for the remaining unverified items (headset unplug and
   real-phone audio routing).

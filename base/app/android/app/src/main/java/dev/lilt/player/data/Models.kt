@@ -79,6 +79,22 @@ data class SongStateEntity(
     val lastPlayedAt: Long = 0,
 )
 
+/**
+ * Non-destructive user tag overrides. The scanned [SongEntity] row remains the
+ * source of truth for the media file; display and playback use these values
+ * when present, and deleting a row restores the scanned tags.
+ */
+@Entity(tableName = "tag_overrides")
+data class TagOverrideEntity(
+    @PrimaryKey val mediaId: Long,
+    val title: String,
+    val artist: String,
+    val album: String,
+    val year: Int,
+    val track: Int,
+    val updatedAt: Long,
+)
+
 @Entity(
     tableName = "bookmarks",
     indices = [Index(value = ["mediaId", "positionMs"], unique = true)],

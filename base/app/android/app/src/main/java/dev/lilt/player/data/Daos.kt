@@ -68,6 +68,27 @@ interface SongStateDao {
 }
 
 @Dao
+interface TagOverrideDao {
+    @Query("SELECT * FROM tag_overrides WHERE mediaId = :mediaId")
+    fun observe(mediaId: Long): Flow<TagOverrideEntity?>
+
+    @Query("SELECT * FROM tag_overrides")
+    fun observeAll(): Flow<List<TagOverrideEntity>>
+
+    @Query("SELECT * FROM tag_overrides WHERE mediaId = :mediaId")
+    suspend fun get(mediaId: Long): TagOverrideEntity?
+
+    @Query("SELECT * FROM tag_overrides")
+    suspend fun all(): List<TagOverrideEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: TagOverrideEntity)
+
+    @Query("DELETE FROM tag_overrides WHERE mediaId = :mediaId")
+    suspend fun delete(mediaId: Long)
+}
+
+@Dao
 interface BookmarkDao {
     @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<BookmarkEntity>>

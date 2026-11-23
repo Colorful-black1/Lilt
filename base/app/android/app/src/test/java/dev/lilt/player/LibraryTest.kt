@@ -5,6 +5,7 @@ import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.PlaylistSummary
 import dev.lilt.player.data.SongEntity
 import dev.lilt.player.data.SongStateEntity
+import dev.lilt.player.data.TagOverrideEntity
 import dev.lilt.player.library.EQ_PRESETS
 import dev.lilt.player.library.EqProfile
 import dev.lilt.player.library.LibraryGroups
@@ -18,10 +19,13 @@ import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.letterOf
 import dev.lilt.player.library.movedItem
 import dev.lilt.player.library.parseLrc
+import dev.lilt.player.library.parseTagNumber
 import dev.lilt.player.library.presetNameFor
 import dev.lilt.player.library.queueStart
 import dev.lilt.player.library.searchLibrary
 import dev.lilt.player.library.sortSongs
+import dev.lilt.player.library.withTagOverride
+import dev.lilt.player.library.withTagOverrides
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -301,6 +305,51 @@ class LibraryTest {
         )
         assertEquals("Rock", presetNameFor(EQ_PRESETS.getValue("Rock")))
         assertEquals("Custom", presetNameFor(listOf(9f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)))
+    }
+
+    @Test
+    fun tagOverrideReplacesDisplayFieldsAndKeepsScanFields() {
+        val original = song(7)
+        val override = TagOverrideEntity(
+            mediaId = 7,
+            title = "New title",
+            artist = "New artist",
+            album = "New album",
+            year = 2024,
+            track = 5,
+            updatedAt = 1,
+        )
+        val merged = original.withTagOverride(override)
+        assertEquals("New title", merged.title)
+        assertEquals("New artist", merged.artist)
+        assertEquals("New album", merged.album)
+        assertEquals(2024, merged.year)
+        assertEquals(5, merged.track)
+        assertEquals(original.albumId, merged.albumId)
+        assertEquals(original.folder, merged.folder)
+        assertEquals(original.durationMs, merged.durationMs)
+        assertEquals(original, original.withTagOverride(null))
+    }
+
+    @Test
+    fun tagOverrideBlanksFallBackAndListMappingWorks() {
+        val original = song(1)
+        val partial = TagOverrideEntity(1, "", "", "", 0, 0, 1)
+        assertEquals(original, original.withTagOverride(partial))
+        val mapped = listOf(original, song(2)).withTagOverrides(
+            mapOf(1L to partial.copy(title = "One")),
+        )
+        assertEquals("One", mapped[0].title)
+        assertEquals("Song 2", mapped[1].title)
+    }
+
+    @Test
+    fun tagNumberParserAcceptsBlankAndRejectsInvalidValues() {
+        assertEquals(0, parseTagNumber(" ")!!)
+        assertEquals(2024, parseTagNumber(" 2024 ")!!)
+        assertNull(parseTagNumber("-1"))
+        assertNull(parseTagNumber("abc"))
+        assertNull(parseTagNumber("999999999999"))
     }
 
     @Test

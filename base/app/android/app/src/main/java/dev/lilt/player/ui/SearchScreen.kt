@@ -53,6 +53,7 @@ fun SearchScreen(
     onOpenPlaylist: (Long) -> Unit,
     onOpenAlbum: (String, Long) -> Unit,
     onOpenArtist: (String) -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
@@ -134,6 +135,7 @@ fun SearchScreen(
                         SongAction.PlayNext -> vm.enqueueNext(song)
                         SongAction.AddToQueue -> vm.addToQueue(song)
                         SongAction.AddToPlaylist -> Unit
+                        SongAction.EditTags -> onEditTags(song.mediaId)
                     }
                 },
                 onOpenPlaylist = {

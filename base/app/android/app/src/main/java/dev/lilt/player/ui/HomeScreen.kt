@@ -85,6 +85,7 @@ fun HomeScreen(
     onOpenPlaylist: (Long) -> Unit,
     onOpenAlbum: (String, Long) -> Unit,
     onOpenArtist: (String) -> Unit,
+    onEditTags: (Long) -> Unit,
 ) {
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
@@ -201,6 +202,7 @@ fun HomeScreen(
                             SongAction.PlayNext -> vm.enqueueNext(song)
                             SongAction.AddToQueue -> vm.addToQueue(song)
                             SongAction.AddToPlaylist -> songForPlaylist = song
+                            SongAction.EditTags -> onEditTags(song.mediaId)
                         }
                     },
                     modifier = Modifier.weight(1f),
@@ -232,6 +234,7 @@ fun HomeScreen(
                             SongAction.PlayNext -> vm.enqueueNext(song)
                             SongAction.AddToQueue -> vm.addToQueue(song)
                             SongAction.AddToPlaylist -> songForPlaylist = song
+                            SongAction.EditTags -> onEditTags(song.mediaId)
                         }
                     },
                     modifier = Modifier.weight(1f),

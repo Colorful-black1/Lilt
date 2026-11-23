@@ -20,13 +20,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SearchHistoryEntity::class,
         LyricsEntity::class,
         FolderRuleEntity::class,
+        TagOverrideEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class LiltDatabase : RoomDatabase() {
     abstract fun musicDao(): MusicDao
     abstract fun songStateDao(): SongStateDao
+    abstract fun tagOverrideDao(): TagOverrideDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun searchHistoryDao(): SearchHistoryDao
     abstract fun lyricsDao(): LyricsDao
@@ -105,6 +107,25 @@ abstract class LiltDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `tag_overrides` (
+                        `mediaId` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `artist` TEXT NOT NULL,
+                        `album` TEXT NOT NULL,
+                        `year` INTEGER NOT NULL,
+                        `track` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`mediaId`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: LiltDatabase? = null
 
@@ -119,6 +140,7 @@ abstract class LiltDatabase : RoomDatabase() {
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_5,
+                    MIGRATION_5_6,
                 )
                     .build()
                     .also { instance = it }

@@ -149,6 +149,62 @@ class LiltDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate5To6AddsTagOverridesAndKeepsUserData() {
+        val name = "lilt-migration-5-6.db"
+        helper.createDatabase(name, 5).use { db ->
+            db.execSQL(
+                """
+                INSERT INTO songs
+                    (mediaId, title, artist, album, albumId, folder, displayName,
+                     durationMs, track, year, mime, dateAdded, size, lastSeen)
+                VALUES
+                    (42, 'Track', 'Artist', 'Album', 7, 'Music/Rock', 'track.mp3',
+                     185000, 1, 2020, 'audio/mpeg', 1, 10, 1)
+                """.trimIndent(),
+            )
+            db.execSQL(
+                "INSERT INTO song_state (mediaId, favorite, playCount, lastPlayedAt) " +
+                    "VALUES (42, 1, 5, 123)",
+            )
+            db.execSQL(
+                "INSERT INTO lyrics (mediaId, text, updatedAt) VALUES (42, '[00:01.00]Hello', 789)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            6,
+            true,
+            LiltDatabase.MIGRATION_5_6,
+        ).use { db ->
+            db.query("SELECT title FROM songs WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Track", cursor.getString(0))
+            }
+            db.query("SELECT favorite, playCount FROM song_state WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+                assertEquals(5, cursor.getInt(1))
+            }
+            db.execSQL(
+                "INSERT INTO tag_overrides " +
+                    "(mediaId, title, artist, album, year, track, updatedAt) " +
+                    "VALUES (42, 'Custom', 'Artist 2', 'Album 2', 2024, 3, 456)",
+            )
+            db.query(
+                "SELECT title, artist, album, year, track FROM tag_overrides WHERE mediaId = 42",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Custom", cursor.getString(0))
+                assertEquals("Artist 2", cursor.getString(1))
+                assertEquals("Album 2", cursor.getString(2))
+                assertEquals(2024, cursor.getInt(3))
+                assertEquals(3, cursor.getInt(4))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2KeepsLibraryAndAddsSongState() {
         helper.createDatabase(databaseName, 1).use { db ->
             db.execSQL(
