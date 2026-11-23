@@ -914,6 +914,22 @@ fn player_bar(
                     {
                         app.now_playing = true;
                     }
+                    if icons::icon_button(
+                        ui,
+                        Icon::MiniPlayer,
+                        28.0,
+                        if app.state.settings.mini_player {
+                            palette.accent
+                        } else {
+                            palette.muted
+                        },
+                        palette.surface_hi,
+                        app.t("Mini player", "迷你播放器"),
+                    )
+                    .clicked()
+                    {
+                        app.toggle_mini_player();
+                    }
                     let queue_count = app.active_queue().map(|q| q.songs.len()).unwrap_or(0);
                     let queue_response = icons::icon_button(
                         ui,

@@ -481,6 +481,16 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                             {
                                                                 open_lyrics_editor = true;
                                                             }
+                                                            if widgets::ghost_button(
+                                                                ui,
+                                                                app.t("Desktop", "桌面"),
+                                                                Some(Icon::DesktopLyrics),
+                                                                &op,
+                                                            )
+                                                            .clicked()
+                                                            {
+                                                                app.toggle_desktop_lyrics();
+                                                            }
                                                         },
                                                     );
                                                 });
@@ -1598,7 +1608,7 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                                 ("Ctrl + Alt + →", app.t("Next track", "下一首")),
                                 ("Ctrl + Alt + ←", app.t("Previous track", "上一首")),
                                 ("Ctrl + Alt + ↑ / ↓", app.t("Volume ±5%", "音量 ±5%")),
-                                ("Ctrl + Alt + L", app.t("Lyrics panel", "歌词面板")),
+                                ("Ctrl + Alt + L", app.t("Desktop lyrics", "桌面歌词")),
                             ] {
                                 ui.horizontal(|ui| {
                                     ui.label(

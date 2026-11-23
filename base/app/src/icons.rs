@@ -46,6 +46,10 @@ pub enum Icon {
     Sparkle,
     Library,
     Locate,
+    Lock,
+    Unlock,
+    MiniPlayer,
+    DesktopLyrics,
 }
 
 pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32, thickness: f32) {
@@ -485,6 +489,74 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32, thicknes
             line((0.40, 0.0), (0.62, 0.0));
             line((0.0, -0.62), (0.0, -0.40));
             line((0.0, 0.40), (0.0, 0.62));
+        }
+        Icon::Lock => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    Pos2::new(c.x - 0.36 * h, c.y - 0.04 * h),
+                    Pos2::new(c.x + 0.36 * h, c.y + 0.46 * h),
+                ),
+                3.0,
+                stroke,
+                StrokeKind::Inside,
+            );
+            let mut shackle = Vec::new();
+            for i in 0..16 {
+                let angle = std::f32::consts::PI + i as f32 * std::f32::consts::PI / 15.0;
+                shackle.push(Pos2::new(
+                    c.x + angle.cos() * h * 0.24,
+                    c.y - 0.04 * h + angle.sin() * h * 0.24,
+                ));
+            }
+            painter.add(Shape::line(shackle, stroke));
+        }
+        Icon::Unlock => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    Pos2::new(c.x - 0.36 * h, c.y - 0.04 * h),
+                    Pos2::new(c.x + 0.36 * h, c.y + 0.46 * h),
+                ),
+                3.0,
+                stroke,
+                StrokeKind::Inside,
+            );
+            line((-0.24, -0.04), (-0.24, -0.26));
+            line((-0.24, -0.26), (0.02, -0.46));
+            line((0.02, -0.46), (0.26, -0.30));
+        }
+        Icon::MiniPlayer => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    Pos2::new(c.x - 0.52 * h, c.y - 0.38 * h),
+                    Pos2::new(c.x + 0.52 * h, c.y + 0.38 * h),
+                ),
+                3.0,
+                stroke,
+                StrokeKind::Inside,
+            );
+            painter.rect_filled(
+                Rect::from_min_max(
+                    Pos2::new(c.x - 0.36 * h, c.y + 0.14 * h),
+                    Pos2::new(c.x + 0.36 * h, c.y + 0.22 * h),
+                ),
+                1.5,
+                color,
+            );
+            painter.circle_filled(Pos2::new(c.x, c.y + 0.02 * h), h * 0.09, color);
+        }
+        Icon::DesktopLyrics => {
+            painter.rect_stroke(
+                Rect::from_min_max(
+                    Pos2::new(c.x - 0.52 * h, c.y - 0.38 * h),
+                    Pos2::new(c.x + 0.52 * h, c.y + 0.38 * h),
+                ),
+                3.0,
+                stroke,
+                StrokeKind::Inside,
+            );
+            line((-0.30, 0.12), (0.30, 0.12));
+            line((-0.20, 0.28), (0.20, 0.28));
+            line((-0.20, -0.16), (0.20, -0.16));
         }
     }
 }

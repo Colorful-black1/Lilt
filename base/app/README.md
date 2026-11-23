@@ -46,7 +46,9 @@ screenshots in `checks/`). For lyric checks, `LILT_START_PAGE=now`, `LILT_LYRICS
 `LILT_LYRICS_OFFSET=500` and `LILT_PAUSE_AFTER_SEEK=1` open the now-playing lyric panel
 at a fixed position with an offset applied. For tray and hotkey checks,
 `LILT_DESKTOP_LOG=<file>` appends native action lines (tray click, tray menu, hotkey,
-show/hide) to that file without enabling the developer console.
+show/hide) to that file without enabling the developer console. The desktop companion
+windows can be opened without touching saved settings with `LILT_DESKTOP_LYRICS=1`,
+`LILT_DESKTOP_LYRICS_LOCKED=1` and `LILT_MINI_PLAYER=1`.
 
 ## First launch
 
@@ -103,12 +105,27 @@ Set `LILT_DATA_DIR` to use a different data folder.
   lyric line seeks to its adjusted time. Settings has lyric font size (10–24 px) and
   opacity (30–100%) sliders with a live preview.
 - **Windows desktop integration.** A self-drawn tray icon with left-click restore and a
-  right-click menu (Show Lilt, Play/Pause, Previous, Next, Quit Lilt). Closing hides to
-  the tray by default; minimizing does too when enabled. Playback, track changes, sleep
-  timers, fades and state saves keep advancing while hidden. Global hotkeys work while
-  another app is focused: `Ctrl+Alt+Space` (play/pause), left/right (previous/next),
-  up/down (volume ±5%) and `L` (lyrics panel). All three behaviours are toggleable in
-  **Settings → Desktop integration**.
+  right-click menu (Show Lilt, Play/Pause, Previous, Next, Desktop lyrics, Lock/Unlock
+  desktop lyrics, Mini player, Quit Lilt). Closing hides to the tray by default;
+  minimizing does too when enabled. Playback, track changes, sleep timers, fades and
+  state saves keep advancing while hidden.
+- **Desktop lyrics.** A separate always-on-top lyric window with a rounded translucent
+  panel shows the current, previous and next lyric lines with the same per-song offset and
+  opacity settings as the now-playing panel. Its header can be dragged, and it can be
+  resized. The lock button hides the controls, freezes dragging and makes the whole window
+  click-through (`WS_EX_TRANSPARENT`), so it does not block work underneath; unlock it from
+  the tray menu or Settings. `Ctrl+Alt+L` toggles the window.
+- **Mini player.** A compact always-on-top window with cover art, title/artist/album,
+  previous/play/next, shuffle/repeat, elapsed time and a seek bar. Its transport and seek
+  actions go through the same playback engine and stay in sync with the main window. The
+  header can be dragged; the expand button returns to the full player.
+- **Windows SMTC.** The system media flyout gets the current title, artist, album, play
+  state, position/duration, shuffle and repeat mode. Its play, pause, previous and next
+  buttons drive the same playback state as the main window and the tray.
+- Global hotkeys work while another app is focused: `Ctrl+Alt+Space` (play/pause),
+  left/right (previous/next), up/down (volume ±5%) and `L` (desktop lyrics). Tray,
+  close-to-tray, global hotkeys, desktop lyrics, lock, lyric size and the mini player are
+  all in **Settings → Desktop integration**.
 - 10-band equalizer at the target's exact frequencies and Q, 22 target presets, three
   preamp modes, bass boost, virtualizer, 0–200 balance, headroom suggestion and five
   stored device profiles; changes apply to the live audio source and persist after
@@ -140,7 +157,7 @@ window is hidden in the tray):
 | Ctrl+Alt+Right | Next |
 | Ctrl+Alt+Left | Previous |
 | Ctrl+Alt+Up / Down | Volume ±5% |
-| Ctrl+Alt+L | Lyrics panel |
+| Ctrl+Alt+L | Desktop lyrics |
 
 ## Platform note
 
@@ -151,5 +168,6 @@ APK by changing a file extension; the Android path is a real second build with t
 requested Media3 foreground service, Room library and Compose screens.
 
 No network permission or network SDK is present. Everything runs from local files.
-The tray icon and global hotkeys use `tray-icon` and `global-hotkey` and are built for
-Windows; the rest of the desktop program still builds on other platforms.
+The tray icon, global hotkeys, companion windows and SMTC use `tray-icon`,
+`global-hotkey`, egui viewports and the Windows `windows` crate. The SMTC integration is
+built for Windows; the rest of the desktop program still builds on other platforms.

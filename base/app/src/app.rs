@@ -1,9 +1,10 @@
 use crate::audio::AudioEngine;
-use crate::desktop::{self, DesktopAction, DesktopIntegration};
+use crate::desktop::{self, DesktopAction, DesktopIntegration, MediaInfo};
 use crate::i18n::tr;
 use crate::library;
 use crate::model::*;
 use crate::theme::{self, Palette};
+use crate::ui::companion::{CompanionAction, CompanionSnapshot, CompanionWindows};
 use eframe::egui;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -223,6 +224,8 @@ pub struct LiltApp {
     pub desktop: Option<DesktopIntegration>,
     pub desktop_error: Option<String>,
     pub hotkey_error: Option<String>,
+    pub media_error: Option<String>,
+    pub companions: CompanionWindows,
     pub hidden_to_tray: bool,
     pub quitting: bool,
     pub was_minimized: bool,
@@ -237,10 +240,7 @@ impl LiltApp {
         let mut state = library::load_state();
         crate::console::set_enabled(state.settings.developer_mode);
         crate::console::log(format!("Lilt {} starting", APP_VERSION));
-        crate::console::log(format!(
-            "Data directory: {}",
-            library::data_dir().display()
-        ));
+        crate::console::log(format!("Data directory: {}", library::data_dir().display()));
         let minute = theme::local_minute_of_day();
         let daylight =
             minute >= state.settings.day_start_minutes && minute < state.settings.day_end_minutes;
@@ -348,6 +348,8 @@ impl LiltApp {
             desktop: None,
             desktop_error: None,
             hotkey_error: None,
+            media_error: None,
+            companions: CompanionWindows::new(),
             hidden_to_tray: false,
             quitting: false,
             was_minimized: false,
@@ -589,6 +591,16 @@ impl LiltApp {
         if std::env::var_os("LILT_LYRICS").is_some() {
             self.lyrics_open = true;
         }
+        if std::env::var_os("LILT_DESKTOP_LYRICS").is_some() {
+            self.state.settings.desktop_lyrics = true;
+        }
+        if std::env::var_os("LILT_DESKTOP_LYRICS_LOCKED").is_some() {
+            self.state.settings.desktop_lyrics = true;
+            self.state.settings.desktop_lyrics_locked = true;
+        }
+        if std::env::var_os("LILT_MINI_PLAYER").is_some() {
+            self.state.settings.mini_player = true;
+        }
         if let Ok(query) = std::env::var("LILT_SEARCH") {
             self.search = query;
         }
@@ -829,10 +841,7 @@ impl LiltApp {
         }
         let was_playing = self.playing;
         let position = self.position();
-        let index = self
-            .active_queue()
-            .map(|queue| queue.index)
-            .unwrap_or(0);
+        let index = self.active_queue().map(|queue| queue.index).unwrap_or(0);
         self.state.settings.output_device = name;
         self.audio = None;
         self.fade = None;
@@ -959,12 +968,7 @@ impl LiltApp {
             }
             let base = candidate.clone();
             let mut suffix = 2;
-            while self
-                .state
-                .queues
-                .iter()
-                .any(|q| q.name == candidate)
-            {
+            while self.state.queues.iter().any(|q| q.name == candidate) {
                 candidate = format!("{base} {suffix}");
                 suffix += 1;
             }
@@ -1133,7 +1137,11 @@ impl LiltApp {
             self.fade = None;
             return;
         }
-        let start_volume = self.audio.as_ref().map(|audio| audio.volume()).unwrap_or(0.0);
+        let start_volume = self
+            .audio
+            .as_ref()
+            .map(|audio| audio.volume())
+            .unwrap_or(0.0);
         self.fade = Some(PlayFade {
             started: Instant::now(),
             duration_ms,
@@ -1366,13 +1374,34 @@ impl LiltApp {
         self.notify(format!("{} {percent}%", self.t("Volume", "音量")));
     }
 
-    pub fn toggle_lyrics_panel(&mut self) {
-        if self.lyrics_open {
-            self.lyrics_open = false;
+    pub fn toggle_desktop_lyrics(&mut self) {
+        self.state.settings.desktop_lyrics = !self.state.settings.desktop_lyrics;
+        self.dirty = true;
+        desktop::log_line(if self.state.settings.desktop_lyrics {
+            "desktop lyrics shown"
         } else {
-            self.lyrics_open = true;
-            self.now_playing = true;
-        }
+            "desktop lyrics hidden"
+        });
+    }
+
+    pub fn toggle_desktop_lyrics_lock(&mut self) {
+        self.state.settings.desktop_lyrics_locked = !self.state.settings.desktop_lyrics_locked;
+        self.dirty = true;
+        desktop::log_line(if self.state.settings.desktop_lyrics_locked {
+            "desktop lyrics locked"
+        } else {
+            "desktop lyrics unlocked"
+        });
+    }
+
+    pub fn toggle_mini_player(&mut self) {
+        self.state.settings.mini_player = !self.state.settings.mini_player;
+        self.dirty = true;
+        desktop::log_line(if self.state.settings.mini_player {
+            "mini player shown"
+        } else {
+            "mini player hidden"
+        });
     }
 
     pub fn set_speed(&mut self, value: f32) {
@@ -1636,8 +1665,7 @@ impl LiltApp {
         } else {
             false
         };
-        if let Some(index) = take_pending_transition(&mut self.pending_next, transition_started)
-        {
+        if let Some(index) = take_pending_transition(&mut self.pending_next, transition_started) {
             if let Some(queue) = self.state.active_queue_mut() {
                 queue.index = index;
                 queue.position = 0.0;
@@ -1743,12 +1771,7 @@ impl LiltApp {
             }
         }
         // A unique name is required for named queues.
-        while self
-            .state
-            .queues
-            .iter()
-            .any(|q| q.name == name)
-        {
+        while self.state.queues.iter().any(|q| q.name == name) {
             name.push(' ');
             name.push('2');
         }
@@ -2715,6 +2738,140 @@ impl LiltApp {
         self.cover_cache.clear();
     }
 
+    fn media_info(&self) -> MediaInfo {
+        let song = self.current_song();
+        let duration = song.map(|song| song.duration).unwrap_or(0.0);
+        MediaInfo {
+            title: song
+                .map(|song| song.display_title().to_owned())
+                .unwrap_or_default(),
+            artist: song
+                .map(|song| song.display_artist().to_owned())
+                .unwrap_or_default(),
+            album: song
+                .map(|song| song.display_album().to_owned())
+                .unwrap_or_default(),
+            playing: self.playing,
+            position: self.position().min(duration),
+            duration,
+            shuffle: self.shuffle,
+            repeat: self.repeat,
+        }
+    }
+
+    fn companion_snapshot(&mut self, ctx: &egui::Context) -> CompanionSnapshot {
+        let current = self.current_song().cloned();
+        let cover = current
+            .as_ref()
+            .and_then(|song| self.load_cover_texture(ctx, song));
+        let lyrics_key = current.as_ref().map(|song| song.key.clone());
+        let lyrics_offset_ms = lyrics_key
+            .as_deref()
+            .map(|key| self.lyrics_offset_for(key))
+            .unwrap_or(0);
+        let lyrics = self.lyrics.clone().unwrap_or_default();
+        let duration = current.as_ref().map(|song| song.duration).unwrap_or(0.0);
+        CompanionSnapshot {
+            language: self.lang(),
+            palette: self.palette,
+            title: current
+                .as_ref()
+                .map(|song| song.display_title().to_owned())
+                .unwrap_or_else(|| self.t("Nothing playing", "暂无播放").to_owned()),
+            artist: current
+                .as_ref()
+                .map(|song| song.display_artist().to_owned())
+                .unwrap_or_default(),
+            album: current
+                .as_ref()
+                .map(|song| song.display_album().to_owned())
+                .unwrap_or_default(),
+            playing: self.playing,
+            position: self.position().min(duration.max(0.0)),
+            duration,
+            volume: self.state.settings.volume,
+            shuffle: self.shuffle,
+            repeat: self.repeat,
+            lyrics,
+            lyrics_offset_ms,
+            lyrics_opacity: self.state.settings.lyrics_opacity,
+            desktop_lyrics_font_size: self.state.settings.desktop_lyrics_font_size,
+            lyrics_locked: self.state.settings.desktop_lyrics_locked,
+            cover,
+        }
+    }
+
+    fn handle_companion_actions(&mut self, ctx: &egui::Context) {
+        for action in self.companions.take_actions() {
+            desktop::log_line(&format!("companion {action:?}"));
+            match action {
+                CompanionAction::TogglePlay => self.toggle_play(),
+                CompanionAction::Play => {
+                    if !self.playing {
+                        self.toggle_play();
+                    }
+                }
+                CompanionAction::Pause => {
+                    if self.playing {
+                        self.toggle_play();
+                    }
+                }
+                CompanionAction::Previous => self.prev_track(),
+                CompanionAction::Next => self.next_track(false),
+                CompanionAction::Seek(seconds) => self.seek_to(seconds),
+                CompanionAction::ToggleShuffle => self.toggle_shuffle(),
+                CompanionAction::CycleRepeat => self.cycle_repeat(),
+                CompanionAction::ShowMain => {
+                    self.state.settings.mini_player = false;
+                    self.mark_dirty();
+                    self.show_main_window(ctx);
+                }
+                CompanionAction::CloseMini => {
+                    self.state.settings.mini_player = false;
+                    self.mark_dirty();
+                }
+                CompanionAction::CloseLyrics => {
+                    self.state.settings.desktop_lyrics = false;
+                    self.mark_dirty();
+                }
+                CompanionAction::ToggleLyricsLock => self.toggle_desktop_lyrics_lock(),
+                CompanionAction::OpenNowPlaying => {
+                    self.state.settings.mini_player = false;
+                    self.now_playing = true;
+                    self.mark_dirty();
+                    self.show_main_window(ctx);
+                }
+            }
+        }
+    }
+
+    fn update_companions(&mut self, ctx: &egui::Context) {
+        let lyrics_visible = self.state.settings.desktop_lyrics && self.screenshot.is_none();
+        let mini_visible = self.state.settings.mini_player && self.screenshot.is_none();
+        if !lyrics_visible && !mini_visible {
+            self.companions.sync(None, ctx, false, false);
+            return;
+        }
+        let snapshot = self.companion_snapshot(ctx);
+        self.companions
+            .sync(Some(snapshot), ctx, lyrics_visible, mini_visible);
+    }
+
+    /// The hidden heartbeat must reflect state changed later in the frame (for
+    /// example a companion action that starts playback or marks a save dirty).
+    fn sync_hidden_window_state(&self) {
+        let busy = self.hidden_to_tray
+            && (self.playing
+                || self.scanning
+                || self.scan_rx.is_some()
+                || self.sleep_deadline.is_some()
+                || self.dirty);
+        if let Some(desktop) = &self.desktop {
+            desktop.set_hidden(self.hidden_to_tray);
+            desktop.set_heartbeat(busy);
+        }
+    }
+
     /// Tray menu, tray clicks and registered shortcuts all arrive here.
     /// Actions are queued by the native callbacks and handled on the UI thread.
     fn update_desktop(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
@@ -2724,11 +2881,7 @@ impl LiltApp {
             && Instant::now() >= self.desktop_next_try
         {
             self.desktop_attempts += 1;
-            match DesktopIntegration::new(
-                ctx,
-                self.lang(),
-                self.state.settings.global_hotkeys,
-            ) {
+            match DesktopIntegration::new(ctx, self.lang(), self.state.settings.global_hotkeys) {
                 Ok(desktop) => {
                     self.desktop = Some(desktop);
                     self.desktop_error = None;
@@ -2744,9 +2897,13 @@ impl LiltApp {
         #[cfg(target_os = "windows")]
         {
             use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-            if let (Ok(handle), Some(desktop)) = (frame.window_handle(), self.desktop.as_ref()) {
+            if let Ok(handle) = frame.window_handle() {
                 if let RawWindowHandle::Win32(win32) = handle.as_raw() {
-                    desktop.set_main_window(win32.hwnd.get());
+                    let hwnd = win32.hwnd.get();
+                    self.companions.set_main_window(hwnd);
+                    if let Some(desktop) = self.desktop.as_mut() {
+                        desktop.set_main_window(hwnd);
+                    }
                 }
             }
         }
@@ -2757,6 +2914,7 @@ impl LiltApp {
             if let Some(desktop) = &mut self.desktop {
                 desktop.set_hotkeys_enabled(self.state.settings.global_hotkeys);
                 self.hotkey_error = desktop.hotkey_error().map(str::to_owned);
+                self.media_error = desktop.media_error().map(str::to_owned);
             }
             let pending = self
                 .desktop
@@ -2785,8 +2943,20 @@ impl LiltApp {
             });
             let language = self.lang();
             let playing = self.playing;
+            let desktop_lyrics = self.state.settings.desktop_lyrics;
+            let lyrics_locked = self.state.settings.desktop_lyrics_locked;
+            let mini_player = self.state.settings.mini_player;
+            let media = self.media_info();
             if let Some(desktop) = &mut self.desktop {
-                desktop.sync(language, playing, track.as_deref());
+                desktop.sync(
+                    language,
+                    playing,
+                    track.as_deref(),
+                    desktop_lyrics,
+                    lyrics_locked,
+                    mini_player,
+                );
+                desktop.sync_media(&media);
             }
         }
 
@@ -2828,17 +2998,6 @@ impl LiltApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.hide_to_tray(ctx);
         }
-
-        let busy = self.hidden_to_tray
-            && (self.playing
-                || self.scanning
-                || self.scan_rx.is_some()
-                || self.sleep_deadline.is_some()
-                || self.dirty);
-        if let Some(desktop) = &self.desktop {
-            desktop.set_hidden(self.hidden_to_tray);
-            desktop.set_heartbeat(busy);
-        }
     }
 
     fn handle_desktop_action(&mut self, ctx: &egui::Context, action: DesktopAction) {
@@ -2848,12 +3007,24 @@ impl LiltApp {
         ));
         match action {
             DesktopAction::Show => self.show_main_window(ctx),
+            DesktopAction::Play => {
+                if !self.playing {
+                    self.toggle_play();
+                }
+            }
+            DesktopAction::Pause => {
+                if self.playing {
+                    self.toggle_play();
+                }
+            }
             DesktopAction::TogglePlay => self.toggle_play(),
             DesktopAction::Previous => self.prev_track(),
             DesktopAction::Next => self.next_track(false),
             DesktopAction::VolumeUp => self.adjust_volume(0.05),
             DesktopAction::VolumeDown => self.adjust_volume(-0.05),
-            DesktopAction::ToggleLyrics => self.toggle_lyrics_panel(),
+            DesktopAction::ToggleDesktopLyrics => self.toggle_desktop_lyrics(),
+            DesktopAction::ToggleLyricsLock => self.toggle_desktop_lyrics_lock(),
+            DesktopAction::ToggleMiniPlayer => self.toggle_mini_player(),
             DesktopAction::Quit => {
                 self.quitting = true;
                 self.save_now();
@@ -3168,6 +3339,7 @@ pub struct SearchResults {
 impl eframe::App for LiltApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.update_desktop(ctx, frame);
+        self.handle_companion_actions(ctx);
         self.update_theme(ctx);
         self.poll_scan();
         self.update_sleep_timer();
@@ -3181,7 +3353,9 @@ impl eframe::App for LiltApp {
             }
         }
         crate::ui::render(self, ctx);
+        self.update_companions(ctx);
         self.maybe_save();
+        self.sync_hidden_window_state();
         self.handle_screenshot(ctx);
         // Keep one delayed frame scheduled while a settings/lyric edit is waiting
         // for `maybe_save`, even when playback is paused and nothing else repaints.
@@ -3190,9 +3364,7 @@ impl eframe::App for LiltApp {
             || self.scanning
             || self.sleep_deadline.is_some()
             || self.scan_rx.is_some()
-            || (self.desktop.is_none()
-                && self.screenshot.is_none()
-                && self.desktop_attempts < 3)
+            || (self.desktop.is_none() && self.screenshot.is_none() && self.desktop_attempts < 3)
         {
             ctx.request_repaint_after(Duration::from_millis(100));
         }

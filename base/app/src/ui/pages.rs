@@ -2379,6 +2379,75 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                         }
                     },
                 );
+                let mut desktop_lyrics = app.state.settings.desktop_lyrics;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Desktop lyrics", "桌面歌词"),
+                    app.t(
+                        "A rounded, always-on-top lyric window with a translucent panel.",
+                        "圆角、置顶的独立歌词窗口，面板半透明。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut desktop_lyrics, palette).clicked() {
+                            app.state.settings.desktop_lyrics = desktop_lyrics;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                let mut lyrics_locked = app.state.settings.desktop_lyrics_locked;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Lock desktop lyrics", "锁定桌面歌词"),
+                    app.t(
+                        "Hide the controls, prevent dragging and let clicks pass through.",
+                        "隐藏控件、禁止拖动，并让鼠标点击穿透窗口。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut lyrics_locked, palette).clicked() {
+                            app.state.settings.desktop_lyrics_locked = lyrics_locked;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                let mut desktop_font = app.state.settings.desktop_lyrics_font_size;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Desktop lyric size", "桌面歌词字号"),
+                    app.t(
+                        "Active line size in the desktop lyric window.",
+                        "桌面歌词窗口当前行的字号。",
+                    ),
+                    |ui| {
+                        let response = ui.add(
+                            egui::Slider::new(&mut desktop_font, 18.0..=56.0)
+                                .step_by(1.0)
+                                .suffix(" px"),
+                        );
+                        if response.changed() {
+                            app.state.settings.desktop_lyrics_font_size = desktop_font;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                let mut mini_player = app.state.settings.mini_player;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Mini player", "迷你播放器"),
+                    app.t(
+                        "A small always-on-top window with transport and seek.",
+                        "带播放控制和进度条的小型置顶窗口。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut mini_player, palette).clicked() {
+                            app.state.settings.mini_player = mini_player;
+                            app.mark_dirty();
+                        }
+                    },
+                );
                 if cfg!(target_os = "windows") {
                     ui.add_space(4.0);
                     ui.label(
@@ -2395,7 +2464,7 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                         ("Ctrl + Alt + ←", app.t("Previous track", "上一首")),
                         ("Ctrl + Alt + →", app.t("Next track", "下一首")),
                         ("Ctrl + Alt + ↑ / ↓", app.t("Volume ±5%", "音量 ±5%")),
-                        ("Ctrl + Alt + L", app.t("Lyrics panel", "歌词面板")),
+                        ("Ctrl + Alt + L", app.t("Desktop lyrics", "桌面歌词")),
                     ] {
                         ui.horizontal(|ui| {
                             ui.label(
@@ -2439,6 +2508,20 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                             RichText::new(format!(
                                 "{} {error}",
                                 app.t("Some shortcuts could not be registered:", "部分快捷键注册失败：")
+                            ))
+                            .size(10.5)
+                            .color(palette.warn),
+                        )
+                        .wrap(),
+                    );
+                }
+                if let Some(error) = &app.media_error {
+                    ui.add_space(4.0);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(format!(
+                                "{} {error}",
+                                app.t("Windows media controls unavailable:", "Windows 媒体控制不可用：")
                             ))
                             .size(10.5)
                             .color(palette.warn),

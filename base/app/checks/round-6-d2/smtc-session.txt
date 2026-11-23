@@ -1,0 +1,13 @@
+sessions=1
+
+
+App       : lilt-medium.exe
+Title     : Glass Horizon
+Artist    : Lumen Field
+Album     : Aurora Drift
+Status    : Paused
+Position  : 12.01
+End       : 48
+PlayPause : True
+Next      : True
+Previous  : True

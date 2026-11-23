@@ -626,6 +626,14 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     /// Register the system-wide Ctrl+Alt shortcuts while Lilt is running.
     pub global_hotkeys: bool,
+    /// Always-on-top desktop lyric window.
+    pub desktop_lyrics: bool,
+    /// Hides desktop lyric controls, makes the window click-through and stops dragging.
+    pub desktop_lyrics_locked: bool,
+    /// Active line size for the desktop lyric window, 18-56 px.
+    pub desktop_lyrics_font_size: f32,
+    /// Compact always-on-top player window.
+    pub mini_player: bool,
 }
 
 impl Default for Settings {
@@ -686,6 +694,10 @@ impl Default for Settings {
             close_to_tray: true,
             minimize_to_tray: false,
             global_hotkeys: true,
+            desktop_lyrics: false,
+            desktop_lyrics_locked: false,
+            desktop_lyrics_font_size: 34.0,
+            mini_player: false,
         }
     }
 }
@@ -1075,6 +1087,10 @@ mod tests {
         assert!(settings.close_to_tray);
         assert!(!settings.minimize_to_tray);
         assert!(settings.global_hotkeys);
+        assert!(!settings.desktop_lyrics);
+        assert!(!settings.desktop_lyrics_locked);
+        assert_eq!(settings.desktop_lyrics_font_size, 34.0);
+        assert!(!settings.mini_player);
         assert_eq!(settings.sleep_history_hm, vec![(1, 30), (0, 15)]);
         assert_eq!(settings.sleep_history_n, vec![10, 5]);
 
@@ -1152,12 +1168,19 @@ mod tests {
         assert!(parsed.settings.close_to_tray);
         assert!(!parsed.settings.minimize_to_tray);
         assert!(parsed.settings.global_hotkeys);
+        assert!(!parsed.settings.desktop_lyrics);
+        assert!(!parsed.settings.mini_player);
+        assert_eq!(parsed.settings.desktop_lyrics_font_size, 34.0);
         let parsed: Persisted = serde_json::from_str(
-            r#"{"settings":{"close_to_tray":false,"minimize_to_tray":true,"global_hotkeys":false}}"#,
+            r#"{"settings":{"close_to_tray":false,"minimize_to_tray":true,"global_hotkeys":false,"desktop_lyrics":true,"desktop_lyrics_locked":true,"desktop_lyrics_font_size":42,"mini_player":true}}"#,
         )
         .unwrap();
         assert!(!parsed.settings.close_to_tray);
         assert!(parsed.settings.minimize_to_tray);
         assert!(!parsed.settings.global_hotkeys);
+        assert!(parsed.settings.desktop_lyrics);
+        assert!(parsed.settings.desktop_lyrics_locked);
+        assert_eq!(parsed.settings.desktop_lyrics_font_size, 42.0);
+        assert!(parsed.settings.mini_player);
     }
 }

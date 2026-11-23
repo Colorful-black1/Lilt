@@ -1,0 +1,2 @@
+lyrics window: ex=0xC0138 layered=True passthrough=True
+hit test at (1200,380): hwnd=264758 title='Chrome Legacy Window' pid=27284

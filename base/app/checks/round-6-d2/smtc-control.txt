@@ -1,0 +1,2 @@
+before=Paused title=Glass Horizon toggle=True
+after=Playing next=True nextTitle=Soft Static nextStatus=Playing
