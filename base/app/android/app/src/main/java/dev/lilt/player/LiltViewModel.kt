@@ -2,6 +2,7 @@ package dev.lilt.player
 
 import android.app.Application
 import android.content.ComponentName
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
@@ -129,6 +130,9 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val rememberQueuePositions = settings.rememberQueuePositions
     val lyricsFontSize = settings.lyricsFontSize
     val lyricsOpacity = settings.lyricsOpacity
+    val floatingLyrics = settings.floatingLyrics
+    val floatingLyricsLocked = settings.floatingLyricsLocked
+    val floatingFontSize = settings.floatingFontSize
 
     private val _player = MutableStateFlow(PlayerUiState())
     val player: StateFlow<PlayerUiState> = _player.asStateFlow()
@@ -736,6 +740,28 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun setRememberQueuePositions(value: Boolean) = settings.setRememberQueuePositions(value)
     fun setLyricsFontSize(value: Float) = settings.setLyricsFontSize(value)
     fun setLyricsOpacity(value: Float) = settings.setLyricsOpacity(value)
+
+    fun setFloatingLyrics(value: Boolean) {
+        settings.setFloatingLyrics(value)
+        refreshFloatingOverlay()
+    }
+
+    fun setFloatingLyricsLocked(value: Boolean) {
+        settings.setFloatingLyricsLocked(value)
+        refreshFloatingOverlay()
+    }
+
+    fun setFloatingFontSize(value: Float) = settings.setFloatingFontSize(value)
+
+    /** Asks the playback service to add or remove the overlay from current preferences. */
+    fun refreshFloatingOverlay() {
+        runCatching {
+            app.startService(
+                Intent(app, PlaybackService::class.java)
+                    .setAction(PlaybackService.ACTION_FLOATING_REFRESH),
+            )
+        }
+    }
 
     fun toggleFavorite(mediaId: Long) {
         if (mediaId <= 0) return

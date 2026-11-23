@@ -1,6 +1,7 @@
 package dev.lilt.player.playback
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -12,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
@@ -24,12 +26,26 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import dev.lilt.player.MainActivity
+import dev.lilt.player.data.LiltDatabase
 import dev.lilt.player.library.EQ_BANDS
 import dev.lilt.player.library.EQ_FREQUENCIES
 import dev.lilt.player.library.EqProfile
+import dev.lilt.player.library.LrcDocument
 import dev.lilt.player.library.PreampMode
+import dev.lilt.player.library.accentArgb
 import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.bassBoostDb
+import dev.lilt.player.library.clampFloatingFontSize
+import dev.lilt.player.library.parseLrc
+import dev.lilt.player.widget.WidgetRenderer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 /**
  * One foreground media session owns playback, the notification and the
@@ -68,6 +84,85 @@ class PlaybackService : MediaSessionService() {
     private var fadeRunnable: Runnable? = null
     private var sleep = SleepState()
 
+    private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var overlay: FloatingLyricsOverlay? = null
+    private var overlayLyrics: LrcDocument? = null
+    private var overlayLyricsMediaId = -1L
+    private var overlayLyricsOffset = 0
+    private var overlayLyricsJob: Job? = null
+    private val overlayActions = object : FloatingLyricsActions {
+        override fun togglePlay() {
+            val exo = player ?: return
+            if (exo.mediaItemCount == 0) {
+                openApp()
+            } else if (exo.isPlaying) {
+                playback?.pause()
+            } else {
+                playback?.play()
+            }
+        }
+
+        override fun previous() {
+            val exo = player ?: return
+            if (exo.currentPosition > 10_000L) exo.seekTo(0) else exo.seekToPreviousMediaItem()
+        }
+
+        override fun next() {
+            player?.seekToNextMediaItem()
+        }
+
+        override fun close() {
+            settingsPrefs.edit().putBoolean("floating_lyrics", false).apply()
+            syncOverlay()
+        }
+
+        override fun lock() {
+            settingsPrefs.edit().putBoolean("floating_lyrics_locked", true).apply()
+            overlay?.applyState(overlayState())
+        }
+
+        override fun openApp() {
+            startActivity(
+                Intent(this@PlaybackService, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                },
+            )
+        }
+    }
+    private val overlayTicker = object : Runnable {
+        override fun run() {
+            if (overlay?.showing == true) {
+                overlay?.applyState(overlayState())
+                mainHandler.postDelayed(this, 250)
+            }
+        }
+    }
+    private val widgetTicker = object : Runnable {
+        override fun run() {
+            val exo = player ?: return
+            if (exo.isPlaying) {
+                WidgetRenderer.update(this@PlaybackService, exo)
+                mainHandler.postDelayed(this, 1_000)
+            }
+        }
+    }
+    private val settingsListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            when (key) {
+                "floating_lyrics" -> syncOverlay()
+                "floating_lyrics_locked",
+                "floating_font_size",
+                "lyrics_opacity",
+                "accent",
+                "language",
+                -> {
+                    overlay?.applyState(overlayState())
+                    WidgetRenderer.update(this, player)
+                }
+            }
+        }
+    private var settingsListenerRegistered = false
+
     override fun onCreate() {
         super.onCreate()
         loadEffectState()
@@ -91,7 +186,15 @@ class PlaybackService : MediaSessionService() {
         attachEqualizer(audioSession)
         runCatching { audioManager.registerAudioDeviceCallback(deviceCallback, mainHandler) }
         exo.addListener(object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                overlay?.applyState(overlayState())
+                WidgetRenderer.update(this@PlaybackService, player)
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                loadOverlayLyrics(mediaItem?.mediaId?.toLongOrNull() ?: -1L)
+                overlay?.applyState(overlayState())
+                WidgetRenderer.update(this@PlaybackService, exo)
                 if (sleep.mode == MODE_OFF) return
                 if (sleep.pendingStop) {
                     stopForSleep()
@@ -109,13 +212,23 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) startSleepTicker() else stopSleepTicker()
+                if (isPlaying) {
+                    startSleepTicker()
+                    startWidgetTicker()
+                } else {
+                    stopSleepTicker()
+                    stopWidgetTicker()
+                }
+                overlay?.applyState(overlayState())
+                WidgetRenderer.update(this@PlaybackService, exo)
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_ENDED && sleep.mode != MODE_OFF) {
                     stopForSleep()
                 }
+                overlay?.applyState(overlayState())
+                WidgetRenderer.update(this@PlaybackService, exo)
             }
         })
         session = MediaSession.Builder(this, wrapper)
@@ -213,6 +326,113 @@ class PlaybackService : MediaSessionService() {
                 }
             })
             .build()
+        settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
+        settingsListenerRegistered = true
+        loadOverlayLyrics(exo.currentMediaItem?.mediaId?.toLongOrNull() ?: -1L)
+        syncOverlay()
+        WidgetRenderer.update(this, exo)
+        if (exo.isPlaying) startWidgetTicker()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val result = super.onStartCommand(intent, flags, startId)
+        if (intent?.action == ACTION_FLOATING_REFRESH) {
+            syncOverlay()
+        }
+        return result
+    }
+
+    private fun openApp() {
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            },
+        )
+    }
+
+    private fun currentMediaId(): Long =
+        player?.currentMediaItem?.mediaId?.toLongOrNull() ?: -1L
+
+    private fun syncOverlay() {
+        val wanted = settingsPrefs.getBoolean("floating_lyrics", false) &&
+            Settings.canDrawOverlays(this)
+        if (!wanted) {
+            overlay?.hide()
+            overlay = null
+            mainHandler.removeCallbacks(overlayTicker)
+            overlayLyricsJob?.cancel()
+            overlayLyricsJob = null
+            overlayLyrics = null
+            overlayLyricsOffset = 0
+            overlayLyricsMediaId = -1L
+            return
+        }
+        if (overlay == null) {
+            overlay = FloatingLyricsOverlay(this, overlayActions)
+            loadOverlayLyrics(currentMediaId())
+            overlay?.show(overlayState())
+            mainHandler.removeCallbacks(overlayTicker)
+            mainHandler.post(overlayTicker)
+        } else {
+            overlay?.applyState(overlayState())
+        }
+    }
+
+    private fun loadOverlayLyrics(mediaId: Long) {
+        if (mediaId == overlayLyricsMediaId && overlayLyricsJob != null) return
+        overlayLyricsJob?.cancel()
+        overlayLyricsJob = null
+        overlayLyrics = null
+        overlayLyricsOffset = 0
+        overlayLyricsMediaId = mediaId
+        if (mediaId <= 0) {
+            overlay?.applyState(overlayState())
+            return
+        }
+        overlayLyricsJob = overlayScope.launch {
+            LiltDatabase.get(this@PlaybackService).lyricsDao().observe(mediaId).collect { entry ->
+                overlayLyrics = entry?.text
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(::parseLrc)
+                overlayLyricsOffset = entry?.offsetMs ?: 0
+                overlay?.applyState(overlayState())
+            }
+        }
+    }
+
+    private fun overlayState(): FloatingLyricsState {
+        val exo = player
+        val item = exo?.currentMediaItem
+        val duration = exo?.duration?.takeIf { it > 0L } ?: 0L
+        val position = exo?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        return FloatingLyricsState(
+            mediaId = item?.mediaId?.toLongOrNull() ?: -1L,
+            title = item?.mediaMetadata?.title?.toString().orEmpty(),
+            artist = item?.mediaMetadata?.artist?.toString().orEmpty(),
+            isPlaying = exo?.isPlaying == true,
+            positionMs = position,
+            durationMs = duration,
+            lyrics = overlayLyrics,
+            offsetMs = overlayLyricsOffset,
+            accent = accentArgb(settingsPrefs.getString("accent", "ember") ?: "ember"),
+            opacity = settingsPrefs.getFloat("lyrics_opacity", 1f).coerceIn(0.35f, 1f),
+            fontSp = clampFloatingFontSize(
+                settingsPrefs.getFloat("floating_font_size", 26f),
+            ),
+            locked = settingsPrefs.getBoolean("floating_lyrics_locked", false),
+            chinese = settingsPrefs.getString("language", "en") == "zh",
+            hasPrevious = exo?.hasPreviousMediaItem() == true,
+            hasNext = exo?.hasNextMediaItem() == true,
+        )
+    }
+
+    private fun startWidgetTicker() {
+        mainHandler.removeCallbacks(widgetTicker)
+        mainHandler.post(widgetTicker)
+    }
+
+    private fun stopWidgetTicker() {
+        mainHandler.removeCallbacks(widgetTicker)
     }
 
     private inner class FadePlayer(inner: Player) : ForwardingPlayer(inner) {
@@ -647,6 +867,11 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        overlay?.onScreenChanged()
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -660,6 +885,18 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         cancelFade()
         stopSleepTicker()
+        stopWidgetTicker()
+        mainHandler.removeCallbacks(overlayTicker)
+        overlayLyricsJob?.cancel()
+        overlayLyricsJob = null
+        overlay?.hide()
+        overlay = null
+        overlayScope.cancel()
+        if (settingsListenerRegistered) {
+            settingsPrefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
+            settingsListenerRegistered = false
+        }
+        WidgetRenderer.idle(this)
         runCatching { audioManager.unregisterAudioDeviceCallback(deviceCallback) }
         session?.release()
         session = null
@@ -700,5 +937,6 @@ class PlaybackService : MediaSessionService() {
         const val CMD_SLEEP_SET = "dev.lilt.player.SLEEP_SET"
         const val CMD_SLEEP_GET = "dev.lilt.player.SLEEP_GET"
         const val CMD_SLEEP_CANCEL = "dev.lilt.player.SLEEP_CANCEL"
+        const val ACTION_FLOATING_REFRESH = "dev.lilt.player.FLOATING_REFRESH"
     }
 }

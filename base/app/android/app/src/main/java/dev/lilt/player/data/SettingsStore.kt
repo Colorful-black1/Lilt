@@ -1,7 +1,9 @@
 package dev.lilt.player.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
+import dev.lilt.player.library.clampFloatingFontSize
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
@@ -36,6 +38,42 @@ class SettingsStore(context: Context) {
         MutableStateFlow(prefs.getFloat("lyrics_font_size", 15f))
     val lyricsOpacity: StateFlow<Float> =
         MutableStateFlow(prefs.getFloat("lyrics_opacity", 1f))
+    val floatingLyrics: StateFlow<Boolean> =
+        MutableStateFlow(prefs.getBoolean("floating_lyrics", false))
+    val floatingLyricsLocked: StateFlow<Boolean> =
+        MutableStateFlow(prefs.getBoolean("floating_lyrics_locked", false))
+    val floatingFontSize: StateFlow<Float> =
+        MutableStateFlow(clampFloatingFontSize(prefs.getFloat("floating_font_size", 26f)))
+
+    /**
+     * The overlay service and the app share one preferences file. The service
+     * can close or lock the overlay itself, so the StateFlows must follow
+     * external writes as well as local setters.
+     */
+    private val preferenceListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            when (key) {
+                "floating_lyrics" ->
+                    (floatingLyrics as MutableStateFlow).value =
+                        prefs.getBoolean(key, false)
+                "floating_lyrics_locked" ->
+                    (floatingLyricsLocked as MutableStateFlow).value =
+                        prefs.getBoolean(key, false)
+                "floating_font_size" ->
+                    (floatingFontSize as MutableStateFlow).value =
+                        clampFloatingFontSize(prefs.getFloat(key, 26f))
+                "lyrics_opacity" ->
+                    (lyricsOpacity as MutableStateFlow).value =
+                        prefs.getFloat(key, 1f)
+                "lyrics_font_size" ->
+                    (lyricsFontSize as MutableStateFlow).value =
+                        prefs.getFloat(key, 15f)
+            }
+        }
+
+    init {
+        prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
+    }
 
     fun setLanguage(value: String) {
         prefs.edit { putString("language", value) }
@@ -111,6 +149,23 @@ class SettingsStore(context: Context) {
         val cleaned = value.coerceIn(0.35f, 1f)
         prefs.edit { putFloat("lyrics_opacity", cleaned) }
         (lyricsOpacity as MutableStateFlow).value = cleaned
+    }
+
+    fun setFloatingLyrics(value: Boolean) {
+        prefs.edit { putBoolean("floating_lyrics", value) }
+        (floatingLyrics as MutableStateFlow).value = value
+    }
+
+    fun setFloatingLyricsLocked(value: Boolean) {
+        prefs.edit { putBoolean("floating_lyrics_locked", value) }
+        (floatingLyricsLocked as MutableStateFlow).value = value
+    }
+
+    /** Floating sizes use half-point steps between 18 and 44 sp. */
+    fun setFloatingFontSize(value: Float) {
+        val cleaned = clampFloatingFontSize(value)
+        prefs.edit { putFloat("floating_font_size", cleaned) }
+        (floatingFontSize as MutableStateFlow).value = cleaned
     }
 
     fun setSleepDefaults(

@@ -104,15 +104,23 @@ private fun LiltRoot(vm: LiltViewModel) {
         if (ok) vm.scan()
     }
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val floatingLyrics by vm.floatingLyrics.collectAsStateWithLifecycle()
+    var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
 
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 granted = hasPermission(context, audioPermission())
+                overlayAllowed = Settings.canDrawOverlays(context)
+                vm.refreshFloatingOverlay()
             }
         }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
+    }
+
+    LaunchedEffect(floatingLyrics, overlayAllowed, granted) {
+        if (granted) vm.refreshFloatingOverlay()
     }
 
     LaunchedEffect(granted) {

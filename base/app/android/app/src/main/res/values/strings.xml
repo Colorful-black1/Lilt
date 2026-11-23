@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lilt</string>
+    <string name="widget_description">Lilt playback controls</string>
+    <string name="widget_idle_title">Lilt</string>
+    <string name="widget_idle_subtitle">Open Lilt to play</string>
+    <string name="widget_cover">Album cover</string>
+    <string name="widget_previous">Previous song</string>
+    <string name="widget_play_pause">Play or pause</string>
+    <string name="widget_next">Next song</string>
 </resources>

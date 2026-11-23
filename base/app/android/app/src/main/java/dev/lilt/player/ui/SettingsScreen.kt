@@ -1,5 +1,13 @@
 package dev.lilt.player.ui
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,21 +41,28 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.data.ScanState
+import dev.lilt.player.widget.LiltWidgetProvider
 import kotlin.math.roundToInt
 
 @Composable
@@ -68,9 +83,26 @@ fun SettingsScreen(
     val fadeOut by vm.fadeOutMs.collectAsStateWithLifecycle()
     val lyricsFontSize by vm.lyricsFontSize.collectAsStateWithLifecycle()
     val lyricsOpacity by vm.lyricsOpacity.collectAsStateWithLifecycle()
+    val floatingLyrics by vm.floatingLyrics.collectAsStateWithLifecycle()
+    val floatingLocked by vm.floatingLyricsLocked.collectAsStateWithLifecycle()
+    val floatingFontSize by vm.floatingFontSize.collectAsStateWithLifecycle()
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val allSongs by vm.allSongs.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current
+    var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                overlayAllowed = Settings.canDrawOverlays(context)
+                vm.refreshFloatingOverlay()
+            }
+        }
+        lifecycle.lifecycle.addObserver(observer)
+        onDispose { lifecycle.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
@@ -243,6 +275,81 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            SettingCard(t("Floating lyrics", "悬浮歌词")) {
+                Text(
+                    t(
+                        "A draggable lyric window that stays above other apps. It only draws local lyrics and never uses the network.",
+                        "悬浮在其他应用上方的可拖动歌词窗。只显示本地歌词，不联网。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingSwitch(
+                    title = t("Show over other apps", "在其他应用上层显示"),
+                    body = t(
+                        "Requires the display-over-other-apps permission. Drag the header to move it.",
+                        "需要“显示在其他应用上层”权限。拖动标题条可移动位置。",
+                    ),
+                    checked = floatingLyrics,
+                ) { enabled ->
+                    vm.setFloatingLyrics(enabled)
+                    overlayAllowed = Settings.canDrawOverlays(context)
+                    if (enabled && !overlayAllowed) {
+                        requestOverlayPermission(context)
+                    }
+                }
+                if (floatingLyrics && !overlayAllowed) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            t(
+                                "Overlay permission is not granted yet.",
+                                "尚未授予悬浮窗权限。",
+                            ),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = { requestOverlayPermission(context) }) {
+                            Text(t("Grant", "去授权"))
+                        }
+                    }
+                }
+                SettingSwitch(
+                    title = t("Lock position and controls", "锁定位置与控件"),
+                    body = t(
+                        "Hides the buttons and stops touch input until unlocked here.",
+                        "隐藏按钮并让窗口不再接收触摸，需在这里解锁。",
+                    ),
+                    checked = floatingLocked,
+                ) { vm.setFloatingLyricsLocked(it) }
+                LyricsDisplaySlider(
+                    title = t("Floating size", "悬浮歌词字号"),
+                    value = floatingFontSize,
+                    range = 18f..44f,
+                    steps = 51,
+                    format = { "%.1f sp".format(it) },
+                    onChange = vm::setFloatingFontSize,
+                )
+                Spacer(Modifier.height(8.dp))
+                val widgetUnavailable = t(
+                    "Add Lilt from your launcher's widget picker.",
+                    "请在桌面启动器的小部件列表中添加 Lilt。",
+                )
+                SettingLink(
+                    t("Add home screen widget", "添加主屏小部件"),
+                    t(
+                        "Cover, title, progress and playback buttons.",
+                        "封面、标题、进度与播放控制。",
+                    ),
+                ) {
+                    requestWidgetPin(context, widgetUnavailable)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
             SettingCard(t("Queues", "队列")) {
                 SettingSwitch(
                     title = t("Remember queue positions", "记住队列位置"),
@@ -280,6 +387,33 @@ fun SettingsScreen(
 
 private const val LYRICS_PREVIEW_TITLE = "Glass horizon, open wide"
 private const val LYRICS_PREVIEW_BODY = "A steady pulse beneath the floor"
+
+private fun requestOverlayPermission(context: Context) {
+    val intent = Intent(
+        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+        Uri.parse("package:${context.packageName}"),
+    )
+    runCatching { context.startActivity(intent) }.onFailure {
+        context.startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${context.packageName}"),
+            ),
+        )
+    }
+}
+
+private fun requestWidgetPin(context: Context, unavailable: String) {
+    val manager = AppWidgetManager.getInstance(context)
+    val provider = ComponentName(context, LiltWidgetProvider::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        manager.isRequestPinAppWidgetSupported
+    ) {
+        manager.requestPinAppWidget(provider, null, null)
+    } else {
+        Toast.makeText(context, unavailable, Toast.LENGTH_LONG).show()
+    }
+}
 
 @Composable
 private fun LyricsDisplaySlider(

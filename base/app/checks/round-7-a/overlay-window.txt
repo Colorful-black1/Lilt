@@ -1,0 +1,26 @@
+Captured with the packaged debug APK on the lilt35 emulator (Android 15/API 35),
+1080x1920 at 420 dpi.
+
+Unlocked overlay:
+  Window #6 Window{6e9ffe7 u0 dev.lilt.player}:
+    mOwnerUid=10221 showForAllUsers=false package=dev.lilt.player appop=SYSTEM_ALERT_WINDOW
+    mAttrs={(26,1056)(1027xwrap) gr=TOP START CENTER sim={adjust=pan} ty=APPLICATION_OVERLAY fmt=TRANSLUCENT}
+      fl=NOT_FOCUSABLE NOT_TOUCH_MODAL LAYOUT_IN_SCREEN
+    Requested w=1027 h=441
+
+Locked overlay:
+    mAttrs={(26,1056)(1027xwrap) gr=TOP START CENTER sim={adjust=pan} ty=APPLICATION_OVERLAY fmt=TRANSLUCENT alpha=0.8}
+      fl=NOT_FOCUSABLE NOT_TOUCHABLE NOT_TOUCH_MODAL LAYOUT_IN_SCREEN
+    Requested w=1027 h=234
+
+The locked flag is what makes the entire card click-through. The header and
+transport row are GONE in the locked state, which is why the requested height
+drops from 441 px to 234 px. Android's resize animation leaves alpha=0.8 on the
+locked window in this capture; the normal unlocked window is fully opaque at the
+window level.
+
+The position is saved in lilt_settings as floating_x/floating_y. Dragging the
+header updates both values, and a recreated service restores them. The card is
+kept inside the display with a 24 dp top margin and a 28 dp bottom margin so the
+transport row stays above the gesture/navigation bar. A display-size or
+orientation change re-fits the window through FloatingLyricsOverlay.onScreenChanged.

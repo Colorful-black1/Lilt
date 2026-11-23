@@ -91,6 +91,8 @@
 - 播放列表增删改、M3U 导入导出。
 - 本地歌词：Room 存储、LRC 时间轴高亮、纯文本、从本地 `.lrc`/`.txt` 导入。
 - 歌词偏移与显示：每首歌独立保存偏移（±100/±500 ms、重置，范围 ±60 秒），播放页与编辑页可调，编辑页显示调整后时间；字号与透明度存本机设置并带预览。
+- 浮动歌词：现有播放服务内的置顶卡片，显示上一/当前/下一行、偏移、透明度与 18–44 sp 字号；可拖动、记忆位置、锁定后隐藏控件并鼠标/触摸穿透，设置中解锁。可选 `SYSTEM_ALERT_WINDOW` 权限，不联网。
+- 主屏小部件：RemoteViews 卡片，封面、标题/艺术家、时间、进度与上一首/播放/下一首；播放服务每秒推送进度，控制按钮使用短时 MediaController。设置中可请求固定到主屏。
 - 单曲虚拟标签编辑：Room v6 保存标题、艺术家、专辑、年份、音轨号；扫描数据只读，支持恢复扫描标签，播放页和 MediaSession metadata 同步更新。
 - 完整睡眠定时：自定义时分、按曲目数、等当前曲结束、淡出、倒计时、取消；定时器在播放服务中运行。
 - 播放/暂停淡入淡出，0–4 秒、250 ms 步进。
@@ -109,7 +111,7 @@
 - 昼夜主题。
 - 备份/恢复、播放统计 CSV 导出。
 - 拼音首字母索引。
-- 桌面小部件、快捷设置磁贴、Android Auto、车载模式、悬浮歌词、锁屏歌词。
+- 快捷设置磁贴、Android Auto、车载模式、锁屏歌词。
 
 ---
 
@@ -139,10 +141,10 @@
 | 书签/笔记 | ✅ | ✅ | 位置 + 备注，播放页快捷跳转 |
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
 | 主题/语言 | ✅ | △ | Android 缺昼夜主题 |
-| 系统集成 | ✅ | ✅ | PC 托盘/关闭到托盘/热键/桌面歌词/迷你播放器/SMTC 已完成；Android 缺小部件/Auto/磁贴 |
+| 系统集成 | ✅ | ✅ | PC 托盘/热键/桌面歌词/迷你播放器/SMTC 已完成；Android 悬浮歌词/小部件已完成，缺 Auto/磁贴 |
 | 备份/恢复 | ❌ | ❌ | 两端都缺 |
 | 音频工具 | ❌ | ❌ | 两端都缺 |
-| 桌面/悬浮体验 | △ | ❌ | PC 已完成桌面歌词与迷你播放器；Android 缺悬浮歌词 |
+| 桌面/悬浮体验 | △ | △ | PC 已完成桌面歌词与迷你播放器；Android 已完成悬浮歌词，缺锁屏歌词 |
 
 ---
 
@@ -283,11 +285,11 @@
 
 ### 4.3 P2：Android 系统能力
 
-- 4×1 / 2×2 桌面小部件。
+- 4×1 / 2×2 桌面小部件（Round 7-A 已完成）。
 - 快捷设置磁贴。
 - Android Auto `MediaLibraryService`。
 - 车载/驾驶模式。
-- 悬浮歌词（需要悬浮窗权限）。
+- 悬浮歌词（Round 7-A 已完成，需要可选的悬浮窗权限）。
 - 锁屏歌词（通知或自定义锁屏页）。
 - Chromecast（局域网投屏，可选）。
 
@@ -316,13 +318,13 @@
 | Android 悬浮歌词 | 高 | 中 | P2 |
 | Android 锁屏歌词 | 中 | 高 | P2 |
 
-状态（2026-11-23）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，支持锁定与鼠标穿透。颜色自定义、双语/翻译行、Android 悬浮歌词仍未做。
+状态（2026-11-23）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，支持锁定与鼠标穿透；Android 悬浮歌词已在 Round 7-A 完成，支持拖动、锁定与穿透。颜色自定义、双语/翻译行和 Android 锁屏歌词仍未做。
 
 技术说明：
 
 - KRC 是酷狗私有格式，不建议作为核心依赖；优先 LRC、内嵌歌词，必要时支持 VTT。
 - PC 已用独立透明置顶窗口实现桌面歌词（Round 6-D2）。
-- Android 悬浮歌词需要 `SYSTEM_ALERT_WINDOW`，应做成可选权限。
+- Android 悬浮歌词已在 Round 7-A 完成，使用可选的 `SYSTEM_ALERT_WINDOW` 权限；关闭时不影响播放。
 - Android 锁屏没有通用歌词接口，建议先用大号媒体通知或自定义锁屏页。
 
 ### 5.2 PC 桌面集成
@@ -356,6 +358,8 @@
 | Android Auto | 高 | 高 | P2 |
 | 车载/驾驶模式 | 中 | 中 | P2 |
 | 悬浮歌词 | 高 | 中 | P2 |
+
+状态（2026-11-23）：RemoteViews 主屏小部件与悬浮歌词已在 Round 7-A 完成。快捷设置磁贴、Android Auto、车载模式和锁屏歌词仍未做。
 
 ### 5.4 音频增强
 
@@ -424,10 +428,11 @@
 
 ### 6.3 Android 小部件与 Auto
 
-- 小部件：Glance 或 RemoteViews。
-- 快捷设置：`TileService`。
-- Android Auto：`MediaLibraryService` + 浏览树；现有 `MediaSessionService` 可复用播放部分。
-- 车载模式：大按钮、少层级、驾驶中减少操作。
+- 小部件：已用 RemoteViews（Round 7-A）；播放服务推送状态，上一首/播放/下一首通过短时 MediaController，封面异步解码。
+- 悬浮歌词：已在现有 `PlaybackService` 内用 `WindowManager` + `TYPE_APPLICATION_OVERLAY` 实现；可选 `SYSTEM_ALERT_WINDOW`，锁定后 `FLAG_NOT_TOUCHABLE`。
+- 快捷设置：`TileService`（未做）。
+- Android Auto：`MediaLibraryService` + 浏览树；现有 `MediaSessionService` 可复用播放部分（未做）。
+- 车载模式：大按钮、少层级、驾驶中减少操作（未做）。
 
 ### 6.4 PC 桌面集成
 
@@ -603,6 +608,25 @@
 
 未纳入本轮：Android 悬浮歌词、任务栏缩略图按钮、SMTC 封面缩略图、桌面歌词双语/颜色自定义。
 
+### 第 7-A 轮：Android 悬浮歌词与主屏小部件（已完成）
+
+交付：
+
+- 悬浮歌词：现有 PlaybackService 内的 WindowManager 置顶卡片，上一/当前/下一行、偏移、透明度、18–44 sp 字号、进度和播放控制；可拖动、位置持久化、显示尺寸变化自动回夹；锁定后隐藏控件并 `FLAG_NOT_TOUCHABLE` 穿透，设置中解锁。
+- 主屏小部件：RemoteViews 卡片，封面、标题/艺术家、时间、进度、上一首/播放/下一首；播放服务每秒推送进度，按钮使用短时 MediaController；设置中可请求固定到主屏。
+- 设置页新增浮动歌词开关、锁定开关、字号滑块、悬浮窗权限入口与“添加主屏小部件”入口。
+- Android 30 个单元测试，新增浮动歌词行窗口、字号夹取、小部件进度/时间和强调色映射；6 个 Room 迁移测试仍通过。
+
+验收：
+
+- 1080×1920 与 720×1280 设置页无控件重叠；悬浮歌词在桌面和播放页上方均正确显示。
+- 定时歌词高亮正确，锁定时窗口 flags 含 `NOT_TOUCHABLE`，控制行隐藏；设置解锁后恢复。
+- 小部件可播放/暂停和切歌，时间每秒推进；与通知、主界面共用同一 MediaSession。
+- APK 仍无 `INTERNET` 权限，新增的 `SYSTEM_ALERT_WINDOW` 仅在用户开启悬浮歌词时需要。
+- 结果见 `base/app/checks/round-7-a/`。
+
+未纳入本轮：Android 锁屏歌词、仅歌词小部件、快捷设置磁贴、Android Auto、车载模式。
+
 ### 第 7 轮：音频与曲库工具
 
 交付：
@@ -622,14 +646,14 @@
 
 交付：
 
-- 4×1 / 2×2 小部件。
 - 快捷设置磁贴。
 - Android Auto。
 - 车载/驾驶模式。
+- 锁屏歌词（大号通知或自定义锁屏页）。
 
 验收：
 
-- 小部件和磁贴真实控制播放。
+- 磁贴与 Auto 真实控制播放；小部件已在 Round 7-A 验证。
 - Android Auto 可浏览并播放本地曲库。
 - 无 INTERNET 权限，断网可用。
 
@@ -687,9 +711,10 @@
 | 2026-11-23 | Round 6-C | 完成 | 歌词每首偏移、字号/透明度、PC/Android 控件与预览、Room v7、25 个单元测试、6 个迁移测试 |
 | 2026-11-23 | Round 6-D1 | 完成 | PC 托盘、关闭/最小化到托盘、6 组全局热键、隐藏播放心跳、设置卡片、21 个单元测试 |
 | 2026-11-23 | Round 6-D2 | 完成 | PC 桌面歌词、锁定/穿透、迷你播放器、Windows SMTC、托盘/设置入口、23 个单元测试 |
-| 下一步 | Round 7 | 待定 | 交叉淡化、A-B 循环、失效文件定位、备份恢复或 Android 悬浮歌词/小部件 |
+| 2026-11-23 | Round 7-A | 完成 | Android 悬浮歌词、锁定/穿透、18–44 sp 字号、RemoteViews 主屏小部件、固定入口、30 个单元测试 |
+| 下一步 | Round 7 | 待定 | 交叉淡化、A-B 循环、失效文件定位、备份恢复或 Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`。
 
 ---
 
@@ -711,6 +736,11 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/PlayerScreen.kt`：Android 播放页、歌词面板与睡眠对话框
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/LyricsScreen.kt`：Android 歌词编辑页
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Lrc.kt`：LRC 解析、偏移高亮、时间格式
+- `base/app/android/app/src/main/java/dev/lilt/player/library/FloatingLyrics.kt`：悬浮歌词行窗口、字号夹取与时间格式
+- `base/app/android/app/src/main/java/dev/lilt/player/playback/FloatingLyricsOverlay.kt`：Android 悬浮歌词窗口、拖动、锁定与穿透
+- `base/app/android/app/src/main/java/dev/lilt/player/widget/LiltWidgetProvider.kt`：RemoteViews 小部件与入口
+- `base/app/android/app/src/main/java/dev/lilt/player/widget/WidgetRenderer.kt`：小部件渲染、封面缓存与每秒状态
+- `base/app/android/app/src/main/java/dev/lilt/player/widget/WidgetActionReceiver.kt`：小部件播放控制
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/Components.kt`：Android 共用偏移控件
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Eq.kt`：均衡器配置、预设、前级与平衡计算
 - `base/app/android/app/src/main/java/dev/lilt/player/library/QueueMemory.kt`：队列续播位置计算
@@ -718,7 +748,7 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/android/app/src/main/java/dev/lilt/player/library/TagEditing.kt`：虚拟标签合并与数字解析
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/QueueDetailScreen.kt`：队列详情、播放与排序
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/TagEditorScreen.kt`：单曲标签编辑
-- `base/app/android/app/src/main/java/dev/lilt/player/playback/PlaybackService.kt`：媒体服务、睡眠定时、淡入淡出、音效
+- `base/app/android/app/src/main/java/dev/lilt/player/playback/PlaybackService.kt`：媒体服务、睡眠定时、淡入淡出、音效、悬浮歌词与小部件状态推送
 - `base/app/checks/round-4/README.md`：收藏、专辑/艺术家、Room v2 验证
 - `base/app/checks/round-4-c/README.md`：列表、搜索、历史、书签与 Room v3 验证
 - `base/app/checks/round-5/README.md`：歌词、睡眠/淡入淡出、均衡器与 Room v5 验证
@@ -727,6 +757,7 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/checks/round-6-c/README.md`：歌词偏移、字号/透明度与 Room v7 验证
 - `base/app/checks/round-6-d1/README.md`：托盘、关闭到托盘与全局热键验证
 - `base/app/checks/round-6-d2/README.md`：桌面歌词、锁定穿透、迷你播放器与 SMTC 验证
+- `base/app/checks/round-7-a/README.md`：Android 悬浮歌词、锁定穿透与主屏小部件验证
 - `base/app/src/desktop.rs`：Windows 托盘菜单、全局热键、隐藏唤醒、心跳与 SMTC
 - `base/app/src/ui/companion.rs`：桌面歌词与迷你播放器两个 deferred viewport
 - `base/app/src/icon.rs`：窗口/托盘共用的自绘图标
@@ -745,3 +776,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.6 | 2026-11-23 | Round 6-C：PC/Android 每首歌词偏移、字号与透明度、Room v7、偏移控件与调整后时间预览 |
 | v0.7 | 2026-11-23 | Round 6-D1：PC 托盘、关闭/最小化到托盘、6 组全局热键、隐藏播放心跳与设置卡片 |
 | v0.8 | 2026-11-23 | Round 6-D2：PC 桌面歌词（锁定/穿透）、迷你播放器、Windows SMTC、托盘与设置入口 |
+| v0.9 | 2026-11-23 | Round 7-A：Android 悬浮歌词（拖动/锁定/穿透）、RemoteViews 主屏小部件、权限与设置入口 |

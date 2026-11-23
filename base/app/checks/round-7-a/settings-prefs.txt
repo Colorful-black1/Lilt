@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <int name="floating_x" value="26" />
+    <int name="floating_y" value="1056" />
+    <boolean name="floating_lyrics" value="true" />
+    <boolean name="floating_lyrics_locked" value="false" />
+</map>
+
+Only the floating-lyric keys are shown here. The floating font size defaults to
+26 sp and uses half-point steps from 18 to 44 sp. Lyric text opacity reuses the
+existing lyrics_opacity setting.

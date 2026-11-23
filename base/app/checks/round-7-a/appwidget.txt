@@ -1,0 +1,14 @@
+Provider [32]:
+  ProviderId{user:0, app:10221,
+    cmp:ComponentInfo{dev.lilt.player/dev.lilt.player.widget.LiltWidgetProvider}}
+  min=(320dp x 70dp) minResize=(320dp x 70dp) updatePeriodMillis=0
+  resizeMode=3 (horizontal and vertical) widgetCategory=1 (home screen)
+
+Bound widgets:
+  [0] id=4
+    provider=ProviderId{user:0, app:10221,
+      cmp:ComponentInfo{dev.lilt.player/dev.lilt.player.widget.LiltWidgetProvider}}
+
+The launcher's pin preview offered a 5x2 card in this emulator. The widget is
+resizable; the layout is built for a wide one-row media card and stays usable
+when the launcher gives it more height.

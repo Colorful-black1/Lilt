@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lilt 音乐</string>
+    <string name="widget_description">Lilt 播放控制</string>
+    <string name="widget_idle_title">Lilt 音乐</string>
+    <string name="widget_idle_subtitle">打开 Lilt 开始播放</string>
+    <string name="widget_cover">专辑封面</string>
+    <string name="widget_previous">上一首</string>
+    <string name="widget_play_pause">播放或暂停</string>
+    <string name="widget_next">下一首</string>
 </resources>

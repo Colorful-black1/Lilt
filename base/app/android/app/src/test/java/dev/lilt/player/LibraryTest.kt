@@ -14,11 +14,16 @@ import dev.lilt.player.library.M3u
 import dev.lilt.player.library.SongSort
 import dev.lilt.player.library.UNKNOWN_ALBUM
 import dev.lilt.player.library.UNKNOWN_ARTIST
+import dev.lilt.player.library.accentArgb
 import dev.lilt.player.library.activeLrcLine
 import dev.lilt.player.library.balanceOffsetsDb
+import dev.lilt.player.library.clampFloatingFontSize
 import dev.lilt.player.library.clampLyricsOffset
+import dev.lilt.player.library.floatingLyricLines
 import dev.lilt.player.library.formatAdjustedTimestamp
 import dev.lilt.player.library.letterOf
+import dev.lilt.player.library.widgetProgress
+import dev.lilt.player.library.widgetTimeLabel
 import dev.lilt.player.library.lyricsPositionMs
 import dev.lilt.player.library.lyricsSeekMs
 import dev.lilt.player.library.movedItem
@@ -278,6 +283,75 @@ class LibraryTest {
         assertEquals("0:02.5", formatAdjustedTimestamp(2_500))
         assertEquals("1:05.5", formatAdjustedTimestamp(65_500))
         assertEquals("0:00.0", formatAdjustedTimestamp(-200))
+    }
+
+    @Test
+    fun floatingLyricsShowNeighboursAndRespectOffset() {
+        val document = parseLrc(
+            "[00:05.00]First\n[00:10.00]Second\n[00:15.00]Third",
+        )
+        val before = floatingLyricLines(document, 1_000, 0)
+        assertEquals("", before.before)
+        assertEquals("First", before.active)
+        assertEquals("Second", before.after)
+        assertEquals(-1, before.activeIndex)
+
+        val middle = floatingLyricLines(document, 11_000, 0)
+        assertEquals("First", middle.before)
+        assertEquals("Second", middle.active)
+        assertEquals("Third", middle.after)
+        assertEquals(1, middle.activeIndex)
+
+        val end = floatingLyricLines(document, 60_000, 0)
+        assertEquals("Second", end.before)
+        assertEquals("Third", end.active)
+        assertEquals("", end.after)
+        assertEquals(2, end.activeIndex)
+
+        // Positive offsets delay the highlight: 11 s position behaves like 9 s.
+        val delayed = floatingLyricLines(document, 11_000, 2_500)
+        assertEquals("First", delayed.active)
+        assertEquals(0, delayed.activeIndex)
+    }
+
+    @Test
+    fun floatingLyricsHandlePlainTextAndEmptyDocuments() {
+        val plain = floatingLyricLines(parseLrc("One\nTwo\nThree"), 5_000, 0)
+        assertEquals("", plain.before)
+        assertEquals("One", plain.active)
+        assertEquals("Two", plain.after)
+        assertEquals(0, plain.activeIndex)
+
+        val empty = floatingLyricLines(null, 0, 0)
+        assertEquals("", empty.active)
+        assertEquals(-1, empty.activeIndex)
+    }
+
+    @Test
+    fun floatingSizeUsesHalfStepsAndStaysInRange() {
+        assertEquals(18f, clampFloatingFontSize(10f))
+        assertEquals(26f, clampFloatingFontSize(26f))
+        assertEquals(26.5f, clampFloatingFontSize(26.26f))
+        assertEquals(44f, clampFloatingFontSize(99f))
+    }
+
+    @Test
+    fun widgetProgressAndTimeLabelsStayBounded() {
+        assertEquals(0, widgetProgress(0, 10_000))
+        assertEquals(500, widgetProgress(5_000, 10_000))
+        assertEquals(1000, widgetProgress(11_000, 10_000))
+        assertEquals(0, widgetProgress(1_000, 0))
+
+        assertEquals("1:23 / 4:05", widgetTimeLabel(83_000, 245_000))
+        assertEquals("1:00:00 / 1:05:00", widgetTimeLabel(3_600_000, 3_900_000))
+        assertEquals("", widgetTimeLabel(0, 0))
+    }
+
+    @Test
+    fun accentIdsMapToNativeOverlayColors() {
+        assertEquals(0xFFF2B46B.toInt(), accentArgb("ember"))
+        assertEquals(0xFF9BC49A.toInt(), accentArgb("sage"))
+        assertEquals(0xFFF2B46B.toInt(), accentArgb("missing"))
     }
 
     @Test

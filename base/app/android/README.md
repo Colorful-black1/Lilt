@@ -45,6 +45,10 @@ For a store or a shareable release build, create your own signing key and config
 3. Open Lilt and allow audio access. The first scan starts automatically; the refresh
    button scans again.
 4. For the notification controls on Android 13+, allow notifications when asked.
+5. Optional: open **Settings → Floating lyrics** and turn on **Show over other apps**. If
+   Android opens the display-over-other-apps screen, allow Lilt there; this is only needed
+   for the floating lyric card. **Lock position and controls** can be undone on the same
+   card.
 
 This debug APK is for testing and sideloading, not for a store listing. A store build
 needs a release signing key and an `.aab` produced with `bundleRelease`.
@@ -73,6 +77,21 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   `-100`, `+100`, `+500` ms and reset, limited to ±60 s); positive values delay the lyrics.
   The editor shows the adjusted timestamps and saves the offset with the text. Settings has
   lyric font size (12–24 sp) and opacity (35–100%) sliders with a live preview.
+- **Floating lyrics.** A draggable always-on-top lyric card outside the app. It shows the
+  previous, current and next LRC lines with the same per-song offset and opacity plus a
+  separate 18–44 sp size, a progress line and previous/play-pause/next/open controls. It
+  needs the optional **display over other apps** permission; Settings opens the system
+  screen when it is missing. The lock button hides the controls, disables dragging and makes
+  the whole card click-through (`FLAG_NOT_TOUCHABLE`); unlock it in Settings. The card runs
+  inside the existing playback service, not a second foreground service, so it always uses
+  the same MediaSession as the notification.
+- **Home-screen widget.** A resizable RemoteViews card with cover, title, artist,
+  elapsed/total time, progress and previous/play-pause/next buttons; tapping the card opens
+  Lilt. The playback service pushes state to it on changes and once a second while playing,
+  and the transport buttons use a short-lived MediaController, so widget, app and
+  notification stay in step. Add it from **Settings → Floating lyrics → Add home screen
+  widget**. The launcher's pin support varies; a fallback instruction is shown when pinning
+  is unavailable.
 - **Single-song tag editing** for title, artist, album, year and track. Tags are a
   non-destructive Room overlay: the audio file is not rewritten, the values survive
   MediaStore rescans, and **Reset to scanned tags** removes the override. The edit entry
@@ -116,27 +135,31 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 ## Deliberately not in this build
 
 Batch tag editing, cover replacement, embedded ReplayGain writing, drag-to-reorder (the
-playlist and queue up/down controls are available), pinyin letter buckets, home-screen
-widgets, quick-settings tile, Android Auto, Chromecast, audio trimming and backup/restore
-are later rounds. They are not simulated with fake data.
+playlist and queue up/down controls are available), pinyin letter buckets, lock-screen
+lyrics, a lyric-only home-screen widget, quick-settings tile, Android Auto, Chromecast,
+audio trimming and backup/restore are later rounds. They are not simulated with fake data.
 
 ## Privacy and permissions
 
-The manifest requests only media reading, notifications, the media-playback foreground
-service and wake lock. It requests **no INTERNET permission** and contains no network,
-advertising, analytics or crash-reporting SDK. Media3 declares `ACCESS_NETWORK_STATE` in
-its library manifest; Lilt removes it with a manifest merge rule.
+The manifest requests media reading, notifications, the media-playback foreground service,
+wake lock and `SYSTEM_ALERT_WINDOW` for floating lyrics. The overlay permission is optional,
+is only requested when the user turns the feature on, and is never needed for playback. The
+manifest requests **no INTERNET permission** and contains no network, advertising, analytics
+or crash-reporting SDK. Media3 declares `ACCESS_NETWORK_STATE` in its library manifest; Lilt
+removes it with a manifest merge rule.
 
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 25 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 30 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
-  index, LRC parsing, lyric offsets, EQ curves/profiles, queue resume positions, list
-  reordering and virtual tag merging.
+  index, LRC parsing, lyric offsets, floating lyric line windows and font clamping, widget
+  progress/time formatting, EQ curves/profiles, queue resume positions, list reordering and
+  virtual tag merging.
 - `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6 and 6→7
   migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
+  `../checks/round-7-a/README.md` for floating lyric and home-screen widget evidence,
   `../checks/round-6-c/README.md` for lyric offset, font and opacity evidence,
   `../checks/round-6-b/README.md` for virtual tag editing, `../checks/round-6/README.md`
   for locate-current and playlist/queue reorder evidence, `../checks/round-5/README.md`

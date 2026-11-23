@@ -1,0 +1,11 @@
+Media button session is dev.lilt.player/androidx.media3.session.id./15 (userId=0)
+  androidx.media3.session.id. dev.lilt.player/androidx.media3.session.id./15 (userId=0)
+    package=dev.lilt.player
+    state=PlaybackState {state=PAUSED(2), position=18088, buffered position=20088, speed=0.0,
+      updated=2247002, actions=7340029, custom actions=[], active item id=0, error=null}
+    metadata: size=10, description=Glass Horizon, Aurora Drift, Demo Album
+
+This is the same MediaSession that the app, notification, floating window and
+home-screen widget all use. The floating window reads the player position every
+250 ms; the widget is updated by the playback service on every state change and
+once a second while playing.
