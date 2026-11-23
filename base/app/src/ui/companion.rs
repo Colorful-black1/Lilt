@@ -173,7 +173,7 @@ impl CompanionWindows {
                 .with_always_on_top()
                 .with_taskbar(false)
                 .with_resizable(true)
-                .with_min_inner_size([420.0, 150.0])
+                .with_min_inner_size([420.0, 160.0])
                 .with_close_button(false)
                 .with_minimize_button(false)
                 .with_maximize_button(false)
@@ -404,9 +404,11 @@ fn shadow_label(ui: &mut Ui, text: &str, font: FontId, color: Color32, shadow: C
     let size = galley.size();
     let (rect, _) = ui.allocate_exact_size(Vec2::new(width, size.y), Sense::hover());
     let position = egui::pos2(rect.center().x - size.x * 0.5, rect.top());
-    let shadow_galley = ui.painter().layout(text.to_owned(), font, shadow, width);
-    ui.painter()
-        .galley(position + Vec2::new(0.0, 1.5), shadow_galley, shadow);
+    if shadow.a() > 0 {
+        let shadow_galley = ui.painter().layout(text.to_owned(), font, shadow, width);
+        ui.painter()
+            .galley(position + Vec2::new(0.0, 1.5), shadow_galley, shadow);
+    }
     ui.painter().galley(position, galley, color);
 }
 
@@ -433,9 +435,14 @@ fn render_lyrics(
     let ink = Color32::from_rgb(0xF8, 0xF3, 0xEA);
     let opacity = (snapshot.lyrics_opacity as f32 / 100.0).clamp(0.3, 1.0);
     let alpha = |value: u8| ((value as f32) * opacity).round() as u8;
-    let shadow = Color32::from_rgba_unmultiplied(6, 5, 4, alpha(190));
-    let active_size = snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0);
     let locked = snapshot.lyrics_locked;
+    let shadow = if locked {
+        Color32::TRANSPARENT
+    } else {
+        Color32::from_rgba_unmultiplied(6, 5, 4, alpha(190))
+    };
+    let active_size = snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0);
+    let toolbar_button = 32.0;
 
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
@@ -451,17 +458,17 @@ fn render_lyrics(
             };
             let inner = card.shrink2(inset);
             let mut body = inner;
-            let header_height = if locked { 24.0 } else { 26.0 };
+            let header_height = if locked { 24.0 } else { 34.0 };
             let header = Rect::from_min_size(inner.min, Vec2::new(inner.width(), header_height));
 
             if lyrics_chrome_visible(locked) {
                 ui.allocate_ui_at_rect(header, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 2.0;
-                        let controls_width = 7.0 * 22.0 + 6.0 * 2.0;
+                        let controls_width = 7.0 * toolbar_button + 6.0 * 2.0;
                         let drag_width = (ui.available_width() - controls_width - 6.0).max(56.0);
                         let (drag_rect, drag) =
-                            ui.allocate_exact_size(Vec2::new(drag_width, 24.0), Sense::drag());
+                            ui.allocate_exact_size(Vec2::new(drag_width, 30.0), Sense::drag());
                         icons::paint(
                             ui.painter(),
                             Rect::from_center_size(
@@ -489,11 +496,11 @@ fn render_lyrics(
                             push_action(actions, main_window, CompanionAction::OpenNowPlaying);
                         }
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = 0.0;
+                            ui.spacing_mut().item_spacing.x = 2.0;
                             if icons::icon_button(
                                 ui,
                                 Icon::Close,
-                                22.0,
+                                toolbar_button,
                                 with_alpha(ink, 210),
                                 with_alpha(ink, 30),
                                 snapshot.t("Close desktop lyrics", "关闭桌面歌词"),
@@ -505,7 +512,7 @@ fn render_lyrics(
                             if icons::icon_button(
                                 ui,
                                 Icon::Lock,
-                                22.0,
+                                toolbar_button,
                                 with_alpha(ink, 210),
                                 with_alpha(ink, 30),
                                 snapshot.t("Lock and click through", "锁定并鼠标穿透"),
@@ -521,7 +528,7 @@ fn render_lyrics(
                             if icons::icon_button(
                                 ui,
                                 Icon::Expand,
-                                22.0,
+                                toolbar_button,
                                 with_alpha(ink, 210),
                                 with_alpha(ink, 30),
                                 snapshot.t("Open player", "打开播放页"),
@@ -538,7 +545,7 @@ fn render_lyrics(
                             if icons::icon_button(
                                 ui,
                                 Icon::Next,
-                                22.0,
+                                toolbar_button,
                                 control_color,
                                 with_alpha(ink, 30),
                                 snapshot.t("Next", "下一首"),
@@ -561,7 +568,7 @@ fn render_lyrics(
                             if icons::icon_button(
                                 ui,
                                 play_icon,
-                                22.0,
+                                toolbar_button,
                                 control_color,
                                 with_alpha(ink, 30),
                                 play_label,
@@ -574,7 +581,7 @@ fn render_lyrics(
                             if icons::icon_button(
                                 ui,
                                 Icon::Prev,
-                                22.0,
+                                toolbar_button,
                                 control_color,
                                 with_alpha(ink, 30),
                                 snapshot.t("Previous", "上一首"),
@@ -599,7 +606,7 @@ fn render_lyrics(
                             if icons::icon_button(
                                 ui,
                                 Icon::Heart,
-                                22.0,
+                                toolbar_button,
                                 heart_color,
                                 with_alpha(ink, 30),
                                 heart_label,

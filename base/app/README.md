@@ -137,12 +137,12 @@ Set `LILT_DATA_DIR` to use a different data folder.
   state saves keep advancing while hidden.
 - **Desktop lyrics.** A separate always-on-top lyric window shows the current, previous and
   next lyric lines with the same per-song offset and opacity settings as the now-playing
-  panel. When unlocked it uses a semi-transparent rounded card with a compact toolbar:
+  panel. When unlocked it uses a semi-transparent rounded card with a 32 px toolbar:
   favourite, previous, play/pause, next, open player, lock and close. The header can be
   dragged and the window resized. Locking removes the card, toolbar and progress rail, makes
-  the window fully transparent and click-through, and leaves a small lock button above the
-  lyrics; click it to unlock. The tray menu and Settings also unlock it. `Ctrl+Alt+L`
-  toggles the window.
+  the window fully transparent and click-through, and leaves crisp lyrics plus a small lock
+  button above them; click it to unlock. The tray menu and Settings also unlock it.
+  `Ctrl+Alt+L` toggles the window.
 - **Mini player.** A compact always-on-top window with cover art, title/artist/album,
   previous/play/next, shuffle/repeat, elapsed time and a seek bar. Its transport and seek
   actions go through the same playback engine and stay in sync with the main window. The
