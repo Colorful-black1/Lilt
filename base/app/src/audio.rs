@@ -1,9 +1,8 @@
 use crate::model::{EqProfile, EQ_BANDS, EQ_BAND_Q, EQ_FREQUENCIES};
+use crate::playback_source::PlaybackSource;
 use cpal::traits::{DeviceTrait, HostTrait};
 use rodio::source::SineWave;
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
-use std::fs::File;
-use std::io::BufReader;
+use rodio::{OutputStream, OutputStreamHandle, Sink, Source};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -124,19 +123,9 @@ impl AudioEngine {
         Ok(())
     }
 
-
-    fn make_source(
-        &self,
-        path: &Path,
-    ) -> Result<EqSource<rodio::source::SamplesConverter<Decoder<BufReader<File>>, f32>>, String>
-    {
-        let file = File::open(path).map_err(|error| format!("Could not read file: {error}"))?;
-        let decoder = Decoder::new(BufReader::new(file))
-            .map_err(|error| format!("This file could not be decoded: {error}"))?;
-        Ok(EqSource::new(
-            decoder.convert_samples::<f32>(),
-            self.shared.clone(),
-        ))
+    fn make_source(&self, path: &Path) -> Result<EqSource<PlaybackSource>, String> {
+        let source = PlaybackSource::open(path)?;
+        Ok(EqSource::new(source, self.shared.clone()))
     }
 
     pub fn play(&mut self, path: &Path, start: f64, volume: f32, speed: f32) -> Result<(), String> {

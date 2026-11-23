@@ -47,6 +47,7 @@
 - 20 个命名队列、队列位置记忆、队列间跳转、同名替换/合并、M3U。
 - 顺序/列表循环/单曲循环/随机，10 秒上一首规则可配置。
 - 无缝播放、播放淡入、暂停淡出、0.50–3.00× 速度。
+- 本地 Symphonia 解码器与内容探测：MP4/M4A（包括后缀误写为 `.mp3`）可播放，损坏或不支持的文件报错而不会关闭程序。
 - 睡眠定时：自定义时分、按歌曲数、等当前曲结束、淡出、历史记录。
 - 10 段均衡器、22 预设、前级、低音增强、虚拟环绕、平衡、余量建议、按设备保存。
 - ReplayGain 读取与应用。
@@ -415,7 +416,7 @@
 | WMA | 低 | 中 | P3，按用户需求决定 |
 | DSF/DFF | 低 | 高 | P3，需 DSD 解码 |
 | CUE | 中 | 高 | P3，需要索引解析和虚拟音轨 |
-| ALAC/M4A | 中 | 低 | 先做兼容性验证 |
+| ALAC/M4A | 中 | 低 | 已完成（M4A/MP4 与内容探测；DRM 加密文件仍不支持） |
 
 ---
 
@@ -783,9 +784,10 @@
 | 2026-11-23 | Round 7-B | 完成 | PC/Android 本地 JSON 备份与恢复、版本校验、引用回退、设置页入口、PC 29 项 + Android 37 项单元测试 |
 | 2026-11-23 | Round 7-C | 完成 | PC/Android A-B 循环、失效文件重连、Room v8 `missing_songs`、PC 32 项 + Android 41 项 + 7 项迁移测试 |
 | 2026-11-23 | Round 7-D | 完成 | PC/Android 单曲停止、重复歌曲检测、PC 37 项 + Android 47 项 + 7 项迁移测试 |
+| 2026-11-23 | Bugfix | 完成 | PC M4A/MP4 解码崩溃修复、内容探测标签/时长、损坏文件错误提示、PC 41 项测试 |
 | 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`。
 
 ---
 
@@ -864,3 +866,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.10 | 2026-11-23 | Round 7-B：PC/Android 本地 JSON 备份与恢复、版本校验、引用解析、设置与事务恢复 |
 | v0.11 | 2026-11-23 | Round 7-C：PC/Android A-B 循环、失效文件重连、Room v8 `missing_songs`、设置与歌单入口 |
 | v0.12 | 2026-11-23 | Round 7-D：PC/Android 单曲停止、重复歌曲检测、最佳副本标记与试听入口 |
+| v0.12.1 | 2026-11-23 | Bugfix：PC 本地 Symphonia 解码器、M4A/MP4 崩溃修复、内容探测标签/时长 |

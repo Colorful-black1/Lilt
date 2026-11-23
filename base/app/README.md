@@ -85,7 +85,9 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - Real folder scanning (mp3/flac/ogg/opus/wav/m4a/aac and more), hierarchical folder
   browsing, breadcrumbs, exclude/include rules, hidden-folder and scan-on-start options,
   manual rescan and live scan progress.
-- Playback through Rodio/Symphonia, pause/resume, seek, next/previous (10-second replay
+- Playback through a local Symphonia decoder with content-aware probing, so M4A/MP4
+  files play even when they use a `.mp3` name and damaged files report an error instead
+  of closing the player; pause/resume, seek, next/previous (10-second replay
   rule), gapless preload, repeat off/all/one, shuffle, volume, 0.50–3.00× speed,
   ReplayGain tag application, the target's 0–4000 ms play/pause volume fades (250 ms
   steps) with its own quadratic curves, and a sleep timer with custom hours/minutes, N

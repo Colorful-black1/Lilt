@@ -1,0 +1,16 @@
+thread 'main' (1896) panicked at C:\Users\abcd\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rodio-0.20.1\src\decoder\symphonia.rs:45:21:
+internal error: entered unreachable code: Seek errors should not occur during initialization
+stack backtrace:
+   0:     0x7ff6ee862e39 - <unknown>
+   1:     0x7ff6ee8757de - <unknown>
+   2:     0x7ff6ee867724 - <unknown>
+   3:     0x7ff6ee849475 - <unknown>
+   4:     0x7ff6ee85b238 - <unknown>
+   5:     0x7ff6ee85b613 - <unknown>
+   6:     0x7ff6ee849584 - <unknown>
+   7:     0x7ff6ee84689f - <unknown>
+   8:     0x7ff6ee849d9e - <unknown>
+   9:     0x7ff6ee8a5c0d - <unknown>
+
+The same failure occurred for 18 files in the local `D:\音乐` library. All had
+MP4/M4A content, including 17 files saved with a `.mp3` extension.

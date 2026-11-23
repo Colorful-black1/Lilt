@@ -11,6 +11,7 @@ mod icon;
 mod icons;
 mod library;
 mod model;
+mod playback_source;
 mod theme;
 mod ui;
 mod widgets;

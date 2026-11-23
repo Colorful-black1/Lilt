@@ -1,5 +1,5 @@
 use crate::model::*;
-use lofty::file::{AudioFile, TaggedFileExt};
+use lofty::file::{AudioFile, FileType, TaggedFile, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::{Accessor, ItemKey};
 use std::collections::HashMap;
@@ -203,6 +203,7 @@ pub fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Son
         .and_then(|e| e.to_str())
         .map(|e| e.to_uppercase())
         .unwrap_or_else(|| "AUDIO".to_owned());
+    let mut format = ext.clone();
 
     let mut title = String::new();
     let mut artist = String::new();
@@ -224,7 +225,8 @@ pub fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Son
         WavInfo::default()
     };
 
-    if let Ok(tagged) = Probe::open(&canonical).and_then(|probe| probe.read()) {
+    if let Some(tagged) = read_tagged(&canonical) {
+        format = format_label(tagged.file_type(), &ext);
         let props = tagged.properties();
         duration = props.duration().as_secs_f64();
         sample_rate = props.sample_rate().unwrap_or(0);
@@ -389,7 +391,7 @@ pub fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Son
         sample_rate,
         channels,
         bitrate,
-        format: ext,
+        format,
         size: meta.len(),
         modified,
         added,
@@ -559,7 +561,7 @@ fn read_wav_info(path: &Path) -> Option<WavInfo> {
 }
 
 pub fn read_cover(path: &Path) -> Option<Vec<u8>> {
-    let tagged = Probe::open(path).ok()?.read().ok()?;
+    let tagged = read_tagged(path)?;
     for tag in tagged.tags() {
         if let Some(picture) = tag.pictures().first() {
             return Some(picture.data().to_vec());
@@ -569,7 +571,7 @@ pub fn read_cover(path: &Path) -> Option<Vec<u8>> {
 }
 
 pub fn read_embedded_lyrics(path: &Path) -> Option<String> {
-    let tagged = Probe::open(path).ok()?.read().ok()?;
+    let tagged = read_tagged(path)?;
     for tag in tagged.tags() {
         if let Some(text) = tag.get_string(&ItemKey::Lyrics) {
             if !text.trim().is_empty() {
@@ -578,6 +580,41 @@ pub fn read_embedded_lyrics(path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+/// Opens a local file by sniffing its header, not just its extension. Some
+/// libraries contain M4A audio saved as `.mp3`; the extension-only probe would
+/// treat those as MPEG and report no duration at all.
+fn read_tagged(path: &Path) -> Option<TaggedFile> {
+    if let Ok(probe) = Probe::open(path) {
+        if let Ok(probe) = probe.guess_file_type() {
+            if let Ok(tagged) = probe.read() {
+                return Some(tagged);
+            }
+        }
+    }
+    // Fall back to the extension-driven probe for containers whose header the
+    // sniffer does not recognise.
+    Probe::open(path).ok()?.read().ok()
+}
+
+fn format_label(file_type: FileType, extension: &str) -> String {
+    match file_type {
+        FileType::Aac => "AAC".to_owned(),
+        FileType::Aiff => "AIFF".to_owned(),
+        FileType::Ape => "APE".to_owned(),
+        FileType::Flac => "FLAC".to_owned(),
+        FileType::Mpeg => "MP3".to_owned(),
+        FileType::Mp4 => "M4A".to_owned(),
+        FileType::Mpc => "MPC".to_owned(),
+        FileType::Opus => "OPUS".to_owned(),
+        FileType::Speex => "SPEEX".to_owned(),
+        FileType::Vorbis => "OGG".to_owned(),
+        FileType::Wav => "WAV".to_owned(),
+        FileType::WavPack => "WV".to_owned(),
+        FileType::Custom(name) => name.to_uppercase(),
+        _ => extension.to_uppercase(),
+    }
 }
 
 pub fn sidecar_lyrics_path(song_path: &Path) -> PathBuf {
@@ -1067,6 +1104,28 @@ mod tests {
         assert_eq!(clamp_lyrics_offset(250), 250);
         assert_eq!(lyrics_position(1.0, 5_000), 0.0);
         assert_eq!(lyrics_seek_time(1.0, -5_000), 0.0);
+    }
+
+    #[test]
+    fn content_probe_reads_mislabelled_m4a() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join(format!("lilt-m4a-test-{}-{stamp}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("tone.m4a");
+        let target = dir.join("mislabelled.mp3");
+        std::fs::copy(&source, &target).unwrap();
+        let song = read_song(&target, &HashMap::new()).expect("m4a should be readable");
+        assert!(song.duration > 1.9);
+        assert_eq!(song.format, "M4A");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
