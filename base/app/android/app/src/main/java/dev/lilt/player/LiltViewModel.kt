@@ -127,6 +127,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val sleepWaitTillEnd = settings.sleepWaitTillEnd
     val sleepFade = settings.sleepFade
     val rememberQueuePositions = settings.rememberQueuePositions
+    val lyricsFontSize = settings.lyricsFontSize
+    val lyricsOpacity = settings.lyricsOpacity
 
     private val _player = MutableStateFlow(PlayerUiState())
     val player: StateFlow<PlayerUiState> = _player.asStateFlow()
@@ -732,6 +734,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun setSongSort(value: String) = settings.setSongSort(value)
     fun setSongSortDescending(value: Boolean) = settings.setSongSortDescending(value)
     fun setRememberQueuePositions(value: Boolean) = settings.setRememberQueuePositions(value)
+    fun setLyricsFontSize(value: Float) = settings.setLyricsFontSize(value)
+    fun setLyricsOpacity(value: Float) = settings.setLyricsOpacity(value)
 
     fun toggleFavorite(mediaId: Long) {
         if (mediaId <= 0) return
@@ -786,8 +790,12 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun lyricsFor(mediaId: Long): kotlinx.coroutines.flow.Flow<LyricsEntity?> =
         repository.observeLyrics(mediaId)
 
-    fun saveLyrics(mediaId: Long, text: String) {
-        viewModelScope.launch { repository.saveLyrics(mediaId, text) }
+    fun saveLyrics(mediaId: Long, text: String, offsetMs: Int = 0) {
+        viewModelScope.launch { repository.saveLyrics(mediaId, text, offsetMs) }
+    }
+
+    fun setLyricsOffset(mediaId: Long, offsetMs: Int) {
+        viewModelScope.launch { repository.setLyricsOffset(mediaId, offsetMs) }
     }
 
     fun deleteLyrics(mediaId: Long) {

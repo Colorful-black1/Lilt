@@ -644,6 +644,24 @@ pub fn parse_lrc(text: &str) -> Vec<(f64, String)> {
     lines
 }
 
+/// Largest per-song lyric shift accepted from the UI, in milliseconds.
+pub const LYRICS_OFFSET_LIMIT_MS: i64 = 60_000;
+
+pub fn clamp_lyrics_offset(offset_ms: i64) -> i64 {
+    offset_ms.clamp(-LYRICS_OFFSET_LIMIT_MS, LYRICS_OFFSET_LIMIT_MS)
+}
+
+/// Position used to pick the highlighted line. A positive offset delays the
+/// lyrics, so line `t` lights up at `t + offset`.
+pub fn lyrics_position(position: f64, offset_ms: i64) -> f64 {
+    (position - offset_ms as f64 / 1000.0).max(0.0)
+}
+
+/// Song position to seek to when the user clicks a lyric line.
+pub fn lyrics_seek_time(line_time: f64, offset_ms: i64) -> f64 {
+    (line_time + offset_ms as f64 / 1000.0).max(0.0)
+}
+
 pub fn export_m3u(path: &Path, songs: &[Song]) -> std::io::Result<()> {
     let file = File::create(path)?;
     let mut out = BufWriter::new(file);
@@ -1027,6 +1045,28 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!((lines[0].0 - 12.5).abs() < 0.01);
         assert_eq!(lines[1].1, "World");
+    }
+
+    #[test]
+    fn lyrics_offsets_shift_highlight_and_seek() {
+        // A line tagged at 10 s lights up at 10 s with no offset.
+        assert!((lyrics_position(10.0, 0) - 10.0).abs() < 0.001);
+        assert!((lyrics_seek_time(10.0, 0) - 10.0).abs() < 0.001);
+        // Positive offsets delay the lyrics by that much.
+        assert!((lyrics_position(10.0, 500) - 9.5).abs() < 0.001);
+        assert!((lyrics_seek_time(10.0, 500) - 10.5).abs() < 0.001);
+        // Negative offsets advance them.
+        assert!((lyrics_position(10.0, -500) - 10.5).abs() < 0.001);
+        assert!((lyrics_seek_time(10.0, -500) - 9.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn lyrics_offsets_clamp_and_never_go_negative() {
+        assert_eq!(clamp_lyrics_offset(90_000), 60_000);
+        assert_eq!(clamp_lyrics_offset(-90_000), -60_000);
+        assert_eq!(clamp_lyrics_offset(250), 250);
+        assert_eq!(lyrics_position(1.0, 5_000), 0.0);
+        assert_eq!(lyrics_seek_time(1.0, -5_000), 0.0);
     }
 
     #[test]

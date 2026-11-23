@@ -72,11 +72,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.PlayerUiState
@@ -101,6 +103,8 @@ fun PlayerScreen(
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val bookmarks by vm.bookmarks.collectAsStateWithLifecycle()
     val speed by vm.playbackSpeed.collectAsStateWithLifecycle()
+    val lyricsFontSize by vm.lyricsFontSize.collectAsStateWithLifecycle()
+    val lyricsOpacity by vm.lyricsOpacity.collectAsStateWithLifecycle()
     val lyrics by remember(state.mediaId) { vm.lyricsFor(state.mediaId) }
         .collectAsStateWithLifecycle(initialValue = null)
     val sleep by vm.sleep.collectAsStateWithLifecycle()
@@ -343,7 +347,13 @@ fun PlayerScreen(
                 Spacer(Modifier.height(14.dp))
                 LyricsPanel(
                     text = lyrics?.text,
+                    offsetMs = lyrics?.offsetMs ?: 0,
                     positionMs = state.positionMs,
+                    fontSize = lyricsFontSize,
+                    opacity = lyricsOpacity,
+                    onOffsetChange = {
+                        if (state.mediaId > 0) vm.setLyricsOffset(state.mediaId, it)
+                    },
                     onOpen = { if (state.mediaId > 0) onOpenLyrics(state.mediaId) },
                 )
                 Spacer(Modifier.height(18.dp))
@@ -458,8 +468,18 @@ private fun SleepStatus(sleep: SleepUiState) {
 }
 
 @Composable
-private fun LyricsPanel(text: String?, positionMs: Long, onOpen: () -> Unit) {
+private fun LyricsPanel(
+    text: String?,
+    offsetMs: Int,
+    positionMs: Long,
+    fontSize: Float,
+    opacity: Float,
+    onOffsetChange: (Int) -> Unit,
+    onOpen: () -> Unit,
+) {
     val document = remember(text) { parseLrc(text.orEmpty()) }
+    val alpha = opacity.coerceIn(0.35f, 1f)
+    val baseSize = fontSize.coerceIn(12f, 24f)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -488,6 +508,10 @@ private fun LyricsPanel(text: String?, positionMs: Long, onOpen: () -> Unit) {
             )
         }
         Spacer(Modifier.height(8.dp))
+        if (document.timed) {
+            LyricsOffsetControls(offsetMs = offsetMs, onOffsetChange = onOffsetChange)
+            Spacer(Modifier.height(6.dp))
+        }
         when {
             text.isNullOrBlank() -> Text(
                 t(
@@ -495,28 +519,43 @@ private fun LyricsPanel(text: String?, positionMs: Long, onOpen: () -> Unit) {
                     "点击为这首歌添加歌词。LRC 时间标签会高亮当前行。",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
             )
             document.isEmpty -> Text(
                 t("The saved lyrics are empty.", "已保存的歌词为空。"),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
             )
-            document.timed -> SyncedLyrics(document, positionMs)
+            document.timed -> SyncedLyrics(
+                document = document,
+                positionMs = positionMs,
+                offsetMs = offsetMs,
+                fontSize = baseSize,
+                opacity = alpha,
+            )
             else -> Text(
                 document.lines.joinToString("\n") { it.text },
                 maxLines = 5,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = TextStyle(
+                    fontSize = baseSize.sp,
+                    lineHeight = (baseSize * 1.45f).sp,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
             )
         }
     }
 }
 
 @Composable
-private fun SyncedLyrics(document: LrcDocument, positionMs: Long) {
-    val active = activeLrcLine(document, positionMs)
+private fun SyncedLyrics(
+    document: LrcDocument,
+    positionMs: Long,
+    offsetMs: Int,
+    fontSize: Float,
+    opacity: Float,
+) {
+    val active = activeLrcLine(document, positionMs, offsetMs)
     val listState = rememberLazyListState()
     LaunchedEffect(active) {
         if (active >= 0) listState.animateScrollToItem(active)
@@ -531,11 +570,16 @@ private fun SyncedLyrics(document: LrcDocument, positionMs: Long) {
                 line.text,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 textAlign = TextAlign.Center,
-                style = if (index == active) MaterialTheme.typography.titleMedium
-                else MaterialTheme.typography.bodyMedium,
-                fontWeight = if (index == active) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (index == active) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = TextStyle(
+                    fontSize = if (index == active) (fontSize + 2f).sp else fontSize.sp,
+                    lineHeight = (fontSize * 1.45f).sp,
+                    fontWeight = if (index == active) FontWeight.SemiBold else FontWeight.Normal,
+                ),
+                color = if (index == active) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = opacity)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = opacity)
+                },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )

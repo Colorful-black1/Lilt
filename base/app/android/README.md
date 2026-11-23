@@ -69,6 +69,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   matching text, and keeps the last 12 queries for one-tap reuse.
 - **Lyrics** are stored per song in Room, support LRC timestamps with the current line
   highlighted in the player, plain text, and import from a local `.lrc`/`.txt` document.
+- **Lyric timing and display** are adjustable. Each song keeps its own offset (`-500`,
+  `-100`, `+100`, `+500` ms and reset, limited to ±60 s); positive values delay the lyrics.
+  The editor shows the adjusted timestamps and saves the offset with the text. Settings has
+  lyric font size (12–24 sp) and opacity (35–100%) sliders with a live preview.
 - **Single-song tag editing** for title, artist, album, year and track. Tags are a
   non-destructive Room overlay: the audio file is not rewritten, the values survive
   MediaStore rescans, and **Reset to scanned tags** removes the override. The edit entry
@@ -83,10 +87,11 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **History and bookmarks.** Playback history keeps the latest 200 starts and can be
   cleared. A bookmark stores a song position plus an optional note; bookmarks are listed
   in the library and as one-tap chips on the now-playing screen.
-- **Room database v6** with a separate `song_state` table for favourites, play counts and
+- **Room database v7** with a separate `song_state` table for favourites, play counts and
   last-played time, so a MediaStore rescan cannot wipe user data. It also stores bookmarks,
-  search history, lyrics, named queue positions and virtual tag overrides. Upgrades from
-  v1/v2/v3/v4/v5 keep the existing library, playlists, queues and user state.
+  search history, lyrics with a per-song offset, named queue positions and virtual tag
+  overrides. Upgrades from v1/v2/v3/v4/v5/v6 keep the existing library, playlists, queues
+  and user state.
 - **Play counts** are recorded after 30% of a track has been heard; history is recorded at
   playback start.
 - Playback through Media3 ExoPlayer inside a foreground `MediaSessionService`:
@@ -125,13 +130,14 @@ its library manifest; Lilt removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 24 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 25 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
-  index, LRC parsing and lyrics timing, EQ curves/profiles, queue resume positions, list
+  index, LRC parsing, lyric offsets, EQ curves/profiles, queue resume positions, list
   reordering and virtual tag merging.
-- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5 and 5→6
+- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6 and 6→7
   migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
+  `../checks/round-6-c/README.md` for lyric offset, font and opacity evidence,
   `../checks/round-6-b/README.md` for virtual tag editing, `../checks/round-6/README.md`
   for locate-current and playlist/queue reorder evidence, `../checks/round-5/README.md`
   for lyrics, sleep/fade, equalizer and queue-memory evidence,

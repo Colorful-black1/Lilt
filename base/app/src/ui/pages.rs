@@ -2223,6 +2223,67 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
             });
             ui.add_space(12.0);
             card_frame(palette).show(ui, |ui| {
+                common::section_title(
+                    ui,
+                    palette,
+                    app.t("Lyrics", "歌词"),
+                    app.t(
+                        "Timed lyrics in the now-playing panel. Each song keeps its own offset.",
+                        "正在播放页的同步歌词。每首歌单独保存偏移。",
+                    ),
+                );
+                ui.add_space(6.0);
+                let mut font_size = app.state.settings.lyrics_font_size;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Font size", "字号"),
+                    app.t(
+                        "Base size for lyric lines; the active line is slightly larger.",
+                        "歌词基础字号；当前行略大。",
+                    ),
+                    |ui| {
+                        let response = ui.add(
+                            egui::Slider::new(&mut font_size, 10.0..=24.0)
+                                .step_by(0.5)
+                                .suffix(" px"),
+                        );
+                        if response.changed() {
+                            app.state.settings.lyrics_font_size = font_size;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                let mut opacity = app.state.settings.lyrics_opacity;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Opacity", "透明度"),
+                    app.t("Text opacity for lyric lines.", "歌词文字的透明度。"),
+                    |ui| {
+                        let response =
+                            ui.add(egui::Slider::new(&mut opacity, 30..=100).suffix(" %"));
+                        if response.changed() {
+                            app.state.settings.lyrics_opacity = opacity;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                ui.add_space(2.0);
+                let alpha = ((opacity as f32 / 100.0) * 255.0).round() as u8;
+                ui.label(
+                    RichText::new(app.t("Glass horizon, open wide", "玻璃地平线，向远处展开"))
+                        .size(font_size + 1.5)
+                        .color(with_alpha(palette.accent, alpha)),
+                );
+                ui.label(
+                    RichText::new(app.t("A steady pulse beneath the floor", "地板下稳定的脉搏"))
+                        .size(font_size)
+                        .color(with_alpha(palette.text, alpha)),
+                );
+            });
+            ui.add_space(12.0);
+            card_frame(palette).show(ui, |ui| {
                 common::section_title(ui, palette, app.t("Audio", "音频"), "");
                 ui.add_space(6.0);
                 let mut normalize = app.state.settings.normalize;

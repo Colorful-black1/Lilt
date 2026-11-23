@@ -129,6 +129,9 @@ interface LyricsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(entry: LyricsEntity)
 
+    @Query("UPDATE lyrics SET offsetMs = :offsetMs, updatedAt = :updatedAt WHERE mediaId = :mediaId")
+    suspend fun updateOffset(mediaId: Long, offsetMs: Int, updatedAt: Long): Int
+
     @Query("DELETE FROM lyrics WHERE mediaId = :mediaId")
     suspend fun delete(mediaId: Long)
 }

@@ -16,7 +16,11 @@ import dev.lilt.player.library.UNKNOWN_ALBUM
 import dev.lilt.player.library.UNKNOWN_ARTIST
 import dev.lilt.player.library.activeLrcLine
 import dev.lilt.player.library.balanceOffsetsDb
+import dev.lilt.player.library.clampLyricsOffset
+import dev.lilt.player.library.formatAdjustedTimestamp
 import dev.lilt.player.library.letterOf
+import dev.lilt.player.library.lyricsPositionMs
+import dev.lilt.player.library.lyricsSeekMs
 import dev.lilt.player.library.movedItem
 import dev.lilt.player.library.parseLrc
 import dev.lilt.player.library.parseTagNumber
@@ -247,6 +251,33 @@ class LibraryTest {
         assertEquals(-1, activeLrcLine(shuffled, 4_999))
         assertEquals(0, activeLrcLine(shuffled, 5_000))
         assertEquals(1, activeLrcLine(shuffled, 45_000))
+    }
+
+    @Test
+    fun lyricsOffsetShiftsHighlightSeekAndClamps() {
+        val document = parseLrc("[00:10.00]First\n[00:20.00]Second")
+        assertEquals(0, activeLrcLine(document, 10_000))
+        assertEquals(-1, activeLrcLine(document, 9_000, 500))
+        assertEquals(0, activeLrcLine(document, 10_500, 500))
+        assertEquals(0, activeLrcLine(document, 9_500, -500))
+        assertEquals(1, activeLrcLine(document, 19_500, -500))
+
+        assertEquals(10_000L, lyricsPositionMs(10_000, 0))
+        assertEquals(9_500L, lyricsPositionMs(10_000, 500))
+        assertEquals(10_500L, lyricsPositionMs(10_000, -500))
+        assertEquals(0L, lyricsPositionMs(1_000, 5_000))
+
+        assertEquals(10_500L, lyricsSeekMs(10_000, 500))
+        assertEquals(9_500L, lyricsSeekMs(10_000, -500))
+        assertEquals(0L, lyricsSeekMs(1_000, -5_000))
+
+        assertEquals(60_000, clampLyricsOffset(90_000))
+        assertEquals(-60_000, clampLyricsOffset(-90_000))
+        assertEquals(250, clampLyricsOffset(250))
+
+        assertEquals("0:02.5", formatAdjustedTimestamp(2_500))
+        assertEquals("1:05.5", formatAdjustedTimestamp(65_500))
+        assertEquals("0:00.0", formatAdjustedTimestamp(-200))
     }
 
     @Test

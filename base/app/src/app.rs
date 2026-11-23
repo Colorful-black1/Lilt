@@ -559,6 +559,18 @@ impl LiltApp {
                     self.seek_to(seconds);
                 }
             }
+            if std::env::var_os("LILT_PAUSE_AFTER_SEEK").is_some() {
+                self.toggle_play();
+            }
+        }
+        if let Ok(offset) = std::env::var("LILT_LYRICS_OFFSET") {
+            if let (Ok(value), Some(key)) = (offset.parse::<i64>(), self.current_key.clone()) {
+                self.set_lyrics_offset(&key, value);
+                self.save_now();
+            }
+        }
+        if std::env::var_os("LILT_LYRICS").is_some() {
+            self.lyrics_open = true;
         }
         if let Ok(query) = std::env::var("LILT_SEARCH") {
             self.search = query;
@@ -2126,6 +2138,21 @@ impl LiltApp {
         self.notify(self.t("Tags updated", "标签已更新").to_owned());
     }
 
+    pub fn lyrics_offset_for(&self, key: &str) -> i64 {
+        self.state.extra(key).lyrics_offset_ms
+    }
+
+    /// Positive values delay the lyrics. The value is stored per song, so
+    /// different masters can keep different timing corrections.
+    pub fn set_lyrics_offset(&mut self, key: &str, offset_ms: i64) {
+        let cleaned = library::clamp_lyrics_offset(offset_ms);
+        if self.state.extra(key).lyrics_offset_ms == cleaned {
+            return;
+        }
+        self.state.extra_mut(key).lyrics_offset_ms = cleaned;
+        self.mark_dirty();
+    }
+
     pub fn save_lyrics_for(&mut self, key: &str, text: String) {
         if let Some(song) = self.song_by_key(key).cloned() {
             let _ = library::save_lyrics(&song, &text);
@@ -2947,7 +2974,13 @@ impl eframe::App for LiltApp {
         crate::ui::render(self, ctx);
         self.maybe_save();
         self.handle_screenshot(ctx);
-        if self.playing || self.scanning || self.sleep_deadline.is_some() || self.scan_rx.is_some()
+        // Keep one delayed frame scheduled while a settings/lyric edit is waiting
+        // for `maybe_save`, even when playback is paused and nothing else repaints.
+        if self.dirty
+            || self.playing
+            || self.scanning
+            || self.sleep_deadline.is_some()
+            || self.scan_rx.is_some()
         {
             ctx.request_repaint_after(Duration::from_millis(100));
         }

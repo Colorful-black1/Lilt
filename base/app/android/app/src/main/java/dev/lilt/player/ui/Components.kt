@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import dev.lilt.player.PlayerUiState
 import dev.lilt.player.data.PlaylistSummary
 import dev.lilt.player.data.SongEntity
+import dev.lilt.player.library.clampLyricsOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Collections
@@ -610,6 +612,55 @@ fun AddChip(label: String, onClick: () -> Unit) {
         Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(4.dp))
         Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/**
+ * Compact per-song lyric timing controls. Positive values delay the lyrics,
+ * so a line tagged at `t` lights up at `t + offset`.
+ */
+@Composable
+fun LyricsOffsetControls(
+    offsetMs: Int,
+    onOffsetChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                t("Offset", "偏移") + " " +
+                    (if (offsetMs > 0) "+$offsetMs" else "$offsetMs") + " ms",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (offsetMs != 0) {
+                TextButton(
+                    onClick = { onOffsetChange(0) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) {
+                    Text(t("Reset", "重置"), style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            listOf(-500, -100, 100, 500).forEach { delta ->
+                TextButton(
+                    onClick = { onOffsetChange(clampLyricsOffset(offsetMs + delta)) },
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        if (delta > 0) "+$delta" else "$delta",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.roundToInt
 
 /** Small, local preferences. No account and no network. */
 class SettingsStore(context: Context) {
@@ -31,6 +32,10 @@ class SettingsStore(context: Context) {
     val sleepFade: StateFlow<Boolean> = MutableStateFlow(prefs.getBoolean("sleep_fade", true))
     val rememberQueuePositions: StateFlow<Boolean> =
         MutableStateFlow(prefs.getBoolean("remember_queue_positions", true))
+    val lyricsFontSize: StateFlow<Float> =
+        MutableStateFlow(prefs.getFloat("lyrics_font_size", 15f))
+    val lyricsOpacity: StateFlow<Float> =
+        MutableStateFlow(prefs.getFloat("lyrics_opacity", 1f))
 
     fun setLanguage(value: String) {
         prefs.edit { putString("language", value) }
@@ -93,6 +98,19 @@ class SettingsStore(context: Context) {
     fun setRememberQueuePositions(value: Boolean) {
         prefs.edit { putBoolean("remember_queue_positions", value) }
         (rememberQueuePositions as MutableStateFlow).value = value
+    }
+
+    /** Font size is kept on half-point steps between 12 and 24 sp. */
+    fun setLyricsFontSize(value: Float) {
+        val cleaned = ((value.coerceIn(12f, 24f) * 2f).roundToInt() / 2f)
+        prefs.edit { putFloat("lyrics_font_size", cleaned) }
+        (lyricsFontSize as MutableStateFlow).value = cleaned
+    }
+
+    fun setLyricsOpacity(value: Float) {
+        val cleaned = value.coerceIn(0.35f, 1f)
+        prefs.edit { putFloat("lyrics_opacity", cleaned) }
+        (lyricsOpacity as MutableStateFlow).value = cleaned
     }
 
     fun setSleepDefaults(

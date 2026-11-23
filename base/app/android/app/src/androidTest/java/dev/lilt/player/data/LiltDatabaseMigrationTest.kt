@@ -205,6 +205,44 @@ class LiltDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate6To7AddsLyricsOffsetAndKeepsStoredLyrics() {
+        val name = "lilt-migration-6-7.db"
+        helper.createDatabase(name, 6).use { db ->
+            db.execSQL(
+                "INSERT INTO lyrics (mediaId, text, updatedAt) " +
+                    "VALUES (42, '[00:01.00]Hello', 789)",
+            )
+            db.execSQL(
+                "INSERT INTO tag_overrides " +
+                    "(mediaId, title, artist, album, year, track, updatedAt) " +
+                    "VALUES (42, 'Custom', 'Artist 2', 'Album 2', 2024, 3, 456)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            7,
+            true,
+            LiltDatabase.MIGRATION_6_7,
+        ).use { db ->
+            db.query("SELECT text, offsetMs FROM lyrics WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("[00:01.00]Hello", cursor.getString(0))
+                assertEquals(0, cursor.getInt(1))
+            }
+            db.execSQL("UPDATE lyrics SET offsetMs = 500 WHERE mediaId = 42")
+            db.query("SELECT offsetMs FROM lyrics WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(500, cursor.getInt(0))
+            }
+            db.query("SELECT title FROM tag_overrides WHERE mediaId = 42").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Custom", cursor.getString(0))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2KeepsLibraryAndAddsSongState() {
         helper.createDatabase(databaseName, 1).use { db ->
             db.execSQL(

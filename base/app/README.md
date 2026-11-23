@@ -42,7 +42,9 @@ cargo run -- --screenshot shots/720.png --size 720x1280
 
 For a settings-page check, `LILT_PAGE=settings` opens Settings first, and
 `LILT_SETTINGS_SCROLL=1050` starts its scroll area at the Playback card (used by the
-screenshots in `checks/`).
+screenshots in `checks/`). For lyric checks, `LILT_START_PAGE=now`, `LILT_LYRICS=1`,
+`LILT_LYRICS_OFFSET=500` and `LILT_PAUSE_AFTER_SEEK=1` open the now-playing lyric panel
+at a fixed position with an offset applied.
 
 ## First launch
 
@@ -94,6 +96,10 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **Locate current song** from the top bar, the Songs header or the now-playing overlay.
   It opens the complete song list and scrolls the playing row into view; the one-shot
   scroll does not fight later manual scrolling.
+- **Lyric timing and display.** Each song keeps its own offset (`-500`, `-100`, `+100`,
+  `+500` ms and reset, limited to ±60 s); positive values delay the lyrics. Clicking a
+  lyric line seeks to its adjusted time. Settings has lyric font size (10–24 px) and
+  opacity (30–100%) sliders with a live preview.
 - 10-band equalizer at the target's exact frequencies and Q, 22 target presets, three
   preamp modes, bass boost, virtualizer, 0–200 balance, headroom suggestion and five
   stored device profiles; changes apply to the live audio source and persist after

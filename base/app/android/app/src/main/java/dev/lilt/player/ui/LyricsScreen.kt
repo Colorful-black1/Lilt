@@ -30,7 +30,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,9 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
+import dev.lilt.player.library.formatAdjustedTimestamp
+import dev.lilt.player.library.lyricsSeekMs
 import dev.lilt.player.library.parseLrc
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -59,11 +66,19 @@ fun LyricsScreen(vm: LiltViewModel, mediaId: Long, onBack: () -> Unit) {
     val song = remember(songs, mediaId) { songs.firstOrNull { it.mediaId == mediaId } }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lyricsFontSize by vm.lyricsFontSize.collectAsStateWithLifecycle()
+    val lyricsOpacity by vm.lyricsOpacity.collectAsStateWithLifecycle()
 
     var draft by remember(mediaId) { mutableStateOf<String?>(null) }
     var confirmClear by remember { mutableStateOf(false) }
+    var offsetMs by remember(mediaId) { mutableIntStateOf(0) }
+    var offsetTouched by remember(mediaId) { mutableStateOf(false) }
     val value = draft ?: stored?.text.orEmpty()
     val parsed = remember(value) { parseLrc(value) }
+
+    LaunchedEffect(mediaId, stored) {
+        if (!offsetTouched) offsetMs = stored?.offsetMs ?: 0
+    }
 
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -89,7 +104,7 @@ fun LyricsScreen(vm: LiltViewModel, mediaId: Long, onBack: () -> Unit) {
                 actions = {
                     IconButton(
                         onClick = {
-                            vm.saveLyrics(mediaId, value)
+                            vm.saveLyrics(mediaId, value, offsetMs)
                             onBack()
                         },
                     ) {
@@ -158,6 +173,89 @@ fun LyricsScreen(vm: LiltViewModel, mediaId: Long, onBack: () -> Unit) {
                 },
                 textStyle = MaterialTheme.typography.bodyLarge,
             )
+            Spacer(Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(14.dp),
+            ) {
+                Text(
+                    t("Timing and preview", "时间校准与预览"),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    t(
+                        "Positive offsets delay the lyrics; negative values make them earlier. Each song keeps its own value.",
+                        "正值让歌词延后，负值让歌词提前。每首歌单独保存。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                LyricsOffsetControls(
+                    offsetMs = offsetMs,
+                    onOffsetChange = {
+                        offsetTouched = true
+                        offsetMs = it
+                    },
+                )
+                if (parsed.timed) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        t("Adjusted timestamps", "调整后时间"),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    parsed.lines.take(3).forEach { line ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                formatAdjustedTimestamp(lyricsSeekMs(line.timeMs, offsetMs)),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(Modifier.size(8.dp))
+                            Text(
+                                line.text,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    t("Display preview", "显示预览"),
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                val previewAlpha = lyricsOpacity.coerceIn(0.35f, 1f)
+                val previewSize = lyricsFontSize.coerceIn(12f, 24f)
+                Text(
+                    parsed.lines.firstOrNull()?.text
+                        ?: t("Glass horizon, open wide", "玻璃地平线，向远处展开"),
+                    style = TextStyle(
+                        fontSize = (previewSize + 2f).sp,
+                        lineHeight = (previewSize * 1.45f).sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = previewAlpha),
+                )
+                Text(
+                    parsed.lines.getOrNull(1)?.text
+                        ?: t("A steady pulse beneath the floor", "地板下稳定的脉搏"),
+                    style = TextStyle(
+                        fontSize = previewSize.sp,
+                        lineHeight = (previewSize * 1.45f).sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = previewAlpha),
+                )
+            }
             Spacer(Modifier.height(12.dp))
             Column(
                 modifier = Modifier

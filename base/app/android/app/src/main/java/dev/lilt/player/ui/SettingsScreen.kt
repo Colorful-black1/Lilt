@@ -41,10 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.data.ScanState
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -62,6 +66,8 @@ fun SettingsScreen(
     val rememberPositions by vm.rememberQueuePositions.collectAsStateWithLifecycle()
     val fadeIn by vm.fadeInMs.collectAsStateWithLifecycle()
     val fadeOut by vm.fadeOutMs.collectAsStateWithLifecycle()
+    val lyricsFontSize by vm.lyricsFontSize.collectAsStateWithLifecycle()
+    val lyricsOpacity by vm.lyricsOpacity.collectAsStateWithLifecycle()
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val allSongs by vm.allSongs.collectAsStateWithLifecycle()
@@ -191,6 +197,52 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            SettingCard(t("Lyrics", "歌词")) {
+                Text(
+                    t(
+                        "Applies to timed lyrics in the player. Each song keeps its own offset there.",
+                        "应用于播放页的同步歌词。每首歌单独保存偏移。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LyricsDisplaySlider(
+                    title = t("Font size", "字号"),
+                    value = lyricsFontSize,
+                    range = 12f..24f,
+                    steps = 23,
+                    format = { "%.1f sp".format(it) },
+                    onChange = vm::setLyricsFontSize,
+                )
+                LyricsDisplaySlider(
+                    title = t("Opacity", "透明度"),
+                    value = lyricsOpacity,
+                    range = 0.35f..1f,
+                    steps = 12,
+                    format = { "${(it * 100).roundToInt()} %" },
+                    onChange = vm::setLyricsOpacity,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    LYRICS_PREVIEW_TITLE,
+                    style = TextStyle(
+                        fontSize = (lyricsFontSize + 2f).sp,
+                        lineHeight = (lyricsFontSize * 1.45f).sp,
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = lyricsOpacity),
+                )
+                Text(
+                    LYRICS_PREVIEW_BODY,
+                    style = TextStyle(
+                        fontSize = lyricsFontSize.sp,
+                        lineHeight = (lyricsFontSize * 1.45f).sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = lyricsOpacity),
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
             SettingCard(t("Queues", "队列")) {
                 SettingSwitch(
                     title = t("Remember queue positions", "记住队列位置"),
@@ -223,6 +275,42 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(40.dp))
         }
+    }
+}
+
+private const val LYRICS_PREVIEW_TITLE = "Glass horizon, open wide"
+private const val LYRICS_PREVIEW_BODY = "A steady pulse beneath the floor"
+
+@Composable
+private fun LyricsDisplaySlider(
+    title: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    format: (Float) -> String,
+    onChange: (Float) -> Unit,
+) {
+    var local by remember(value) { mutableFloatStateOf(value) }
+    Column(Modifier.padding(top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                format(local),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Slider(
+            value = local,
+            onValueChange = { local = it },
+            valueRange = range,
+            steps = steps,
+            onValueChangeFinished = { onChange(local) },
+        )
     }
 }
 
@@ -354,6 +442,8 @@ fun AboutScreen(onBack: () -> Unit) {
                 t("Sorting, multi-select and A-Z index", "排序、多选与字母索引"),
                 t("Grouped search with query history", "分组搜索与搜索历史"),
                 t("Local lyrics with LRC timing and import", "本地歌词、LRC 时间轴与导入"),
+                t("Per-song lyric offset, font size and opacity", "每首歌歌词偏移、字号与透明度"),
+                t("Virtual single-song tag editing", "单曲虚拟标签编辑"),
                 t("Foreground service, notification and lock-screen controls", "前台服务、通知栏与锁屏控制"),
                 t("Named queues with M3U import and export", "命名队列与 M3U 导入导出"),
                 t("Playlists, full sleep timer and playback speed", "播放列表、完整睡眠定时与播放速度"),
@@ -372,8 +462,8 @@ fun AboutScreen(onBack: () -> Unit) {
             Text(t("Not in this build", "本版本未包含"), style = MaterialTheme.typography.titleLarge)
             Text(
                 t(
-                    "Tag editing, lyrics editing, embedded ReplayGain writing, home-screen widgets, Android Auto and cast are not part of this build. They stay on the later list instead of being replaced with fake data.",
-                    "标签编辑、歌词编辑、ReplayGain 写入、桌面小部件、Android Auto 与投屏尚未包含。它们保留在后续清单中，而不是用假数据代替。",
+                    "Batch tag editing, cover replacement, embedded ReplayGain writing, home-screen widgets, Android Auto and cast are not part of this build. They stay on the later list instead of being replaced with fake data.",
+                    "批量标签编辑、封面替换、ReplayGain 写入、桌面小部件、Android Auto 与投屏尚未包含。它们保留在后续清单中，而不是用假数据代替。",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

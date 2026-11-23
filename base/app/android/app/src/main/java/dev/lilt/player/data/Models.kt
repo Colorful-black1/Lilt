@@ -118,6 +118,8 @@ data class SearchHistoryEntity(
 data class LyricsEntity(
     @PrimaryKey val mediaId: Long,
     val text: String,
+    /** Positive values delay the lyrics; line `t` lights up at `t + offsetMs`. */
+    val offsetMs: Int = 0,
     val updatedAt: Long,
 )
 

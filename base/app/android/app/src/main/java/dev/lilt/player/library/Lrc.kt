@@ -51,12 +51,27 @@ fun parseLrc(text: String): LrcDocument {
     )
 }
 
+/** Largest per-song lyric shift accepted from the UI, in milliseconds. */
+const val LYRICS_OFFSET_LIMIT_MS = 60_000
+
+fun clampLyricsOffset(offsetMs: Int): Int =
+    offsetMs.coerceIn(-LYRICS_OFFSET_LIMIT_MS, LYRICS_OFFSET_LIMIT_MS)
+
+/** Position used to pick the highlighted line. Positive offsets delay the lyrics. */
+fun lyricsPositionMs(positionMs: Long, offsetMs: Int): Long =
+    (positionMs - offsetMs).coerceAtLeast(0L)
+
+/** Song position to seek to when the user taps a timed line. */
+fun lyricsSeekMs(lineTimeMs: Long, offsetMs: Int): Long =
+    (lineTimeMs + offsetMs).coerceAtLeast(0L)
+
 /** Index of the line that should be highlighted, or -1 before the first tag. */
-fun activeLrcLine(document: LrcDocument, positionMs: Long): Int {
+fun activeLrcLine(document: LrcDocument, positionMs: Long, offsetMs: Int = 0): Int {
     if (!document.timed) return -1
+    val adjusted = lyricsPositionMs(positionMs, offsetMs)
     var active = -1
     document.lines.forEachIndexed { index, line ->
-        if (line.timeMs <= positionMs) active = index else return@forEachIndexed
+        if (line.timeMs <= adjusted) active = index else return@forEachIndexed
     }
     return active
 }
@@ -64,4 +79,12 @@ fun activeLrcLine(document: LrcDocument, positionMs: Long): Int {
 fun formatLrcTimestamp(timeMs: Long): String {
     val totalSeconds = (timeMs.coerceAtLeast(0) / 1000).toInt()
     return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
+}
+
+/** `mm:ss.d`; used where a 100 ms lyric shift must be visible. */
+fun formatAdjustedTimestamp(timeMs: Long): String {
+    val total = timeMs.coerceAtLeast(0)
+    val minutes = total / 60_000
+    val seconds = (total % 60_000) / 1000.0
+    return "%d:%04.1f".format(minutes, seconds)
 }

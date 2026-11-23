@@ -1,5 +1,6 @@
 use crate::app::{ConfirmAction, LiltApp, Modal, TagEditorState};
 use crate::icons::{self, Icon};
+use crate::library;
 use crate::model::*;
 use crate::theme::{cover_palette, display_font, mix, with_alpha, Palette};
 use crate::widgets;
@@ -65,6 +66,14 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     };
     let lyrics = app.lyrics.clone().unwrap_or_default();
     let lyrics_open = app.lyrics_open;
+    let lyrics_song_key = current.as_ref().map(|song| song.key.clone());
+    let mut lyrics_offset_ms = lyrics_song_key
+        .as_deref()
+        .map(|key| app.lyrics_offset_for(key))
+        .unwrap_or(0);
+    let lyrics_font_size = app.state.settings.lyrics_font_size.clamp(10.0, 24.0);
+    let lyrics_opacity = app.state.settings.lyrics_opacity.clamp(30, 100) as f32 / 100.0;
+    let lyric_alpha = |value: u8| ((value as f32) * lyrics_opacity).round() as u8;
 
     let mut close = false;
     let mut toggle_play = false;
@@ -476,6 +485,48 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                     );
                                                 });
                                                 ui.add_space(6.0);
+                                                let timed =
+                                                    lyrics.iter().any(|(time, _)| *time > 0.0);
+                                                if timed {
+                                                    ui.horizontal_wrapped(|ui| {
+                                                        ui.label(
+                                                            RichText::new(format!(
+                                                                "{} {:+} ms",
+                                                                app.t("Offset", "偏移"),
+                                                                lyrics_offset_ms
+                                                            ))
+                                                            .size(10.5)
+                                                            .color(ink_muted),
+                                                        );
+                                                        for delta in [-500i64, -100, 100, 500] {
+                                                            if widgets::chip(
+                                                                ui,
+                                                                &format!("{delta:+}"),
+                                                                false,
+                                                                &op,
+                                                            )
+                                                            .clicked()
+                                                            {
+                                                                lyrics_offset_ms =
+                                                                    library::clamp_lyrics_offset(
+                                                                        lyrics_offset_ms + delta,
+                                                                    );
+                                                            }
+                                                        }
+                                                        if lyrics_offset_ms != 0
+                                                            && widgets::chip(
+                                                                ui,
+                                                                app.t("Reset", "重置"),
+                                                                false,
+                                                                &op,
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            lyrics_offset_ms = 0;
+                                                        }
+                                                    });
+                                                    ui.add_space(4.0);
+                                                }
                                                 if lyrics.is_empty() {
                                                     ui.label(
                                                         RichText::new(app.t(
@@ -486,11 +537,18 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                         .color(ink_muted),
                                                     );
                                                 } else {
+                                                    let lyric_position =
+                                                        library::lyrics_position(
+                                                            position,
+                                                            lyrics_offset_ms,
+                                                        );
                                                     let active_line = lyrics
                                                         .iter()
                                                         .enumerate()
                                                         .rev()
-                                                        .find(|(_, (time, _))| *time <= position + 0.1)
+                                                        .find(|(_, (time, _))| {
+                                                            *time <= lyric_position + 0.1
+                                                        })
                                                         .map(|(index, _)| index);
                                                     ScrollArea::vertical()
                                                         .id_salt("now_playing_lyrics")
@@ -505,22 +563,33 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                                     egui::Button::new(
                                                                         RichText::new(line)
                                                                             .size(if active {
-                                                                                14.0
+                                                                                lyrics_font_size
+                                                                                    + 1.5
                                                                             } else {
-                                                                                12.5
+                                                                                lyrics_font_size
                                                                             })
                                                                             .color(if active {
-                                                                                palette.accent
+                                                                                with_alpha(
+                                                                                    palette.accent,
+                                                                                    lyric_alpha(255),
+                                                                                )
                                                                             } else {
-                                                                                with_alpha(ink, 165)
+                                                                                with_alpha(
+                                                                                    ink,
+                                                                                    lyric_alpha(165),
+                                                                                )
                                                                             }),
                                                                     )
                                                                     .frame(false),
                                                                 );
                                                                 if response.clicked() {
                                                                     seek = Some(
-                                                                        (*time / duration.max(1.0))
-                                                                            .clamp(0.0, 1.0),
+                                                                        (library::lyrics_seek_time(
+                                                                            *time,
+                                                                            lyrics_offset_ms,
+                                                                        ) / duration
+                                                                            .max(1.0))
+                                                                        .clamp(0.0, 1.0),
                                                                     );
                                                                 }
                                                             }
@@ -697,6 +766,11 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     }
     if toggle_play {
         app.toggle_play();
+    }
+    if let Some(key) = &lyrics_song_key {
+        if lyrics_offset_ms != app.lyrics_offset_for(key) {
+            app.set_lyrics_offset(key, lyrics_offset_ms);
+        }
     }
     if prev {
         app.prev_track();

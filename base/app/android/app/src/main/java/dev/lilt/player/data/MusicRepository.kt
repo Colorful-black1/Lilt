@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.room.withTransaction
+import dev.lilt.player.library.clampLyricsOffset
 import dev.lilt.player.library.movedItem
 import dev.lilt.player.library.withTagOverride
 import dev.lilt.player.library.withTagOverrides
@@ -426,7 +427,11 @@ class MusicRepository(
         searches.clear()
     }
 
-    suspend fun saveLyrics(mediaId: Long, text: String) = withContext(Dispatchers.IO) {
+    suspend fun saveLyrics(
+        mediaId: Long,
+        text: String,
+        offsetMs: Int = 0,
+    ) = withContext(Dispatchers.IO) {
         if (mediaId <= 0) return@withContext
         if (text.isBlank()) {
             lyrics.delete(mediaId)
@@ -435,10 +440,20 @@ class MusicRepository(
                 LyricsEntity(
                     mediaId = mediaId,
                     text = text.trim(),
+                    offsetMs = clampLyricsOffset(offsetMs),
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
         }
+    }
+
+    suspend fun setLyricsOffset(mediaId: Long, offsetMs: Int) = withContext(Dispatchers.IO) {
+        if (mediaId <= 0) return@withContext
+        lyrics.updateOffset(
+            mediaId = mediaId,
+            offsetMs = clampLyricsOffset(offsetMs),
+            updatedAt = System.currentTimeMillis(),
+        )
     }
 
     suspend fun deleteLyrics(mediaId: Long) = withContext(Dispatchers.IO) {

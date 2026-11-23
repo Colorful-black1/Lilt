@@ -313,6 +313,8 @@ pub struct SongExtra {
     pub track: Option<u32>,
     pub cover: Option<String>,
     pub lyrics: Option<String>,
+    /// Positive values delay the lyrics; a line at `t` is highlighted at `t + offset`.
+    pub lyrics_offset_ms: i64,
     pub favorite: bool,
     pub play_count: u32,
     pub last_played: Option<u64>,
@@ -332,6 +334,7 @@ impl Default for SongExtra {
             track: None,
             cover: None,
             lyrics: None,
+            lyrics_offset_ms: 0,
             favorite: false,
             play_count: 0,
             last_played: None,
@@ -600,6 +603,10 @@ pub struct Settings {
     pub day_end_minutes: u32,
     pub volume: f32,
     pub playback_speed: f32,
+    /// Base size of lyric lines in the now-playing panel, 10–24 px.
+    pub lyrics_font_size: f32,
+    /// Lyric text opacity in percent, 30–100.
+    pub lyrics_opacity: u8,
     /// `k_b_fdid`: "Fade-in volume when play", default 0, 0…4000 ms, step 250.
     pub fade_in_ms: u32,
     /// `k_b_fdod`: "Fade-out volume when pause", default 0, 0…4000 ms, step 250.
@@ -659,6 +666,8 @@ impl Default for Settings {
             volume: 0.8,
             // `k_f_plyspd4` default 10000 (1.00×).
             playback_speed: 1.0,
+            lyrics_font_size: 13.0,
+            lyrics_opacity: 100,
             // `k_b_fdid` / `k_b_fdod` default 0 ms.
             fade_in_ms: 0,
             fade_out_ms: 0,
@@ -1052,6 +1061,8 @@ mod tests {
         assert!(settings.gapless);
         assert_eq!(settings.fade_in_ms, 0);
         assert_eq!(settings.fade_out_ms, 0);
+        assert_eq!(settings.lyrics_font_size, 13.0);
+        assert_eq!(settings.lyrics_opacity, 100);
         assert_eq!(settings.sleep_history_hm, vec![(1, 30), (0, 15)]);
         assert_eq!(settings.sleep_history_n, vec![10, 5]);
 
@@ -1060,6 +1071,15 @@ mod tests {
         assert_eq!(eq.headroom_db, 6.0);
         assert_eq!(eq.boost_db, 2.0);
         assert_eq!(eq.balance, 100.0);
+    }
+
+    #[test]
+    fn old_song_json_defaults_lyrics_offset() {
+        let extra: SongExtra = serde_json::from_str(r#"{"favorite":true,"play_count":3}"#)
+            .expect("old SongExtra JSON should load");
+        assert_eq!(extra.lyrics_offset_ms, 0);
+        assert!(extra.favorite);
+        assert_eq!(extra.play_count, 3);
     }
 
     #[test]
