@@ -1784,6 +1784,7 @@ fn apply_modal_action(app: &mut LiltApp, action: ModalAction) {
                         .to_owned(),
                 );
             }
+            ConfirmAction::RestoreBackup(path) => app.restore_backup(&path),
             ConfirmAction::ResetStarter => {
                 app.notify(
                     app.t("Starter library already present", "初始曲库已存在")

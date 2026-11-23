@@ -2,6 +2,7 @@
 
 mod app;
 mod audio;
+mod backup;
 mod console;
 mod desktop;
 mod i18n;

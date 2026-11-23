@@ -65,7 +65,6 @@
 - A-B 循环、单曲播放（播完停止）。
 - 重复歌曲检测、失效文件重新关联、批量文件操作。
 - 音频裁剪、格式转换、CUE 分轨。
-- 备份/恢复。
 - ReplayGain 计算与写回。
 - APE、WMA、DSF/DFF 等格式支持。
 - 听歌时长、最常听歌手/专辑统计。
@@ -109,7 +108,7 @@
 - ReplayGain。
 - 上一首规则设置、无缝播放开关。
 - 昼夜主题。
-- 备份/恢复、播放统计 CSV 导出。
+- 播放统计 CSV 导出。
 - 拼音首字母索引。
 - 快捷设置磁贴、Android Auto、车载模式、锁屏歌词。
 
@@ -142,7 +141,7 @@
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
 | 主题/语言 | ✅ | △ | Android 缺昼夜主题 |
 | 系统集成 | ✅ | ✅ | PC 托盘/热键/桌面歌词/迷你播放器/SMTC 已完成；Android 悬浮歌词/小部件已完成，缺 Auto/磁贴 |
-| 备份/恢复 | ❌ | ❌ | 两端都缺 |
+| 备份/恢复 | ✅ | ✅ | 本地 JSON 备份与恢复已完成；PC/Android 格式各自独立，跨平台导入未做 |
 | 音频工具 | ❌ | ❌ | 两端都缺 |
 | 桌面/悬浮体验 | △ | △ | PC 已完成桌面歌词与迷你播放器；Android 已完成悬浮歌词，缺锁屏歌词 |
 
@@ -270,11 +269,11 @@
 - 歌词编辑：纯文本/LRC，保存到本地。
 - 歌词显示：每首歌偏移、字号与透明度（已在 Round 6-C 完成）。
 - Most Played CSV 导出。
-- 备份/恢复：设置、播放列表、队列、收藏、标签覆盖。
+- 备份/恢复：设置、播放列表、队列、收藏、标签覆盖（Round 7-B 已完成）。
 - 导入/导出 M3U 的往返一致性测试。
 - 批量加入/移除播放列表。
 
-状态（2026-11-23）：单曲虚拟标签编辑已完成，修改后列表、搜索、专辑/艺术家分组、播放页和 MediaSession metadata 同步更新；歌词偏移、字号与透明度也已落地。批量编辑和封面选择仍待做。
+状态（2026-11-23）：单曲虚拟标签编辑已完成，修改后列表、搜索、专辑/艺术家分组、播放页和 MediaSession metadata 同步更新；歌词偏移、字号与透明度也已落地；本地备份/恢复已在 Round 7-B 完成。批量编辑和封面选择仍待做。
 
 验收：
 
@@ -386,7 +385,7 @@
 | CUE 分轨 | 中 | 高 | P3 |
 | 音频裁剪/铃声制作 | 中 | 中 | P3 |
 | 格式转换 | 中 | 高 | P3 |
-| 本地备份/恢复 | 高 | 低 | P1 |
+| 本地备份/恢复 | 高 | 低 | 已完成（Round 7-B） |
 
 ### 5.6 统计与可用性
 
@@ -463,6 +462,7 @@
 - 包含：设置、文件夹规则、播放列表、队列、收藏、书签、标签覆盖。
 - 不包含音频文件本身。
 - 恢复时做版本兼容和冲突处理。
+- 状态（2026-11-23）：已按单个 JSON 在 PC 与 Android 实现（Round 7-B）；两端格式各自独立，跨平台导入未做。
 
 ---
 
@@ -627,20 +627,38 @@
 
 未纳入本轮：Android 锁屏歌词、仅歌词小部件、快捷设置磁贴、Android Auto、车载模式。
 
+### 第 7-B 轮：本地备份与恢复（已完成）
+
+交付：
+
+- PC：版本化 JSON 备份，包含设置、曲库根目录与包含/排除规则、播放列表、队列与位置、收藏/播放计数/最后播放位置、书签、歌词与偏移、标签覆盖、EQ 配置和最近搜索；恢复前校验 app/format/platform，恢复后停止播放、保存状态并重扫。
+- Android：通过系统文档选择器导出/导入 JSON；包含歌单、队列、收藏、历史、书签、歌词、标签覆盖、文件夹规则、搜索历史、EQ 与设置。恢复在一个 Room 事务内替换用户表，曲目引用按 mediaId → 文件夹+文件名 → 标题/艺术家/时长回退解析；无法匹配的引用跳过并计数。
+- 两端设置页新增“备份与恢复 / Backup & restore”卡片；导出成功/失败、恢复确认、恢复结果都有明确提示。
+- PC 29 个单元测试（新增 6 个备份往返、版本拒绝、设置夹取、ID 归一化与根目录回退测试）；Android 37 个单元测试（新增 7 个 JSON 往返、平台/格式拒绝、设置夹取、曲目引用解析、预览与 EQ 测试）；6 个 Room 迁移测试仍通过。
+
+验收：
+
+- Android 实测：9,687 字节 JSON 导出成功；清空歌单、队列、收藏、歌词、书签、标签和搜索后，恢复为 1 个歌单（3 首）、1 个队列（2 首）、1 首收藏、歌词偏移 250 ms、1 个书签和 1 个标签覆盖，设置中的 accent/speed/字号恢复为 sage/1.25×/17.5 sp。
+- 备份文件不包含音频文件和扫描索引；Android 恢复使用媒体表当前行做引用解析，不写入扫描数据。
+- APK 仍无 `INTERNET` 权限；备份通过 SAF 文档选择器完成，未新增存储权限。
+- 结果见 `base/app/checks/round-7-b/`。
+
+未纳入本轮：PC 与 Android 之间的跨平台导入、云端同步、音频文件打包、批量编辑冲突策略。
+
 ### 第 7 轮：音频与曲库工具
 
 交付：
 
 - 交叉淡化、A-B 循环、单曲播放。
+- 本地备份/恢复（已在 Round 7-B 完成）。
 - 重复检测、失效文件定位、批量重命名。
 - 音频裁剪、CUE、格式转换（按需求裁剪范围）。
-- 本地备份/恢复。
 
 验收：
 
 - 交叉淡化不爆音、不丢拍。
 - 失效文件可重新指向新路径。
-- 备份恢复后播放列表、队列、收藏、设置一致。
+- 备份恢复后播放列表、队列、收藏、设置一致（Round 7-B 已验证）。
 
 ### 第 8 轮：Android 系统集成
 
@@ -689,7 +707,7 @@
 3. PC 全局热键的默认组合是否采用本文建议？（已采用，Round 6-D1；可在设置关闭）
 4. Android 小部件、磁贴、Android Auto 的优先级是否高于音频工具？
 5. APE/DSD/CUE 是否有真实使用需求，值得投入高成本？
-6. 备份文件是否需要跨 PC/Android 共用格式？
+6. 备份文件是否需要跨 PC/Android 共用格式？（当前实现：各平台独立格式、平台内恢复；跨平台未做）
 7. 收藏是否只针对歌曲，还是也要收藏专辑/艺术家？（当前实现：仅歌曲）
 8. 播放计数阈值是否沿用 PC 的默认 30%？（当前实现：30%）
 
@@ -712,9 +730,10 @@
 | 2026-11-23 | Round 6-D1 | 完成 | PC 托盘、关闭/最小化到托盘、6 组全局热键、隐藏播放心跳、设置卡片、21 个单元测试 |
 | 2026-11-23 | Round 6-D2 | 完成 | PC 桌面歌词、锁定/穿透、迷你播放器、Windows SMTC、托盘/设置入口、23 个单元测试 |
 | 2026-11-23 | Round 7-A | 完成 | Android 悬浮歌词、锁定/穿透、18–44 sp 字号、RemoteViews 主屏小部件、固定入口、30 个单元测试 |
-| 下一步 | Round 7 | 待定 | 交叉淡化、A-B 循环、失效文件定位、备份恢复或 Android 磁贴/Auto |
+| 2026-11-23 | Round 7-B | 完成 | PC/Android 本地 JSON 备份与恢复、版本校验、引用回退、设置页入口、PC 29 项 + Android 37 项单元测试 |
+| 下一步 | Round 7-C | 待定 | 交叉淡化、A-B 循环、失效文件定位、重复检测或 Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`。
 
 ---
 
@@ -727,6 +746,10 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/src/ui/common.rs`：PC 歌曲表格、排序、多选、收藏、书签
 - `base/app/src/library.rs`：扫描、标签、歌词、偏移换算、M3U、CSV
 - `base/app/src/ui/dialogs.rs`：PC 正在播放浮层、歌词面板与偏移控件
+- `base/app/src/backup.rs`：PC 版本化备份、校验、ID 归一化与恢复
+- `base/app/android/app/src/main/java/dev/lilt/player/data/Backup.kt`：Android 备份 JSON、平台校验与曲目引用解析
+- `base/app/android/app/src/main/java/dev/lilt/player/data/BackupManager.kt`：Android Room 备份收集与事务恢复
+- `base/app/checks/round-7-b/README.md`：PC/Android 备份恢复验证
 - `base/app/android/app/src/main/java/dev/lilt/player/data/Models.kt`：Android 数据模型
 - `base/app/android/app/src/main/java/dev/lilt/player/data/SettingsStore.kt`：Android 设置
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Sorting.kt`：Android 排序与字母索引
@@ -777,3 +800,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.7 | 2026-11-23 | Round 6-D1：PC 托盘、关闭/最小化到托盘、6 组全局热键、隐藏播放心跳与设置卡片 |
 | v0.8 | 2026-11-23 | Round 6-D2：PC 桌面歌词（锁定/穿透）、迷你播放器、Windows SMTC、托盘与设置入口 |
 | v0.9 | 2026-11-23 | Round 7-A：Android 悬浮歌词（拖动/锁定/穿透）、RemoteViews 主屏小部件、权限与设置入口 |
+| v0.10 | 2026-11-23 | Round 7-B：PC/Android 本地 JSON 备份与恢复、版本校验、引用解析、设置与事务恢复 |

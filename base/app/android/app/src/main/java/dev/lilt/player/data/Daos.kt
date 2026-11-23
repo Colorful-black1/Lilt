@@ -45,11 +45,20 @@ interface MusicDao {
     @Insert
     suspend fun addHistory(entry: HistoryEntity)
 
+    @Insert
+    suspend fun addHistory(entries: List<HistoryEntity>)
+
+    @Query("SELECT * FROM history ORDER BY playedAt DESC")
+    suspend fun allHistory(): List<HistoryEntity>
+
     @Query("SELECT * FROM history ORDER BY playedAt DESC LIMIT 200")
     fun observeHistory(): Flow<List<HistoryEntity>>
 
     @Query("DELETE FROM history")
     suspend fun clearHistory()
+
+    @Query("DELETE FROM folder_rules")
+    suspend fun clearRules()
 }
 
 @Dao
@@ -63,8 +72,17 @@ interface SongStateDao {
     @Query("SELECT * FROM song_state")
     fun observeStates(): Flow<List<SongStateEntity>>
 
+    @Query("SELECT * FROM song_state")
+    suspend fun all(): List<SongStateEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: SongStateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(states: List<SongStateEntity>)
+
+    @Query("DELETE FROM song_state")
+    suspend fun clear()
 }
 
 @Dao
@@ -84,6 +102,12 @@ interface TagOverrideDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: TagOverrideEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entries: List<TagOverrideEntity>)
+
+    @Query("DELETE FROM tag_overrides")
+    suspend fun clear()
+
     @Query("DELETE FROM tag_overrides WHERE mediaId = :mediaId")
     suspend fun delete(mediaId: Long)
 }
@@ -99,6 +123,15 @@ interface BookmarkDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(bookmark: BookmarkEntity)
 
+    @Insert
+    suspend fun insertAll(bookmarks: List<BookmarkEntity>)
+
+    @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC")
+    suspend fun all(): List<BookmarkEntity>
+
+    @Query("DELETE FROM bookmarks")
+    suspend fun clear()
+
     @Query("DELETE FROM bookmarks WHERE id = :id")
     suspend fun delete(id: Long)
 }
@@ -107,6 +140,9 @@ interface BookmarkDao {
 interface SearchHistoryDao {
     @Query("SELECT * FROM search_history ORDER BY searchedAt DESC LIMIT 12")
     fun observe(): Flow<List<SearchHistoryEntity>>
+
+    @Query("SELECT * FROM search_history ORDER BY searchedAt DESC")
+    suspend fun all(): List<SearchHistoryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(entry: SearchHistoryEntity)
@@ -129,6 +165,15 @@ interface LyricsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun put(entry: LyricsEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putAll(entries: List<LyricsEntity>)
+
+    @Query("SELECT * FROM lyrics")
+    suspend fun all(): List<LyricsEntity>
+
+    @Query("DELETE FROM lyrics")
+    suspend fun clear()
+
     @Query("UPDATE lyrics SET offsetMs = :offsetMs, updatedAt = :updatedAt WHERE mediaId = :mediaId")
     suspend fun updateOffset(mediaId: Long, offsetMs: Int, updatedAt: Long): Int
 
@@ -147,6 +192,18 @@ interface PlaylistDao {
         """
     )
     fun observePlaylists(): Flow<List<PlaylistSummary>>
+
+    @Query("SELECT * FROM playlists ORDER BY id")
+    suspend fun allPlaylists(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlist_songs ORDER BY playlistId, position")
+    suspend fun allPlaylistSongs(): List<PlaylistSongEntity>
+
+    @Query("DELETE FROM playlist_songs")
+    suspend fun clearAllPlaylistSongs()
+
+    @Query("DELETE FROM playlists")
+    suspend fun clearAllPlaylists()
 
     @Query("SELECT * FROM playlists WHERE id = :id")
     suspend fun playlist(id: Long): PlaylistEntity?
@@ -185,6 +242,9 @@ interface PlaylistDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addSong(entry: PlaylistSongEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addSongs(entries: List<PlaylistSongEntity>)
+
     @Query("DELETE FROM playlist_songs WHERE playlistId = :id AND mediaId = :mediaId")
     suspend fun removeSong(id: Long, mediaId: Long)
 
@@ -211,6 +271,18 @@ interface QueueDao {
         """
     )
     fun observeQueues(): Flow<List<QueueSummary>>
+
+    @Query("SELECT * FROM queues ORDER BY id")
+    suspend fun allQueues(): List<QueueEntity>
+
+    @Query("SELECT * FROM queue_songs ORDER BY queueId, position")
+    suspend fun allQueueSongs(): List<QueueSongEntity>
+
+    @Query("DELETE FROM queue_songs")
+    suspend fun clearAllQueueSongs()
+
+    @Query("DELETE FROM queues")
+    suspend fun clearAllQueues()
 
     @Query("SELECT * FROM queues WHERE id = :id")
     suspend fun queue(id: Long): QueueEntity?
@@ -256,6 +328,9 @@ interface QueueDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addQueueSong(entry: QueueSongEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun addQueueSongs(entries: List<QueueSongEntity>)
 
     @Query(
         """

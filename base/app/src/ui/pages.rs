@@ -2535,6 +2535,50 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                 common::section_title(
                     ui,
                     palette,
+                    app.t("Backup & restore", "备份与恢复"),
+                    app.t(
+                        "One local JSON file with playlists, queues, favourites, lyrics, bookmarks and settings.",
+                        "一个本地 JSON 文件，包含播放列表、队列、收藏、歌词、书签与设置。",
+                    ),
+                );
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new(app.t(
+                        "The backup never includes audio files or the scanned library index. Restoring replaces the user data on this device and rescans the folders.",
+                        "备份不包含音频文件和扫描索引。恢复会替换本机的用户数据，并重新扫描文件夹。",
+                    ))
+                    .size(10.5)
+                    .color(palette.muted),
+                );
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if widgets::primary_button(
+                        ui,
+                        app.t("Export backup", "导出备份"),
+                        Some(Icon::Download),
+                        palette,
+                    )
+                    .clicked()
+                    {
+                        app.export_backup();
+                    }
+                    if widgets::ghost_button(
+                        ui,
+                        app.t("Restore backup", "恢复备份"),
+                        Some(Icon::Refresh),
+                        palette,
+                    )
+                    .clicked()
+                    {
+                        app.choose_backup_to_restore();
+                    }
+                });
+            });
+            ui.add_space(12.0);
+            card_frame(palette).show(ui, |ui| {
+                common::section_title(
+                    ui,
+                    palette,
                     app.t("Developer", "开发者"),
                     app.t(
                         "Diagnostics. Leave this off for normal use.",

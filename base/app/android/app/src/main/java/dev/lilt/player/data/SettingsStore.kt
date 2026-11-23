@@ -168,6 +168,57 @@ class SettingsStore(context: Context) {
         (floatingFontSize as MutableStateFlow).value = cleaned
     }
 
+    fun snapshotForBackup(): BackupSettings = BackupSettings(
+        language = language.value,
+        theme = theme.value,
+        accent = accent.value,
+        includeOnly = includeOnly.value,
+        queueConflict = queueConflict.value,
+        playbackSpeed = playbackSpeed.value,
+        songSort = songSort.value,
+        songSortDescending = songSortDescending.value,
+        fadeInMs = fadeInMs.value,
+        fadeOutMs = fadeOutMs.value,
+        sleepHours = sleepHours.value,
+        sleepMinutes = sleepMinutes.value,
+        sleepTracks = sleepTracks.value,
+        sleepWaitTillEnd = sleepWaitTillEnd.value,
+        sleepFade = sleepFade.value,
+        rememberQueuePositions = rememberQueuePositions.value,
+        lyricsFontSize = lyricsFontSize.value,
+        lyricsOpacity = lyricsOpacity.value,
+        floatingLyrics = floatingLyrics.value,
+        floatingLyricsLocked = floatingLyricsLocked.value,
+        floatingFontSize = floatingFontSize.value,
+    )
+
+    /** Applies typed, range-checked values from a backup through the normal setters. */
+    fun restoreFromBackup(backup: BackupSettings) {
+        setLanguage(backup.language)
+        setTheme(backup.theme)
+        setAccent(backup.accent)
+        setIncludeOnly(backup.includeOnly)
+        setQueueConflict(backup.queueConflict)
+        setPlaybackSpeed(backup.playbackSpeed)
+        setSongSort(backup.songSort)
+        setSongSortDescending(backup.songSortDescending)
+        setFadeInMs(backup.fadeInMs)
+        setFadeOutMs(backup.fadeOutMs)
+        setSleepDefaults(
+            hours = backup.sleepHours,
+            minutes = backup.sleepMinutes,
+            tracks = backup.sleepTracks,
+            waitTillEnd = backup.sleepWaitTillEnd,
+            fade = backup.sleepFade,
+        )
+        setRememberQueuePositions(backup.rememberQueuePositions)
+        setLyricsFontSize(backup.lyricsFontSize)
+        setLyricsOpacity(backup.lyricsOpacity)
+        setFloatingLyrics(backup.floatingLyrics)
+        setFloatingLyricsLocked(backup.floatingLyricsLocked)
+        setFloatingFontSize(backup.floatingFontSize)
+    }
+
     fun setSleepDefaults(
         hours: Int,
         minutes: Int,

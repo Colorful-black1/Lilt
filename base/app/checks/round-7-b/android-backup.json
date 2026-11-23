@@ -1,0 +1,409 @@
+{
+  "app": "lilt",
+  "format": 1,
+  "platform": "android",
+  "created": 1795424807019,
+  "songs": [
+    {
+      "mediaId": 1000000017,
+      "title": "Glass Horizon",
+      "artist": "Aurora Drift",
+      "album": "Demo Album",
+      "folder": "Music\/LiltTest",
+      "displayName": "01 - Glass Horizon.mp3",
+      "durationMs": 20088
+    },
+    {
+      "mediaId": 1000000018,
+      "title": "Soft Static",
+      "artist": "Aurora Drift",
+      "album": "Demo Album",
+      "folder": "Music\/LiltTest",
+      "displayName": "02 - Soft Static.m4a",
+      "durationMs": 18064
+    },
+    {
+      "mediaId": 1000000019,
+      "title": "Northlight",
+      "artist": "Aurora Drift",
+      "album": "Demo Album",
+      "folder": "Music\/LiltTest",
+      "displayName": "03 - Northlight.ogg",
+      "durationMs": 16000
+    },
+    {
+      "mediaId": 1000000020,
+      "title": "Last Train",
+      "artist": "Night Transit",
+      "album": "Night Tracks",
+      "folder": "Music\/LiltTest",
+      "displayName": "04 - Last Train.flac",
+      "durationMs": 14000
+    },
+    {
+      "mediaId": 1000000127,
+      "title": "Afterglow",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "01 - Afterglow.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000128,
+      "title": "Blue Hour",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "02 - Blue Hour.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000129,
+      "title": "Cinder",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "03 - Cinder.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000130,
+      "title": "Drift",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "04 - Drift.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000131,
+      "title": "Echo",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "05 - Echo.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000132,
+      "title": "Fields",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "06 - Fields.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000133,
+      "title": "Glass",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "07 - Glass.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000134,
+      "title": "Harbor",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "08 - Harbor.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000135,
+      "title": "Iris",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "09 - Iris.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000136,
+      "title": "Juniper",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "10 - Juniper.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000137,
+      "title": "Kite",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "11 - Kite.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000138,
+      "title": "Lantern",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "12 - Lantern.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000139,
+      "title": "Meadow",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "13 - Meadow.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000140,
+      "title": "Nightfall",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "14 - Nightfall.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000141,
+      "title": "Orbit",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "15 - Orbit.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000142,
+      "title": "Paper",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "16 - Paper.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000143,
+      "title": "Quiet",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "17 - Quiet.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000144,
+      "title": "River",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "18 - River.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000145,
+      "title": "Signal",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "19 - Signal.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000146,
+      "title": "Tide",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "20 - Tide.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000147,
+      "title": "Umber",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "21 - Umber.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000148,
+      "title": "Velvet",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "22 - Velvet.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000149,
+      "title": "Willow",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "23 - Willow.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000150,
+      "title": "Xenon",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "24 - Xenon.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000151,
+      "title": "Yarrow",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "25 - Yarrow.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000152,
+      "title": "Zenith",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "26 - Zenith.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000153,
+      "title": "42 Signal",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "27 - 42 Signal.mp3",
+      "durationMs": 3030
+    },
+    {
+      "mediaId": 1000000154,
+      "title": "Bei Fang",
+      "artist": "Index Artist",
+      "album": "Index Album",
+      "folder": "Music\/LiltIndex",
+      "displayName": "28 - Bei Fang.mp3",
+      "durationMs": 3030
+    }
+  ],
+  "playlists": [
+    {
+      "name": "Backup Test List",
+      "createdAt": 1795424757984,
+      "songs": [
+        1000000017,
+        1000000018,
+        1000000019
+      ]
+    }
+  ],
+  "queues": [
+    {
+      "name": "Backup Test Queue",
+      "createdAt": 1795424757984,
+      "lastIndex": 1,
+      "lastPositionMs": 5000,
+      "songs": [
+        1000000018,
+        1000000017
+      ]
+    }
+  ],
+  "activeQueueIndex": 0,
+  "songStates": [
+    {
+      "mediaId": 1000000017,
+      "favorite": true,
+      "playCount": 4,
+      "lastPlayedAt": 1795424757984
+    }
+  ],
+  "history": [],
+  "bookmarks": [
+    {
+      "mediaId": 1000000017,
+      "positionMs": 8000,
+      "note": "Backup chorus",
+      "createdAt": 1795424757984
+    }
+  ],
+  "lyrics": [
+    {
+      "mediaId": 1000000017,
+      "text": "[00:01.00]First light\n[00:04.00]Morning finds the window\n[00:08.00]Static on the line",
+      "offsetMs": 250,
+      "updatedAt": 1795424757984
+    }
+  ],
+  "tags": [
+    {
+      "mediaId": 1000000018,
+      "title": "Soft Static (Live)",
+      "artist": "Aurora Drift",
+      "album": "Demo Album",
+      "year": 2026,
+      "track": 2,
+      "updatedAt": 1795424757984
+    }
+  ],
+  "rules": [],
+  "searches": [
+    {
+      "query": "glass",
+      "searchedAt": 1795424757984
+    }
+  ],
+  "settings": {
+    "language": "en",
+    "theme": "black",
+    "accent": "sage",
+    "includeOnly": false,
+    "queueConflict": "replace",
+    "playbackSpeed": 1.25,
+    "songSort": "title",
+    "songSortDescending": false,
+    "fadeInMs": 750,
+    "fadeOutMs": 0,
+    "sleepHours": 1,
+    "sleepMinutes": 30,
+    "sleepTracks": 10,
+    "sleepWaitTillEnd": false,
+    "sleepFade": true,
+    "rememberQueuePositions": true,
+    "lyricsFontSize": 17.5,
+    "lyricsOpacity": 1,
+    "floatingLyrics": false,
+    "floatingLyricsLocked": false,
+    "floatingFontSize": 30.5
+  },
+  "eq": {
+    "enabled": true,
+    "gains": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "preampMode": "off",
+    "headroomDb": 6,
+    "boostDb": 2,
+    "bass": 0,
+    "virtualizer": 0,
+    "balance": 100,
+    "preset": "Flat",
+    "perDevice": true
+  }
+}

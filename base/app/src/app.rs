@@ -1,4 +1,5 @@
 use crate::audio::AudioEngine;
+use crate::backup;
 use crate::desktop::{self, DesktopAction, DesktopIntegration, MediaInfo};
 use crate::i18n::tr;
 use crate::library;
@@ -27,6 +28,7 @@ pub enum ConfirmAction {
     RemoveExcluded(String),
     RemoveIncluded(String),
     ClearHistory,
+    RestoreBackup(String),
     ResetStarter,
 }
 
@@ -2507,6 +2509,124 @@ impl LiltApp {
             Ok(()) => self.notify(self.t("CSV exported", "CSV 已导出").to_owned()),
             Err(error) => self.notify(format!("Export failed: {error}")),
         }
+    }
+
+    pub fn export_backup(&mut self) {
+        self.save_now();
+        let backup = backup::make_backup(&self.state);
+        let Some(path) = rfd::FileDialog::new()
+            .set_file_name("lilt-backup.json")
+            .add_filter("Lilt backup", &["json"])
+            .save_file()
+        else {
+            return;
+        };
+        let path = if path.extension().is_none() {
+            path.with_extension("json")
+        } else {
+            path
+        };
+        let result = backup::to_json(&backup).and_then(|text| {
+            std::fs::write(&path, text)
+                .map_err(|error| format!("Could not write the backup: {error}"))
+        });
+        match result {
+            Ok(()) => {
+                let name = path
+                    .file_name()
+                    .map(|value| value.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string());
+                self.notify(format!(
+                    "{} {name}",
+                    self.t("Backup saved:", "备份已保存：")
+                ));
+            }
+            Err(error) => self.notify(error),
+        }
+    }
+
+    pub fn choose_backup_to_restore(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Lilt backup", &["json"])
+            .pick_file()
+        else {
+            return;
+        };
+        let backup = match backup::read_file(&path) {
+            Ok(backup) => backup,
+            Err(error) => {
+                self.notify(error);
+                return;
+            }
+        };
+        let name = path
+            .file_name()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.display().to_string());
+        let body = format!(
+            "{} {name}\n\n{}\n\n{}",
+            self.t("File:", "文件："),
+            backup::describe(&backup.data),
+            self.t(
+                "This replaces the playlists, queues, favourites, lyrics, bookmarks and settings currently on this device. The music files themselves are not changed.",
+                "这会替换本机现有的播放列表、队列、收藏、歌词、书签与设置；音频文件本身不会被修改。",
+            ),
+        );
+        self.modal = Some(Modal::Confirm {
+            title: self.t("Restore this backup?", "恢复此备份？").to_owned(),
+            body,
+            action: ConfirmAction::RestoreBackup(path.to_string_lossy().to_string()),
+        });
+    }
+
+    pub fn restore_backup(&mut self, path: &str) {
+        let backup = match backup::read_file(Path::new(path)) {
+            Ok(backup) => backup,
+            Err(error) => {
+                self.notify(error);
+                return;
+            }
+        };
+        // A scan started with the old state cannot be reused. Drop its
+        // receiver; the worker only sends progress and exits on its own.
+        self.scan_rx = None;
+        self.scanning = false;
+        if let Some(audio) = &mut self.audio {
+            audio.stop();
+        }
+        self.playing = false;
+        self.fade = None;
+        self.current_key = None;
+        self.pending_next = None;
+        self.lyrics = None;
+        self.lyrics_for = None;
+        self.selected.clear();
+        self.detail = None;
+        self.modal = None;
+        let current_roots = self.state.library_roots.clone();
+        let summary = backup::apply_backup(&mut self.state, backup, &current_roots);
+        let mut eq = self.state.eq_profile(self.state.settings.eq_device);
+        eq.enabled = self.state.settings.eq_enabled;
+        self.active_eq = eq.clone();
+        if let Ok(mut guard) = self.eq_shared.write() {
+            *guard = eq;
+        }
+        if let Some(audio) = &mut self.audio {
+            audio.set_volume(self.state.settings.volume);
+            audio.set_speed(self.state.settings.playback_speed);
+        }
+        crate::console::set_enabled(self.state.settings.developer_mode);
+        self.dirty = true;
+        self.start_scan();
+        self.save_now();
+        self.notify(format!(
+            "{} {} {}, {} {}",
+            self.t("Backup restored:", "备份已恢复："),
+            summary.playlists,
+            self.t("playlists", "个播放列表"),
+            summary.queues,
+            self.t("queues", "个队列"),
+        ));
     }
 
     pub fn folder_song_keys(&self, path: &Path) -> Vec<String> {

@@ -1,0 +1,21 @@
+Database after the export -> clear -> restore cycle
+
+Playlists:
+  Backup Test List = 3 songs
+Queues:
+  Backup Test Queue = 2 songs, index 1, position 5000 ms
+Favourites:
+  mediaId=1000000017 favorite=1 plays=4 last=1795424757984
+Lyrics:
+  mediaId=1000000017 offset=250 ms, 85 chars
+Bookmarks:
+  mediaId=1000000017 at 8000 ms: Backup chorus
+Tag overrides:
+  mediaId=1000000018 title=Soft Static (Live) artist=Aurora Drift album=Demo Album year=2026 track=2
+Search history:
+  glass
+
+The playlist, queue, favourite, lyrics, bookmark, tag override and search
+history were deleted before the restore. Restore recreated them from the JSON
+backup, using the current MediaStore song rows. The new playlist and queue got
+fresh Room ids (2), which is why the saved active_queue is 2.

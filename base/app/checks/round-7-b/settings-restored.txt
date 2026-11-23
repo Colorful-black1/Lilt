@@ -1,0 +1,11 @@
+SharedPreferences after restore (lilt_settings.xml)
+
+  <float name="lyrics_font_size" value="17.5" />
+  <float name="floating_font_size" value="30.5" />
+  <string name="accent">sage</string>
+  <float name="speed" value="1.25" />
+  <long name="active_queue" value="2" />
+
+Before the export these values were sage / 1.25x / 17.5 sp / 30.5 sp. They
+were changed to rose / 0.75x / 12.0 sp / 20.0 sp and the user tables were
+cleared. After restoring the JSON, every value matched the backup again.

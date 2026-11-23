@@ -100,6 +100,12 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **Locate current song** from the top bar, the Songs header or the now-playing overlay.
   It opens the complete song list and scrolls the playing row into view; the one-shot
   scroll does not fight later manual scrolling.
+- **Local backup & restore.** **Settings → Backup & restore** exports one versioned JSON
+  file with playlists, queues, favourites, play counts, last positions, bookmarks, lyrics
+  and offsets, tag overrides, EQ profiles, recent searches and settings. Restore validates
+  the app, format and platform, stops playback, replaces the user data, saves the state and
+  rescans the library. Audio files and the scanned index are never copied into the backup;
+  playlists whose files are gone keep their keys rather than inventing replacements.
 - **Lyric timing and display.** Each song keeps its own offset (`-500`, `-100`, `+100`,
   `+500` ms and reset, limited to ±60 s); positive values delay the lyrics. Clicking a
   lyric line seeks to its adjusted time. Settings has lyric font size (10–24 px) and
@@ -136,7 +142,8 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - A **Sound output** picker with a test tone at the top of Settings, so a Windows default
   pointed at an HDMI screen can be changed without editing files.
 - A separate, installable **Android APK** in `android/` built with Kotlin, Compose,
-  Media3 and Room; see `android/README.md`.
+  Media3 and Room; see `android/README.md`. Android has the same local backup/restore
+  route, with its own platform-specific JSON envelope and Room transaction.
 
 ## Keyboard
 

@@ -8,6 +8,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -46,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,8 +65,15 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
+import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.ScanState
 import dev.lilt.player.widget.LiltWidgetProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -92,6 +103,9 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
+    val isChinese = language == "zh"
+    fun countText(count: Int, one: String, many: String, zh: String): String =
+        "$count " + if (isChinese) zh else if (count == 1) one else many
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -102,6 +116,66 @@ fun SettingsScreen(
         }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
+    }
+
+    val backupScope = rememberCoroutineScope()
+    var backupBusy by remember { mutableStateOf(false) }
+    var pendingRestore by remember { mutableStateOf<Pair<String, BackupPreview>?>(null) }
+    val backupExportedText = t("Backup exported.", "备份已导出。")
+    val exportFailedText = t("Export failed.", "导出失败。")
+    val notBackupText = t("This is not a Lilt backup.", "这不是 Lilt 备份文件。")
+    val restoreFailedText = t("Restore failed.", "恢复失败。")
+    val referencesMissingText = t("references were not found.", "个引用未找到。")
+    val backupRestoredText = t("Backup restored: ", "备份已恢复：")
+    val createBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupScope.launch {
+            backupBusy = true
+            val result = runCatching {
+                val text = withContext(Dispatchers.IO) { vm.exportBackup() }
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        stream.write(text.toByteArray(Charsets.UTF_8))
+                    } ?: error("Could not open the selected file.")
+                }
+            }
+            backupBusy = false
+            Toast.makeText(
+                context,
+                if (result.isSuccess) {
+                    backupExportedText
+                } else {
+                    result.exceptionOrNull()?.message ?: exportFailedText
+                },
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+    val openBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        backupScope.launch {
+            backupBusy = true
+            val result = runCatching {
+                val text = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("Could not read the selected file.")
+                }
+                text to withContext(Dispatchers.IO) { vm.previewBackup(text) }
+            }
+            backupBusy = false
+            result.onSuccess { pendingRestore = it }
+                .onFailure {
+                    Toast.makeText(
+                        context,
+                        it.message ?: notBackupText,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+        }
     }
 
     Scaffold(
@@ -350,6 +424,48 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            SettingCard(t("Backup & restore", "备份与恢复")) {
+                Text(
+                    t(
+                        "One local JSON file with playlists, queues, favourites, history, lyrics, bookmarks, tags and settings. Audio files are never included.",
+                        "一个本地 JSON 文件，包含播放列表、队列、收藏、历史、歌词、书签、标签和设置；不包含音频文件。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                SettingLink(
+                    t("Export backup", "导出备份"),
+                    t(
+                        "Choose where to save the JSON file.",
+                        "选择 JSON 文件的保存位置。",
+                    ),
+                ) {
+                    if (!backupBusy) {
+                        val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US)
+                            .format(Date())
+                        createBackup.launch("lilt-backup-$stamp.json")
+                    }
+                }
+                SettingLink(
+                    t("Restore backup", "恢复备份"),
+                    t(
+                        "Replaces the user data on this phone after a confirmation.",
+                        "确认后替换本机上的用户数据。",
+                    ),
+                ) {
+                    if (!backupBusy) openBackup.launch(arrayOf("*/*"))
+                }
+                if (backupBusy) {
+                    Text(
+                        t("Working…", "处理中…"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
             SettingCard(t("Queues", "队列")) {
                 SettingSwitch(
                     title = t("Remember queue positions", "记住队列位置"),
@@ -382,6 +498,79 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(40.dp))
         }
+    }
+
+    pendingRestore?.let { (text, preview) ->
+        AlertDialog(
+            onDismissRequest = { if (!backupBusy) pendingRestore = null },
+            title = { Text(t("Restore this backup?", "恢复此备份？")) },
+            text = {
+                Text(
+                    t(
+                        "This replaces playlists, queues, favourites, history, lyrics, bookmarks, tags and settings on this phone. Audio files are not changed.",
+                        "这会替换本机的播放列表、队列、收藏、历史、歌词、书签、标签和设置；音频文件不会被修改。",
+                    ) + "\n\n" + t(
+                        "Backup contains: ",
+                        "备份包含：",
+                    ) + countText(preview.playlists, "playlist", "playlists", "个播放列表") +
+                        ", " + countText(preview.queues, "queue", "queues", "个队列") +
+                        ", " + countText(preview.favorites, "favourite", "favourites", "首收藏") +
+                        ", " + countText(preview.lyrics, "lyric file", "lyric files", "份歌词") +
+                        ", " + countText(preview.bookmarks, "bookmark", "bookmarks", "个书签"),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !backupBusy,
+                    onClick = {
+                        backupScope.launch {
+                            backupBusy = true
+                            val result = runCatching { vm.restoreBackup(text) }
+                            backupBusy = false
+                            pendingRestore = null
+                            result.onSuccess { summary ->
+                                val unresolved = if (summary.unresolved > 0) {
+                                    " ${summary.unresolved} $referencesMissingText"
+                                } else {
+                                    ""
+                                }
+                                Toast.makeText(
+                                    context,
+                                    backupRestoredText +
+                                        countText(
+                                            summary.playlists,
+                                            "playlist",
+                                            "playlists",
+                                            "个播放列表",
+                                        ) +
+                                        ", " + countText(
+                                            summary.queues,
+                                            "queue",
+                                            "queues",
+                                            "个队列",
+                                        ) +
+                                        unresolved,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }.onFailure {
+                                Toast.makeText(
+                                    context,
+                                    it.message ?: restoreFailedText,
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                        }
+                    },
+                ) {
+                    Text(t("Restore", "恢复"))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestore = null }) {
+                    Text(t("Cancel", "取消"))
+                }
+            },
+        )
     }
 }
 

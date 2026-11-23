@@ -1,0 +1,15 @@
+Android test run
+
+testDebugUnitTest: 37 tests, 0 failures
+  (30 existing + 7 new in BackupTest)
+connectedDebugAndroidTest: 6 Room migration tests, 0 failures
+assembleDebug: BUILD SUCCESSFUL
+
+New backup coverage:
+- backupJsonRoundTripKeepsEverything
+- backupRejectsOtherPlatformsAndFormats
+- invalidSettingsAreClampedDuringDecode
+- songReferencesResolveByIdThenFileThenMetadata
+- ambiguousMetadataIsNotGuessed
+- previewCountsWhatTheDialogShows
+- eqBackupBecomesARunnableProfile

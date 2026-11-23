@@ -17,12 +17,17 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import dev.lilt.player.data.BackupManager
+import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.BookmarkEntity
 import dev.lilt.player.data.HistoryEntity
+import dev.lilt.player.data.LiltBackup
 import dev.lilt.player.data.LiltDatabase
 import dev.lilt.player.data.LyricsEntity
 import dev.lilt.player.data.MusicRepository
+import dev.lilt.player.data.RestoreSummary
 import dev.lilt.player.data.ScanState
+import dev.lilt.player.data.toProfile
 import dev.lilt.player.data.SearchHistoryEntity
 import dev.lilt.player.data.SettingsStore
 import dev.lilt.player.data.SongEntity
@@ -33,6 +38,7 @@ import dev.lilt.player.library.PreampMode
 import dev.lilt.player.library.presetNameFor
 import dev.lilt.player.library.queueStart
 import dev.lilt.player.playback.PlaybackService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,6 +48,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** A play is counted after this share of the track has been heard. */
 private const val PLAY_COUNT_PERCENT = 30L
@@ -87,6 +94,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val db = LiltDatabase.get(application)
     private val settings = SettingsStore(application)
+    private val backupManager by lazy { BackupManager(application) }
     val repository = MusicRepository(application, db, settings)
 
     val songs: StateFlow<List<SongEntity>> = repository.observeSongs()
@@ -752,6 +760,26 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setFloatingFontSize(value: Float) = settings.setFloatingFontSize(value)
+
+    suspend fun exportBackup(): String = backupManager.export(settings)
+
+    fun previewBackup(text: String): BackupPreview = LiltBackup.decode(text).preview()
+
+    /** Replaces user-owned data and applies the restored settings to the running player. */
+    suspend fun restoreBackup(text: String): RestoreSummary {
+        val backup = withContext(Dispatchers.IO) { LiltBackup.decode(text) }
+        val result = backupManager.restore(backup, settings)
+        result.eq?.let { eq ->
+            _eq.value = _eq.value.copy(
+                profile = eq.toProfile(),
+                perDevice = eq.perDevice,
+            )
+            pushEq()
+        }
+        controller?.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
+        refreshFloatingOverlay()
+        return result.summary
+    }
 
     /** Asks the playback service to add or remove the overlay from current preferences. */
     fun refreshFloatingOverlay() {
