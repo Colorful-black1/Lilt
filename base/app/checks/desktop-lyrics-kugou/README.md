@@ -100,8 +100,8 @@ scale to fit without clipping.
 ## Packaged artifacts
 
 ```text
-dist/Lilt-0.1.0-win64/Lilt.exe        11,204,096 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,192,670 bytes
+dist/Lilt-0.1.0-win64/Lilt.exe        11,210,752 bytes  (PE subsystem 2)
+dist/Lilt-0.1.0-win64-portable.zip    18,197,805 bytes
 ```
 
 `package.ps1 pc` completed successfully after the change.

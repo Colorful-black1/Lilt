@@ -1,0 +1,6 @@
+PC test run (cargo test)
+
+running 46 tests
+test result: ok. 46 passed; 0 failed; 0 ignored
+
+The player-bar change is layout-only; the existing desktop tests still pass.

@@ -1,0 +1,19 @@
+Player-bar pixel alignment (1196x819 window capture)
+
+Short-title screenshot:
+  play button centre:       (597.5, 749.5)
+  previous glyph centre:    (550.5, 749.5)
+  next glyph centre:        (644.5, 749.5)
+  shuffle glyph centre:      (513.0, 749.5)
+  repeat glyph centre:       (681.5, 749.5)
+
+Long-title screenshot:
+  play button centre:       (597.5, 749.5)
+  previous glyph centre:    (550.5, 749.5)
+  next glyph centre:        (644.5, 749.5)
+  shuffle glyph centre:      (513.0, 749.5)
+  repeat glyph centre:       (681.5, 749.5)
+
+The app content is 1196 px wide, so the window centre is x=598. The transport
+group is within half a pixel of that in both screenshots. All glyph centres share
+y=749.5, so previous/next are vertically aligned with play.

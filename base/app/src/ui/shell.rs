@@ -710,159 +710,167 @@ fn player_bar(
 ) {
     let current = app.current_song().cloned();
     let width = ui.available_width();
-    let left_w = if compact { 200.0 } else { 300.0 };
-    let right_w = if width > 980.0 {
-        235.0
-    } else if width > 800.0 {
-        150.0
-    } else {
-        86.0
-    };
-    let center_w = (width - left_w - right_w - 20.0).max(220.0);
+    let gap = ui.spacing().item_spacing.x;
+    let center_w = 260.0;
+    let side_w = ((width - center_w - gap * 2.0) / 2.0).max(120.0);
     ui.allocate_ui_with_layout(
         Vec2::new(width, 80.0),
         Layout::left_to_right(Align::Center),
         |ui| {
-            // Left: artwork + title
-            let cover_size = 54.0;
-            let texture = current
-                .as_ref()
-                .and_then(|song| app.load_cover_texture(ctx, song));
-            let (cover_rect, cover_response) =
-                ui.allocate_exact_size(Vec2::splat(cover_size), Sense::click());
-            if let Some(texture) = &texture {
-                ui.put(
-                    cover_rect,
-                    egui::Image::new(texture)
-                        .fit_to_exact_size(cover_rect.size())
-                        .corner_radius(7.0),
-                );
-            } else {
-                widgets::draw_cover(
-                    ui.painter(),
-                    cover_rect,
-                    current.as_ref().map(|s| s.album.as_str()).unwrap_or("Lilt"),
-                    palette,
-                );
-            }
-            if cover_response.clicked() {
-                app.now_playing = true;
-            }
-            ui.add_space(10.0);
-            let text_width = (left_w - 92.0).max(90.0);
+            // Left: artwork + title. A fixed-width column keeps the centre
+            // transport independent of the title/artist length.
             ui.allocate_ui_with_layout(
-                Vec2::new(text_width, 54.0),
-                Layout::top_down(Align::LEFT),
+                Vec2::new(side_w, 76.0),
+                Layout::left_to_right(Align::Center),
                 |ui| {
-                    ui.add_space(2.0);
-                    let title = current
+                    ui.set_width(side_w);
+                    let cover_size = 54.0;
+                    let texture = current
                         .as_ref()
-                        .map(|s| s.display_title().to_owned())
-                        .unwrap_or_else(|| app.t("Choose a song", "选择一首歌").to_owned());
-                    let title_response = ui.add(
-                        egui::Label::new(
-                            RichText::new(title.clone())
-                                .size(12.8)
-                                .color(palette.text)
-                                .strong(),
-                        )
-                        .truncate()
-                        .sense(Sense::click()),
-                    );
-                    if title_response.clicked() {
+                        .and_then(|song| app.load_cover_texture(ctx, song));
+                    let (cover_rect, cover_response) =
+                        ui.allocate_exact_size(Vec2::splat(cover_size), Sense::click());
+                    if let Some(texture) = &texture {
+                        ui.put(
+                            cover_rect,
+                            egui::Image::new(texture)
+                                .fit_to_exact_size(cover_rect.size())
+                                .corner_radius(7.0),
+                        );
+                    } else {
+                        widgets::draw_cover(
+                            ui.painter(),
+                            cover_rect,
+                            current.as_ref().map(|s| s.album.as_str()).unwrap_or("Lilt"),
+                            palette,
+                        );
+                    }
+                    if cover_response.clicked() {
                         app.now_playing = true;
                     }
-                    let subtitle = current
-                        .as_ref()
-                        .map(|s| s.display_artist().to_owned())
-                        .unwrap_or_else(|| app.t("Your local library", "你的本地曲库").to_owned());
-                    ui.label(RichText::new(subtitle).size(10.5).color(palette.muted));
+                    ui.add_space(10.0);
+                    let text_width = (side_w - 92.0).max(90.0);
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(text_width, 54.0),
+                        Layout::top_down(Align::LEFT),
+                        |ui| {
+                            ui.add_space(2.0);
+                            let title = current
+                                .as_ref()
+                                .map(|s| s.display_title().to_owned())
+                                .unwrap_or_else(|| app.t("Choose a song", "选择一首歌").to_owned());
+                            let title_response = ui.add(
+                                egui::Label::new(
+                                    RichText::new(title.clone())
+                                        .size(12.8)
+                                        .color(palette.text)
+                                        .strong(),
+                                )
+                                .truncate()
+                                .sense(Sense::click()),
+                            );
+                            if title_response.clicked() {
+                                app.now_playing = true;
+                            }
+                            let subtitle = current
+                                .as_ref()
+                                .map(|s| s.display_artist().to_owned())
+                                .unwrap_or_else(|| {
+                                    app.t("Your local library", "你的本地曲库").to_owned()
+                                });
+                            ui.label(RichText::new(subtitle).size(10.5).color(palette.muted));
+                        },
+                    );
+                    if !compact && current.as_ref().map(|s| s.favorite).unwrap_or(false) {
+                        UIHeart(ui, palette, 14.0);
+                    }
                 },
             );
-            if !compact && current.as_ref().map(|s| s.favorite).unwrap_or(false) {
-                UIHeart(ui, palette, 14.0);
-            }
 
             // Center: transport + seek
-            ui.add_space(12.0);
             ui.allocate_ui_with_layout(
                 Vec2::new(center_w, 76.0),
                 Layout::top_down(Align::Center),
                 |ui| {
+                    ui.set_width(center_w);
                     ui.add_space(2.0);
-                    ui.horizontal(|ui| {
-                        let group = 230.0;
-                        let space = ((ui.available_width() - group) / 2.0).max(0.0);
-                        ui.add_space(space);
-                        let shuffle_color = if app.shuffle {
-                            palette.accent
-                        } else {
-                            palette.muted
-                        };
-                        if icons::icon_button(
-                            ui,
-                            Icon::Shuffle,
-                            28.0,
-                            shuffle_color,
-                            palette.surface_hi,
-                            app.t("Shuffle", "随机"),
-                        )
-                        .clicked()
-                        {
-                            app.toggle_shuffle();
-                        }
-                        if icons::icon_button(
-                            ui,
-                            Icon::Prev,
-                            30.0,
-                            palette.text,
-                            palette.surface_hi,
-                            app.t("Previous", "上一首"),
-                        )
-                        .clicked()
-                        {
-                            app.prev_track();
-                        }
-                        ui.add_space(2.0);
-                        if widgets::play_button(ui, 40.0, app.playing, palette).clicked() {
-                            app.toggle_play();
-                        }
-                        ui.add_space(2.0);
-                        if icons::icon_button(
-                            ui,
-                            Icon::Next,
-                            30.0,
-                            palette.text,
-                            palette.surface_hi,
-                            app.t("Next", "下一首"),
-                        )
-                        .clicked()
-                        {
-                            app.next_track(false);
-                        }
-                        let repeat_icon = if app.repeat == RepeatMode::One {
-                            Icon::RepeatOne
-                        } else {
-                            Icon::Repeat
-                        };
-                        let repeat_color = if app.repeat != RepeatMode::Off {
-                            palette.accent
-                        } else {
-                            palette.muted
-                        };
-                        if icons::icon_button(
-                            ui,
-                            repeat_icon,
-                            28.0,
-                            repeat_color,
-                            palette.surface_hi,
-                            app.t("Repeat", "循环"),
-                        )
-                        .clicked()
-                        {
-                            app.cycle_repeat();
-                        }
-                    });
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(ui.available_width(), 44.0),
+                        Layout::left_to_right(Align::Center),
+                        |ui| {
+                            let group = 28.0 + 30.0 + 40.0 + 30.0 + 28.0 + gap * 4.0 + 4.0;
+                            let space = ((ui.available_width() - group) / 2.0).max(0.0);
+                            ui.add_space(space);
+                            let shuffle_color = if app.shuffle {
+                                palette.accent
+                            } else {
+                                palette.muted
+                            };
+                            if icons::icon_button(
+                                ui,
+                                Icon::Shuffle,
+                                28.0,
+                                shuffle_color,
+                                palette.surface_hi,
+                                app.t("Shuffle", "随机"),
+                            )
+                            .clicked()
+                            {
+                                app.toggle_shuffle();
+                            }
+                            if icons::icon_button(
+                                ui,
+                                Icon::Prev,
+                                30.0,
+                                palette.text,
+                                palette.surface_hi,
+                                app.t("Previous", "上一首"),
+                            )
+                            .clicked()
+                            {
+                                app.prev_track();
+                            }
+                            ui.add_space(2.0);
+                            if widgets::play_button(ui, 40.0, app.playing, palette).clicked() {
+                                app.toggle_play();
+                            }
+                            ui.add_space(2.0);
+                            if icons::icon_button(
+                                ui,
+                                Icon::Next,
+                                30.0,
+                                palette.text,
+                                palette.surface_hi,
+                                app.t("Next", "下一首"),
+                            )
+                            .clicked()
+                            {
+                                app.next_track(false);
+                            }
+                            let repeat_icon = if app.repeat == RepeatMode::One {
+                                Icon::RepeatOne
+                            } else {
+                                Icon::Repeat
+                            };
+                            let repeat_color = if app.repeat != RepeatMode::Off {
+                                palette.accent
+                            } else {
+                                palette.muted
+                            };
+                            if icons::icon_button(
+                                ui,
+                                repeat_icon,
+                                28.0,
+                                repeat_color,
+                                palette.surface_hi,
+                                app.t("Repeat", "循环"),
+                            )
+                            .clicked()
+                            {
+                                app.cycle_repeat();
+                            }
+                        },
+                    );
                     ui.add_space(2.0);
                     let duration = app.duration();
                     let position = app.position().min(duration);
@@ -899,9 +907,10 @@ fn player_bar(
 
             // Right: volume, sleep, queue, expand
             ui.allocate_ui_with_layout(
-                Vec2::new(right_w, 76.0),
+                Vec2::new(side_w, 76.0),
                 Layout::right_to_left(Align::Center),
                 |ui| {
+                    ui.set_width(side_w);
                     if icons::icon_button(
                         ui,
                         Icon::Expand,
