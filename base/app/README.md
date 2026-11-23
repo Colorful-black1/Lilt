@@ -103,6 +103,15 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **A-B loop.** In the now-playing panel, press **A-B loop** once to set A, again to set B
   and once more (or **Clear A-B**) to stop. Playback returns to A when it reaches B; seeking
   outside the range or changing track clears the markers. The same panel shows both times.
+- **Stop after this song.** The now-playing panel has a one-shot **Stop after this song**
+  button. It drops an already queued gapless track, pauses when the current song ends and
+  keeps the queue in place; pressing prev/next or starting another context cancels it.
+- **Duplicate songs.** **Settings → Find duplicate songs** groups tracks with the same
+  normalised title and artist and a length within two seconds (case, spaces and punctuation
+  are ignored). Each group puts the highest-bitrate, then largest copy first and marks it
+  **KEEP**, with format, bitrate, size, duration and full path for every copy. Play or open
+  the containing folder from the dialog. Detection only reports; audio files are never
+  deleted or renamed.
 - **Missing-file re-linking.** Playlists keep entries whose file disappears instead of
   silently dropping them. **Settings → Library** shows the missing count and opens a list
   with the old path and the playlists, queues, favourite, lyrics and bookmarks that point at

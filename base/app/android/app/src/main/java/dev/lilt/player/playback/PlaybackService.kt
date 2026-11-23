@@ -40,6 +40,7 @@ import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.bassBoostDb
 import dev.lilt.player.library.clampFloatingFontSize
 import dev.lilt.player.library.parseLrc
+import dev.lilt.player.library.stopAfterShouldStop
 import dev.lilt.player.widget.WidgetRenderer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,7 @@ class PlaybackService : MediaSessionService() {
     private var abStartMs = -1L
     private var abEndMs = -1L
     private var abLastJumpAt = 0L
+    private var stopAfterCurrent = false
 
     private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var overlay: FloatingLyricsOverlay? = null
@@ -165,6 +167,20 @@ class PlaybackService : MediaSessionService() {
             mainHandler.postDelayed(this, 100)
         }
     }
+    private val stopAfterTicker = object : Runnable {
+        override fun run() {
+            if (!stopAfterCurrent) return
+            val exo = player ?: return
+            if (!exo.isPlaying) return
+            if (stopAfterShouldStop(true, true, exo.duration, exo.currentPosition)) {
+                exo.pause()
+                exo.seekTo(0L)
+                setStopAfter(false)
+                return
+            }
+            mainHandler.postDelayed(this, 100)
+        }
+    }
     private val settingsListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             when (key) {
@@ -213,6 +229,16 @@ class PlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 loadOverlayLyrics(mediaItem?.mediaId?.toLongOrNull() ?: -1L)
                 clearAbLoop()
+                if (stopAfterCurrent) {
+                    if (
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                        reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
+                    ) {
+                        exo.pause()
+                        exo.seekTo(0L)
+                    }
+                    setStopAfter(false)
+                }
                 overlay?.applyState(overlayState())
                 WidgetRenderer.update(this@PlaybackService, exo)
                 if (sleep.mode == MODE_OFF) return
@@ -235,6 +261,7 @@ class PlaybackService : MediaSessionService() {
                 if (isPlaying) {
                     startSleepTicker()
                     startWidgetTicker()
+                    if (stopAfterCurrent) startStopAfterTicker()
                 } else {
                     stopSleepTicker()
                     stopWidgetTicker()
@@ -266,6 +293,8 @@ class PlaybackService : MediaSessionService() {
                         .add(SessionCommand(CMD_AB_SET, Bundle.EMPTY))
                         .add(SessionCommand(CMD_AB_GET, Bundle.EMPTY))
                         .add(SessionCommand(CMD_AB_CLEAR, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_STOP_AFTER_SET, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_STOP_AFTER_GET, Bundle.EMPTY))
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(commands)
@@ -365,6 +394,15 @@ class PlaybackService : MediaSessionService() {
                                 SessionResult(SessionResult.RESULT_SUCCESS, abExtras())
                             )
                         }
+                        CMD_STOP_AFTER_SET -> {
+                            setStopAfter(args.getBoolean("enabled", false))
+                            return Futures.immediateFuture(
+                                SessionResult(SessionResult.RESULT_SUCCESS, stopAfterExtras())
+                            )
+                        }
+                        CMD_STOP_AFTER_GET -> return Futures.immediateFuture(
+                            SessionResult(SessionResult.RESULT_SUCCESS, stopAfterExtras())
+                        )
                     }
                     return super.onCustomCommand(session, controller, customCommand, args)
                 }
@@ -699,6 +737,24 @@ class PlaybackService : MediaSessionService() {
         putLong("endMs", abEndMs)
     }
 
+    private fun setStopAfter(enabled: Boolean) {
+        stopAfterCurrent = enabled
+        mainHandler.removeCallbacks(stopAfterTicker)
+        if (enabled && player?.isPlaying == true) {
+            mainHandler.post(stopAfterTicker)
+        }
+    }
+
+    private fun startStopAfterTicker() {
+        if (!stopAfterCurrent) return
+        mainHandler.removeCallbacks(stopAfterTicker)
+        mainHandler.post(stopAfterTicker)
+    }
+
+    private fun stopAfterExtras(): Bundle = Bundle().apply {
+        putBoolean("enabled", stopAfterCurrent)
+    }
+
     private fun loadEffectState() {
         val gains = prefs.getString("gains", null)
             ?.split(',')
@@ -950,6 +1006,7 @@ class PlaybackService : MediaSessionService() {
         stopSleepTicker()
         stopWidgetTicker()
         mainHandler.removeCallbacks(abTicker)
+        mainHandler.removeCallbacks(stopAfterTicker)
         mainHandler.removeCallbacks(overlayTicker)
         overlayLyricsJob?.cancel()
         overlayLyricsJob = null
@@ -1004,6 +1061,8 @@ class PlaybackService : MediaSessionService() {
         const val CMD_AB_SET = "dev.lilt.player.AB_SET"
         const val CMD_AB_GET = "dev.lilt.player.AB_GET"
         const val CMD_AB_CLEAR = "dev.lilt.player.AB_CLEAR"
+        const val CMD_STOP_AFTER_SET = "dev.lilt.player.STOP_AFTER_SET"
+        const val CMD_STOP_AFTER_GET = "dev.lilt.player.STOP_AFTER_GET"
         const val ACTION_FLOATING_REFRESH = "dev.lilt.player.FLOATING_REFRESH"
     }
 }

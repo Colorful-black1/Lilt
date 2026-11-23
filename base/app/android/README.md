@@ -97,6 +97,15 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   every 100 ms so the loop also works with the screen off or the app in the background.
   Changing tracks clears the markers. The loop state travels over MediaSession custom
   commands; no second player is created.
+- **Stop after this song.** The player has a one-shot toggle. The playback service checks
+  the position every 100 ms and pauses in the last 180 ms of the track, then seeks to 0:00
+  so the same song remains loaded. Changing tracks clears the toggle. Because the check
+  runs in the existing service, it also works with the screen off or the app backgrounded.
+- **Duplicate songs.** **Settings → Duplicate songs** groups tracks with the same
+  normalised title and artist and a length within two seconds. Each group marks the
+  highest-bitrate, then largest copy **KEEP** and lists format, estimated bitrate, size,
+  duration and folder path for every copy; tap a row to play that copy. The screen only
+  reports — audio files are never deleted or renamed.
 - **Missing-file re-linking.** A MediaStore rescan deletes rows for files that moved, but
   playlists, queues, favourites, lyrics, bookmarks and history keep their old ids. Room v8
   stores the last-known title, artist, album, folder and file name in `missing_songs`
@@ -174,15 +183,17 @@ removes it with a manifest merge rule.
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 41 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 47 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
   index, LRC parsing, lyric offsets, floating lyric line windows and font clamping, widget
   progress/time formatting, backup JSON round trips, platform/format rejection, song
-  reference resolution, A-B loop bounds, missing-reference grouping, EQ curves/profiles,
-  queue resume positions, list reordering and virtual tag merging.
+  reference resolution, A-B loop bounds, stop-after bounds, duplicate grouping,
+  missing-reference grouping, EQ curves/profiles, queue resume positions, list reordering
+  and virtual tag merging.
 - `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6, 6→7 and
   7→8 migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
+  `../checks/round-7-d/README.md` for stop-after and duplicate-song evidence,
   `../checks/round-7-c/README.md` for A-B loop and missing-file re-link evidence,
   `../checks/round-7-b/README.md` for backup export, restore confirmation and restored
   playlist/favourite evidence, `../checks/round-7-a/README.md` for floating lyric and

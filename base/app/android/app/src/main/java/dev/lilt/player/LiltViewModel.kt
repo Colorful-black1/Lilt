@@ -159,6 +159,12 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val _abLoop = MutableStateFlow(AbLoopUiState())
     val abLoop: StateFlow<AbLoopUiState> = _abLoop.asStateFlow()
 
+    private val _stopAfter = MutableStateFlow(false)
+    val stopAfter: StateFlow<Boolean> = _stopAfter.asStateFlow()
+
+    private val _stopAfterNotice = MutableStateFlow(false)
+    val stopAfterNotice: StateFlow<Boolean> = _stopAfterNotice.asStateFlow()
+
     private val _missingFiles = MutableStateFlow<List<MissingReference>>(emptyList())
     val missingFiles: StateFlow<List<MissingReference>> = _missingFiles.asStateFlow()
 
@@ -179,6 +185,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             countedMediaId = -1L
             _abLoop.value = AbLoopUiState()
+            _stopAfter.value = false
+            _stopAfterNotice.value = false
             if (SystemClock.elapsedRealtime() >= queueSaveGuardUntil) {
                 saveActiveQueuePosition(force = true)
             }
@@ -215,6 +223,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                     refreshEq(c)
                     refreshSleep(c)
                     refreshAbLoop(c)
+                    refreshStopAfter(c)
                     pendingPlay?.invoke()
                     pendingPlay = null
                 } catch (_: Exception) {
@@ -239,6 +248,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
             while (isActive) {
                 delay(1_000)
                 if (_sleep.value.active) controller?.let(::refreshSleep)
+                if (_stopAfter.value) controller?.let(::refreshStopAfter)
             }
         }
         viewModelScope.launch {
@@ -347,6 +357,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         if (queueId == null) settings.setActiveQueue(-1) else settings.setActiveQueue(queueId)
         queueSaveGuardUntil = SystemClock.elapsedRealtime() + 1_500
         countedMediaId = -1L
+        _stopAfterNotice.value = false
         player.setMediaItems(
             songs.map(::mediaItem),
             startIndex.coerceIn(0, songs.lastIndex),
@@ -508,6 +519,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun togglePlayPause() {
+        _stopAfterNotice.value = false
         val player = controller
         if (player == null) {
             pendingPlay = { togglePlayPause() }
@@ -524,11 +536,13 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun next() {
+        _stopAfterNotice.value = false
         controller?.seekToNextMediaItem()
     }
 
     /** The original restarts the current track after ten seconds. */
     fun previous() {
+        _stopAfterNotice.value = false
         val player = controller ?: return
         if (player.currentPosition > 10_000L) player.seekTo(0) else player.seekToPreviousMediaItem()
     }
@@ -676,6 +690,43 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     } else {
                         AbLoopUiState()
+                    }
+                }
+            },
+            ContextCompat.getMainExecutor(app),
+        )
+    }
+
+    fun toggleStopAfter() {
+        val next = !_stopAfter.value
+        _stopAfter.value = next
+        if (next) _stopAfterNotice.value = false
+        val player = controller ?: return
+        val args = Bundle().apply { putBoolean("enabled", next) }
+        player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_STOP_AFTER_SET, Bundle.EMPTY),
+            args,
+        )
+    }
+
+    private fun refreshStopAfter(player: MediaController) {
+        val future = player.sendCustomCommand(
+            SessionCommand(PlaybackService.CMD_STOP_AFTER_GET, Bundle.EMPTY),
+            Bundle.EMPTY,
+        )
+        future.addListener(
+            {
+                runCatching {
+                    val enabled = future.get().extras.getBoolean("enabled", false)
+                    val wasEnabled = _stopAfter.value
+                    _stopAfter.value = enabled
+                    if (
+                        wasEnabled &&
+                        !enabled &&
+                        !player.isPlaying &&
+                        player.currentPosition <= 1_500L
+                    ) {
+                        _stopAfterNotice.value = true
                     }
                 }
             },

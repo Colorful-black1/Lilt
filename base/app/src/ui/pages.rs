@@ -2081,6 +2081,22 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                         app.open_missing_files();
                     }
                 });
+                ui.horizontal(|ui| {
+                    if widgets::ghost_button(
+                        ui,
+                        app.t("Find duplicate songs", "查找重复歌曲"),
+                        Some(Icon::Search),
+                        palette,
+                    )
+                    .on_hover_text(app.t(
+                        "Matches normalised title and artist with a similar length.",
+                        "按规范化标题、艺术家与相近时长匹配。",
+                    ))
+                    .clicked()
+                    {
+                        app.open_duplicates();
+                    }
+                });
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let before = app.state.settings.min_duration_seconds;

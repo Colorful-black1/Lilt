@@ -1,6 +1,7 @@
 use crate::audio::AudioEngine;
 use crate::backup;
 use crate::desktop::{self, DesktopAction, DesktopIntegration, MediaInfo};
+use crate::duplicates;
 use crate::i18n::tr;
 use crate::library;
 use crate::model::*;
@@ -109,6 +110,8 @@ pub enum Modal {
     About,
     Shortcuts,
     MissingFiles(Vec<MissingFile>),
+    /// Each group is one suspected duplicate set, best copy first.
+    Duplicates(Vec<Vec<Song>>),
 }
 
 #[derive(Clone, Debug)]
@@ -206,6 +209,8 @@ pub struct LiltApp {
     pub pending_next: Option<usize>,
     pub counted_current: bool,
     pub ab_loop: Option<AbLoop>,
+    /// One-shot "pause at the end of the current track" flag.
+    pub stop_after_current: bool,
     pub lyrics: Option<Vec<(f64, String)>>,
     pub lyrics_for: Option<String>,
 
@@ -335,6 +340,7 @@ impl LiltApp {
             pending_next: None,
             counted_current: false,
             ab_loop: None,
+            stop_after_current: false,
             lyrics: None,
             lyrics_for: None,
             audio: None,
@@ -612,6 +618,10 @@ impl LiltApp {
                 }
             }
         }
+        if std::env::var_os("LILT_STOP_AFTER").is_some() {
+            self.stop_after_current = true;
+            self.drop_queued_next();
+        }
         if let Ok(offset) = std::env::var("LILT_LYRICS_OFFSET") {
             if let (Ok(value), Some(key)) = (offset.parse::<i64>(), self.current_key.clone()) {
                 self.set_lyrics_offset(&key, value);
@@ -705,6 +715,7 @@ impl LiltApp {
                 "about" => self.modal = Some(Modal::About),
                 "shortcuts" => self.modal = Some(Modal::Shortcuts),
                 "missing" => self.open_missing_files(),
+                "duplicates" => self.open_duplicates(),
                 _ => {}
             }
         }
@@ -949,7 +960,7 @@ impl LiltApp {
     }
 
     fn queue_next(&mut self) {
-        if self.pending_next.is_some() {
+        if self.pending_next.is_some() || self.stop_after_current {
             return;
         }
         let Some(queue) = self.active_queue() else {
@@ -975,6 +986,7 @@ impl LiltApp {
     }
 
     pub fn play_context(&mut self, keys: Vec<String>, index: usize, name: &str) {
+        self.clear_stop_after_current();
         let existing: Vec<String> = keys
             .iter()
             .filter(|key| self.song_by_key(key).is_some())
@@ -1010,6 +1022,7 @@ impl LiltApp {
     }
 
     pub fn play_active_queue_at(&mut self, index: usize) {
+        self.clear_stop_after_current();
         if self.active_queue().is_some() {
             self.start_index(index, 0.0);
         }
@@ -1262,6 +1275,9 @@ impl LiltApp {
     }
 
     pub fn next_track(&mut self, auto: bool) {
+        if !auto {
+            self.clear_stop_after_current();
+        }
         let Some((len, current)) = self.active_queue().map(|q| (q.songs.len(), q.index)) else {
             return;
         };
@@ -1322,6 +1338,7 @@ impl LiltApp {
     }
 
     pub fn prev_track(&mut self) {
+        self.clear_stop_after_current();
         let pos = self.position();
         if !self.state.settings.previous_always && pos > crate::model::PREVIOUS_REPLAY_SECONDS {
             self.seek_to(0.0);
@@ -1444,6 +1461,84 @@ impl LiltApp {
         if self.ab_loop.take().is_some() {
             self.notify(self.t("A-B loop off", "A-B 循环已关闭").to_owned());
         }
+    }
+
+    /// One-shot "stop at the end of this song". Enabling it also drops a
+    /// gapless preload that is already queued, so the next track cannot start
+    /// between the toggle and the end of the current track.
+    pub fn toggle_stop_after_current(&mut self) {
+        self.stop_after_current = !self.stop_after_current;
+        if self.stop_after_current {
+            self.drop_queued_next();
+            self.notify(
+                self.t("Will stop after this song", "本曲结束后停止")
+                    .to_owned(),
+            );
+        } else {
+            self.notify(
+                self.t("Stop after this song off", "已取消本曲结束后停止")
+                    .to_owned(),
+            );
+        }
+    }
+
+    pub fn clear_stop_after_current(&mut self) {
+        self.stop_after_current = false;
+    }
+
+    fn drop_queued_next(&mut self) {
+        if self.pending_next.take().is_none() {
+            return;
+        }
+        let Some(song) = self.current_song().cloned() else {
+            return;
+        };
+        let position = self.position();
+        let was_playing = self.playing;
+        let volume = self.effective_volume();
+        let speed = self.state.settings.playback_speed.clamp(0.5, 3.0);
+        let mut error = None;
+        if let Some(audio) = &mut self.audio {
+            if let Err(err) = audio.play(&song.path, position, volume, speed) {
+                error = Some(err);
+            } else {
+                audio.set_speed(speed);
+                if !was_playing {
+                    audio.pause();
+                }
+            }
+        }
+        if let Some(error) = error {
+            self.notify(error);
+            self.playing = false;
+        }
+    }
+
+    fn stop_after_song(&mut self) {
+        if let Some(audio) = &self.audio {
+            audio.pause();
+        }
+        self.fade = None;
+        self.playing = false;
+        self.stop_after_current = false;
+        let duration = self.duration();
+        self.last_play_pos = duration;
+        if let Some(queue) = self.state.active_queue_mut() {
+            queue.position = duration;
+        }
+        if let Some(key) = self.current_key.clone() {
+            if let Some(extra) = self.state.songs.get_mut(&key) {
+                extra.last_position = duration;
+            }
+            if let Some(song) = self.songs.iter_mut().find(|song| song.key == key) {
+                song.last_position = duration;
+            }
+        }
+        self.notify(
+            self.t("Stopped after this song", "本曲结束后已停止")
+                .to_owned(),
+        );
+        self.save_now();
     }
 
     pub fn set_volume(&mut self, value: f32) {
@@ -1778,6 +1873,10 @@ impl LiltApp {
             return;
         }
         if empty {
+            if self.stop_after_current {
+                self.stop_after_song();
+                return;
+            }
             // Keep `playing` true across an automatic track change: the target
             // does not fade-in on auto-advance (`MusicService.V` has no
             // `ac.e0`/`ac.M` call). `next_track` clears it if the queue ends.
@@ -2756,6 +2855,35 @@ impl LiltApp {
     pub fn open_missing_files(&mut self) {
         let files = self.missing_files();
         self.modal = Some(Modal::MissingFiles(files));
+    }
+
+    /// Groups files that share normalised tags and a similar length. The best
+    /// copy sorts first inside each group.
+    pub fn open_duplicates(&mut self) {
+        let candidates: Vec<duplicates::DuplicateCandidate> = self
+            .songs
+            .iter()
+            .map(|song| duplicates::DuplicateCandidate {
+                title: song.display_title().to_owned(),
+                artist: song.artist.clone(),
+                duration: song.duration,
+                size: song.size,
+                bitrate: song.bitrate,
+            })
+            .collect();
+        let groups = duplicates::find_duplicate_groups(&candidates);
+        let views = groups
+            .into_iter()
+            .map(|group| {
+                group
+                    .songs
+                    .into_iter()
+                    .filter_map(|index| self.songs.get(index).cloned())
+                    .collect()
+            })
+            .filter(|group: &Vec<Song>| group.len() >= 2)
+            .collect();
+        self.modal = Some(Modal::Duplicates(views));
     }
 
     /// Playlist, queue and user-data references that no longer resolve to a

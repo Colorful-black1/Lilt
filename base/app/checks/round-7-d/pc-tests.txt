@@ -1,0 +1,14 @@
+Desktop test run (cargo test)
+
+running 37 tests
+test result: ok. 37 passed; 0 failed; 0 ignored
+
+New this round (duplicates.rs):
+- groups_near_identical_metadata_but_not_distant_lengths
+- same_size_and_length_alone_is_not_enough
+- suggests_the_highest_quality_copy_first
+- ignores_singletons_missing_durations_and_tiny_titles
+- formats_small_and_large_files
+
+The stop-after path is covered end to end with the real audio engine and a
+two-track queue; see 01-pc-stop-after-1180x780.png.

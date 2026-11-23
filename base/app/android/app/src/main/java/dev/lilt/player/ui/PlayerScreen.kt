@@ -47,6 +47,7 @@ import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -109,6 +110,8 @@ fun PlayerScreen(
         .collectAsStateWithLifecycle(initialValue = null)
     val sleep by vm.sleep.collectAsStateWithLifecycle()
     val abLoop by vm.abLoop.collectAsStateWithLifecycle()
+    val stopAfter by vm.stopAfter.collectAsStateWithLifecycle()
+    val stopAfterNotice by vm.stopAfterNotice.collectAsStateWithLifecycle()
     val defaultHours by vm.sleepHours.collectAsStateWithLifecycle()
     val defaultMinutes by vm.sleepMinutes.collectAsStateWithLifecycle()
     val defaultTracks by vm.sleepTracks.collectAsStateWithLifecycle()
@@ -337,6 +340,35 @@ fun PlayerScreen(
                             Text(t("Clear", "清除"))
                         }
                     }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 0.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = vm::toggleStopAfter) {
+                        Icon(
+                            Icons.Rounded.StopCircle,
+                            null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (stopAfter) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (stopAfter) t("Stopping after this song", "本曲结束后停止")
+                            else t("Stop after this song", "本曲结束后停止"),
+                            color = if (stopAfter) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                if (stopAfterNotice) {
+                    Text(
+                        t("Stopped after this song", "本曲结束后已停止"),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
                 if (sleep.active) {
                     SleepStatus(sleep)

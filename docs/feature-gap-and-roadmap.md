@@ -57,13 +57,14 @@
 - 浅色/深色/纯黑/昼夜/跟随系统主题，5 种强调色，中英界面。
 - 声音输出选择与测试音。
 - 定位当前播放歌曲：歌曲页标题栏和正在播放浮层均可触发，跳到完整歌曲列表并滚动到当前行。
+- 单曲停止：正在播放页一键“本曲结束后停止”，取消已预载的下一首，播完暂停在曲末；切歌自动取消。
+- 重复歌曲检测：设置页按规范化标题、艺术家与相近时长分组，标记最佳副本，可试听或打开文件位置；只报告，不删除文件。
 - 开发者模式与独立控制台。
 
 尚未实现：
 
 - 真正的音频交叉淡化。
-- 单曲播放（播完停止）。
-- 重复歌曲检测、批量文件操作。
+- 批量文件操作（重命名/移动/删除）。
 - 音频裁剪、格式转换、CUE 分轨。
 - ReplayGain 计算与写回。
 - APE、WMA、DSF/DFF 等格式支持。
@@ -100,6 +101,8 @@
 - 0.50–3.00× 播放速度。
 - A-B 循环：播放页设置 A/B 点，服务内 100 ms 计时器在 B 点回到 A，切歌自动清除。
 - 失效文件重连：扫描前把消失歌曲的元数据写入 `missing_songs`；设置页列出歌单、队列、收藏、歌词、书签与标签中的旧引用，可从现有曲库选择替代歌曲，Room 事务内改写全部引用。
+- 单曲停止：播放页一键在服务内 100 ms 检查，曲末暂停并回到 0:00；切歌自动取消，暂停后恢复播放仍保留设置。
+- 重复歌曲检测：设置页按规范化标题、艺术家与相近时长分组，标记最佳副本；可试听，不删除文件。
 - 纯黑/深色/浅色/跟随系统主题，5 种强调色，中英界面。
 
 尚未实现：
@@ -146,7 +149,9 @@
 | 备份/恢复 | ✅ | ✅ | 本地 JSON 备份与恢复已完成；PC/Android 格式各自独立，跨平台导入未做 |
 | A-B 循环 | ✅ | ✅ | 两端均支持 A/B 点与循环；切歌自动清除 |
 | 失效文件重连 | ✅ | ✅ | PC 保留歌单键并可选新文件；Android 用 `missing_songs` 保留元数据并在事务内改写引用 |
-| 音频工具 | △ | △ | 交叉淡化、单曲停止、重复检测、裁剪/CUE/转换仍缺 |
+| 单曲停止 | ✅ | ✅ | 两端一键在本曲结束后暂停；切歌自动取消 |
+| 重复歌曲检测 | ✅ | ✅ | 规范化标题/艺术家/时长分组，最佳副本优先；只报告不删除 |
+| 音频工具 | △ | △ | 交叉淡化、批量文件操作、裁剪/CUE/转换仍缺 |
 | 桌面/悬浮体验 | △ | △ | PC 已完成桌面歌词与迷你播放器；Android 已完成悬浮歌词，缺锁屏歌词 |
 
 ---
@@ -370,7 +375,7 @@
 |---|---|---|---|
 | 真正的交叉淡化/智能过渡 | 高 | 高 | P1 |
 | A-B 循环 | 中 | 低 | 已完成（Round 7-C） |
-| 单曲播放（播完停止） | 中 | 低 | P2 |
+| 单曲播放（播完停止） | 中 | 低 | 已完成（Round 7-D） |
 | 变速与变调 | 中 | 中 | P2 |
 | ReplayGain 计算与写回 | 中 | 中 | P2 |
 | 音量标准化 | 中 | 中 | P2 |
@@ -381,7 +386,7 @@
 
 | 功能 | 价值 | 成本 | 优先级 |
 |---|---|---|---|
-| 重复歌曲检测 | 高 | 中 | P2 |
+| 重复歌曲检测 | 高 | 中 | 已完成（Round 7-D，只报告不删除） |
 | 失效文件定位/重新关联 | 高 | 中 | 已完成（Round 7-C） |
 | 批量重命名/移动/删除 | 高 | 高 | P2 |
 | 按标签重命名文件 | 中 | 中 | P2 |
@@ -667,20 +672,41 @@
 - 两端仍无网络权限；Android 备份/重连均不需要新增存储权限。
 - 结果见 `base/app/checks/round-7-c/`。
 
-未纳入本轮：真正的交叉淡化、单曲播完停止、重复检测、批量重命名、音频裁剪、CUE、格式转换、跨平台备份导入。
+未纳入本轮：真正的交叉淡化、批量重命名、音频裁剪、CUE、格式转换、跨平台备份导入。
+
+### 第 7-D 轮：单曲停止与重复歌曲检测（已完成）
+
+交付：
+
+- PC 单曲停止：正在播放页新增“本曲结束后停止”。开启时丢弃已预载的下一首，播完当前曲后暂停并保存位置；手动上一首/下一首、选择新歌或新队列自动取消。按钮再次按下可取消。
+- Android 单曲停止：播放页新增“本曲结束后停止”。状态通过 MediaSession 自定义命令交给 PlaybackService，服务内 100 ms 计时器在曲末 180 ms 前暂停并回到 0:00，切歌自动清除；暂停后恢复播放仍保留设置。播放页显示“已在本曲结束后停止”状态。
+- 重复歌曲检测：PC 与 Android 都按规范化标题（忽略大小写、空格与标点）、艺术家和 ±2 秒时长分组；PC 设置页“查找重复歌曲”，Android 设置页“重复歌曲”。每组把最高码率、最大文件的副本标记为“保留”，列出格式、估算码率、大小、时长与路径；可试听/打开位置。只报告，不删除或移动音频文件。
+- PC 37 个单元测试；Android 47 个单元测试与 7 个 Room 迁移测试。
+
+验收：
+
+- PC 实测：`Glass Horizon` 从 0:45.5 开始，开启单曲停止后播到 0:48 暂停，队列的下一首 `Soft Static` 保持未播放。
+- Android 实测：3 秒 `Glass` 位于包含 `Glass Horizon` 的搜索队列中；开启单曲停止后 5 秒仍停在 `Glass` 的 0:00 / 0:03，页面显示“已在本曲结束后停止”，未进入下一首。
+- Android 重复检测：向 `Music/LiltTest` 复制 `05 - Glass Horizon copy.mp3` 后重扫，设置页显示 `1 group · 2 files`，检测页把 `01 - Glass Horizon.mp3` 标记为保留，并同时列出两个文件的 24 kbps、59 KB、0:20 与路径。
+- PC 截图：1180×780 正在播放页显示停止按钮与 0:48 / 0:48 暂停状态；重复歌曲对话框显示 `2 duplicate groups · 5 files`；720×1280 对话框不裁切。
+- 两端仍无网络权限；重复检测只读取已扫描/MediaStore 元数据，不新增存储权限。
+- 结果见 `base/app/checks/round-7-d/`。
+
+未纳入本轮：真正的交叉淡化、批量重命名/移动/删除、按标签重命名、CUE 分轨、音频裁剪、格式转换、跨平台备份导入。
 
 ### 第 7 轮：音频与曲库工具
 
 交付：
 
-- 交叉淡化、A-B 循环（已完成）、单曲播放。
+- 交叉淡化、A-B 循环（已完成）、单曲播放（已完成）。
 - 本地备份/恢复（已在 Round 7-B 完成）。
-- 重复检测、失效文件定位（已完成）、批量重命名。
+- 重复检测（已完成）、失效文件定位（已完成）、批量重命名。
 - 音频裁剪、CUE、格式转换（按需求裁剪范围）。
 
 验收：
 
 - 交叉淡化不爆音、不丢拍。
+- 单曲停止不进入下一首（Round 7-D 已验证）。
 - 失效文件可重新指向新路径（Round 7-C 已验证）。
 - 备份恢复后播放列表、队列、收藏、设置一致（Round 7-B 已验证）。
 
@@ -756,9 +782,10 @@
 | 2026-11-23 | Round 7-A | 完成 | Android 悬浮歌词、锁定/穿透、18–44 sp 字号、RemoteViews 主屏小部件、固定入口、30 个单元测试 |
 | 2026-11-23 | Round 7-B | 完成 | PC/Android 本地 JSON 备份与恢复、版本校验、引用回退、设置页入口、PC 29 项 + Android 37 项单元测试 |
 | 2026-11-23 | Round 7-C | 完成 | PC/Android A-B 循环、失效文件重连、Room v8 `missing_songs`、PC 32 项 + Android 41 项 + 7 项迁移测试 |
-| 下一步 | Round 7-D | 待定 | 交叉淡化、单曲停止、重复检测、批量重命名或 Android 磁贴/Auto |
+| 2026-11-23 | Round 7-D | 完成 | PC/Android 单曲停止、重复歌曲检测、PC 37 项 + Android 47 项 + 7 项迁移测试 |
+| 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`。
 
 ---
 
@@ -770,16 +797,20 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/src/ui/pages.rs`：PC 设置页与列表页面
 - `base/app/src/ui/common.rs`：PC 歌曲表格、排序、多选、收藏、书签
 - `base/app/src/library.rs`：扫描、标签、歌词、偏移换算、M3U、CSV
-- `base/app/src/ui/dialogs.rs`：PC 正在播放浮层、歌词面板、A-B 控件与失效文件对话框
-- `base/app/src/app.rs`：PC 播放心跳、A-B 循环、失效文件检测与重连
+- `base/app/src/ui/dialogs.rs`：PC 正在播放浮层、歌词面板、A-B/单曲停止控件、失效文件与重复歌曲对话框
+- `base/app/src/app.rs`：PC 播放心跳、A-B 循环、单曲停止、失效文件检测与重连
+- `base/app/src/duplicates.rs`：PC 重复歌曲分组、副本排序与大小格式
 - `base/app/src/backup.rs`：PC 版本化备份、校验、ID 归一化与恢复
 - `base/app/android/app/src/main/java/dev/lilt/player/data/Backup.kt`：Android 备份 JSON、平台校验与曲目引用解析
 - `base/app/android/app/src/main/java/dev/lilt/player/data/BackupManager.kt`：Android Room 备份收集与事务恢复
 - `base/app/checks/round-7-b/README.md`：PC/Android 备份恢复验证
 - `base/app/checks/round-7-c/README.md`：PC/Android A-B 循环与失效文件重连验证
+- `base/app/checks/round-7-d/README.md`：PC/Android 单曲停止与重复歌曲检测验证
 - `base/app/android/app/src/main/java/dev/lilt/player/data/MissingFiles.kt`：Android 失效引用聚合
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/MissingFilesScreen.kt`：Android 失效文件列表与替代歌曲选择
-- `base/app/android/app/src/main/java/dev/lilt/player/library/PlaybackTools.kt`：Android A-B 循环判定
+- `base/app/android/app/src/main/java/dev/lilt/player/library/PlaybackTools.kt`：Android A-B 循环与单曲停止判定
+- `base/app/android/app/src/main/java/dev/lilt/player/library/DuplicateTools.kt`：Android 重复歌曲分组与大小格式
+- `base/app/android/app/src/main/java/dev/lilt/player/ui/DuplicatesScreen.kt`：Android 重复歌曲列表与试听
 - `base/app/android/app/src/main/java/dev/lilt/player/data/Models.kt`：Android 数据模型
 - `base/app/android/app/src/main/java/dev/lilt/player/data/SettingsStore.kt`：Android 设置
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Sorting.kt`：Android 排序与字母索引
@@ -832,3 +863,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.9 | 2026-11-23 | Round 7-A：Android 悬浮歌词（拖动/锁定/穿透）、RemoteViews 主屏小部件、权限与设置入口 |
 | v0.10 | 2026-11-23 | Round 7-B：PC/Android 本地 JSON 备份与恢复、版本校验、引用解析、设置与事务恢复 |
 | v0.11 | 2026-11-23 | Round 7-C：PC/Android A-B 循环、失效文件重连、Room v8 `missing_songs`、设置与歌单入口 |
+| v0.12 | 2026-11-23 | Round 7-D：PC/Android 单曲停止、重复歌曲检测、最佳副本标记与试听入口 |

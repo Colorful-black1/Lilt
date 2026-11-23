@@ -56,6 +56,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.lilt.player.ui.AlbumDetailScreen
 import dev.lilt.player.ui.AboutScreen
 import dev.lilt.player.ui.ArtistDetailScreen
+import dev.lilt.player.ui.DuplicatesScreen
 import dev.lilt.player.ui.HomeScreen
 import dev.lilt.player.ui.LiltTheme
 import dev.lilt.player.ui.LyricsScreen
@@ -242,12 +243,16 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onBack = { nav.popBackStack() },
                 onOpenRules = { nav.navigate("rules") },
                 onOpenMissingFiles = { nav.navigate("missing") },
+                onOpenDuplicates = { nav.navigate("duplicates") },
                 onOpenAbout = { nav.navigate("about") },
                 onOpenEqualizer = { nav.navigate("equalizer") },
             )
         }
         composable("missing") {
             MissingFilesScreen(vm, onBack = { nav.popBackStack() })
+        }
+        composable("duplicates") {
+            DuplicatesScreen(vm, onBack = { nav.popBackStack() })
         }
         composable("equalizer") {
             dev.lilt.player.ui.EqualizerScreen(vm, onBack = { nav.popBackStack() })

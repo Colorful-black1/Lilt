@@ -1,0 +1,14 @@
+Android test run
+
+testDebugUnitTest: 47 tests, 0 failures
+  (41 previous + 1 stop-after bound + 5 duplicate grouping/format)
+connectedDebugAndroidTest: 7 Room migration tests, 0 failures
+assembleDebug: BUILD SUCCESSFUL
+
+New this round:
+- PlaybackToolsTest.stopAfterNeedsAnEnabledPlayingTrackNearTheEnd
+- DuplicateToolsTest.groupsNearIdenticalTagsButNotDistantLengths
+- DuplicateToolsTest.sameSizeAndLengthAloneIsNotEnough
+- DuplicateToolsTest.suggestsHighestQualityCopyFirst
+- DuplicateToolsTest.ignoresSingletonsMissingLengthsAndTinyTitles
+- DuplicateToolsTest.formatsBytes

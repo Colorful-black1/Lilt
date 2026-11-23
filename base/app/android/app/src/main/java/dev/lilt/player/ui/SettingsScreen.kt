@@ -68,6 +68,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.ScanState
+import dev.lilt.player.library.DuplicateCandidate
+import dev.lilt.player.library.findDuplicateGroups
 import dev.lilt.player.widget.LiltWidgetProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -83,6 +85,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenMissingFiles: () -> Unit,
+    onOpenDuplicates: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenEqualizer: () -> Unit,
 ) {
@@ -103,6 +106,23 @@ fun SettingsScreen(
     val songs by vm.songs.collectAsStateWithLifecycle()
     val allSongs by vm.allSongs.collectAsStateWithLifecycle()
     val missingFiles by vm.missingFiles.collectAsStateWithLifecycle()
+    val duplicateGroups = remember(allSongs) {
+        findDuplicateGroups(
+            allSongs.map { song ->
+                DuplicateCandidate(
+                    title = song.title.ifBlank { song.displayName.substringBeforeLast('.') },
+                    artist = song.artist,
+                    durationMs = song.durationMs,
+                    size = song.size,
+                    bitrate = if (song.durationMs > 0) {
+                        ((song.size * 8) / song.durationMs).toInt()
+                    } else {
+                        0
+                    },
+                )
+            },
+        )
+    }
 
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
@@ -260,6 +280,21 @@ fun SettingsScreen(
                             )
                     },
                     onClick = onOpenMissingFiles,
+                )
+                SettingLink(
+                    title = t("Duplicate songs", "重复歌曲"),
+                    body = if (duplicateGroups.isEmpty()) {
+                        t("No suspected duplicates.", "没有疑似重复的歌曲。")
+                    } else {
+                        countText(duplicateGroups.size, "group", "groups", "组") + " · " +
+                            countText(
+                                duplicateGroups.sumOf { it.indices.size },
+                                "file",
+                                "files",
+                                "个文件",
+                            )
+                    },
+                    onClick = onOpenDuplicates,
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),

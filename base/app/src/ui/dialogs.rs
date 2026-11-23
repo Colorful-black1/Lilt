@@ -1,4 +1,5 @@
 use crate::app::{AbLoop, ConfirmAction, LiltApp, Modal, TagEditorState};
+use crate::duplicates;
 use crate::icons::{self, Icon};
 use crate::library;
 use crate::model::*;
@@ -93,6 +94,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     let mut locate_current = false;
     let mut toggle_ab = false;
     let mut clear_ab = false;
+    let mut toggle_stop_after = false;
 
     egui::Area::new(egui::Id::new("now_playing_overlay"))
         .fixed_pos(screen.min)
@@ -448,6 +450,29 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                     .clicked()
                                                 {
                                                     clear_ab = true;
+                                                }
+                                                let stop_label = if app.stop_after_current {
+                                                    format!(
+                                                        "{} ✓",
+                                                        app.t("Stop after this song", "本曲结束后停止")
+                                                    )
+                                                } else {
+                                                    app.t("Stop after this song", "本曲结束后停止")
+                                                        .to_owned()
+                                                };
+                                                if widgets::ghost_button(
+                                                    ui,
+                                                    &stop_label,
+                                                    Some(Icon::Pause),
+                                                    &op,
+                                                )
+                                                .on_hover_text(app.t(
+                                                    "Pause when the current track ends instead of playing the next one.",
+                                                    "当前歌曲播完后暂停，不播放下一首。",
+                                                ))
+                                                .clicked()
+                                                {
+                                                    toggle_stop_after = true;
                                                 }
                                                 if widgets::ghost_button(
                                                     ui,
@@ -878,6 +903,9 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     }
     if clear_ab {
         app.clear_ab_loop();
+    }
+    if toggle_stop_after {
+        app.toggle_stop_after_current();
     }
 }
 
@@ -1585,6 +1613,206 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                                     close = true;
                                 }
                                 if widgets::ghost_button(ui, app.t("Cancel", "取消"), None, &palette).clicked() {
+                                    close = true;
+                                }
+                            });
+                        }
+                        Modal::Duplicates(groups) => {
+                            modal_header(
+                                ui,
+                                &palette,
+                                app.t("Duplicate songs", "重复歌曲"),
+                                &mut close,
+                            );
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new(app.t(
+                                    "Groups share a normalised title and artist with a similar length. The best copy is marked Keep. Lilt only reports duplicates; it never deletes files.",
+                                    "分组依据是规范化后的标题、艺术家与相近时长。最佳副本标记为“保留”。Lilt 只报告重复，不会删除文件。",
+                                ))
+                                .size(10.5)
+                                .color(palette.muted),
+                            );
+                            ui.add_space(10.0);
+                            if groups.is_empty() {
+                                ui.label(
+                                    RichText::new(app.t(
+                                        "No duplicate songs found.",
+                                        "没有找到重复歌曲。",
+                                    ))
+                                    .size(11.5)
+                                    .color(palette.text),
+                                );
+                            } else {
+                                let group_count = groups.len();
+                                let file_count = groups.iter().map(Vec::len).sum::<usize>();
+                                let group_text = if group_count == 1 {
+                                    format!("1 {}", app.t("duplicate group", "组重复"))
+                                } else {
+                                    format!(
+                                        "{group_count} {}",
+                                        app.t("duplicate groups", "组重复")
+                                    )
+                                };
+                                let file_text = if file_count == 1 {
+                                    format!("1 {}", app.t("file", "个文件"))
+                                } else {
+                                    format!("{file_count} {}", app.t("files", "个文件"))
+                                };
+                                ui.label(
+                                    RichText::new(format!("{group_text} · {file_text}"))
+                                        .size(10.5)
+                                        .color(palette.muted),
+                                );
+                                ui.add_space(6.0);
+                                ScrollArea::vertical()
+                                    .id_salt("duplicate_groups_scroll")
+                                    .max_height(350.0)
+                                    .auto_shrink([false, false])
+                                    .show(ui, |ui| {
+                                        for group in groups.iter() {
+                                            let Some(first) = group.first() else {
+                                                continue;
+                                            };
+                                            egui::Frame::NONE
+                                                .fill(palette.surface_hi)
+                                                .corner_radius(10.0)
+                                                .inner_margin(Margin::symmetric(10, 8))
+                                                .show(ui, |ui| {
+                                                    ui.set_width(400.0);
+                                                    ui.label(
+                                                        RichText::new(first.display_title())
+                                                            .size(12.0)
+                                                            .color(palette.text)
+                                                            .strong(),
+                                                    );
+                                                    ui.label(
+                                                        RichText::new(format!(
+                                                            "{} · {}",
+                                                            first.artist, first.album
+                                                        ))
+                                                        .size(9.5)
+                                                        .color(palette.muted),
+                                                    );
+                                                    ui.add_space(4.0);
+                                                    let keys: Vec<String> =
+                                                        group.iter().map(|s| s.key.clone()).collect();
+                                                    let name =
+                                                        app.t("Duplicate songs", "重复歌曲").to_owned();
+                                                    for (index, song) in group.iter().enumerate() {
+                                                        ui.horizontal(|ui| {
+                                                            ui.vertical(|ui| {
+                                                                ui.set_width(270.0);
+                                                                ui.horizontal(|ui| {
+                                                                    if index == 0 {
+                                                                        ui.label(
+                                                                            RichText::new(
+                                                                                app.t("KEEP", "保留"),
+                                                                            )
+                                                                            .size(8.5)
+                                                                            .color(palette.accent)
+                                                                            .strong(),
+                                                                        );
+                                                                    }
+                                                                    ui.label(
+                                                                        RichText::new(
+                                                                            song.display_title(),
+                                                                        )
+                                                                        .size(10.5)
+                                                                        .color(palette.text),
+                                                                    );
+                                                                });
+                                                                let format = if song
+                                                                    .format
+                                                                    .is_empty()
+                                                                {
+                                                                    app.t("Audio", "音频").to_owned()
+                                                                } else {
+                                                                    song.format.to_uppercase()
+                                                                };
+                                                                let bitrate = if song.bitrate > 0 {
+                                                                    format!("{} kbps", song.bitrate)
+                                                                } else {
+                                                                    "—".to_owned()
+                                                                };
+                                                                ui.label(
+                                                                    RichText::new(format!(
+                                                                        "{} · {} · {} · {}",
+                                                                        format,
+                                                                        bitrate,
+                                                                        duplicates::format_size(
+                                                                            song.size
+                                                                        ),
+                                                                        format_duration(
+                                                                            song.duration
+                                                                        )
+                                                                    ))
+                                                                    .size(9.0)
+                                                                    .color(palette.muted),
+                                                                );
+                                                                ui.label(
+                                                                    RichText::new(
+                                                                        song.path
+                                                                            .to_string_lossy()
+                                                                            .to_string(),
+                                                                    )
+                                                                    .size(8.5)
+                                                                    .color(palette.faint),
+                                                                );
+                                                            });
+                                                            ui.with_layout(
+                                                                Layout::right_to_left(
+                                                                    Align::Center,
+                                                                ),
+                                                                |ui| {
+                                                                    if widgets::ghost_button(
+                                                                        ui,
+                                                                        app.t("Show", "打开"),
+                                                                        Some(Icon::Folder),
+                                                                        &palette,
+                                                                    )
+                                                                    .clicked()
+                                                                    {
+                                                                        open_folder_in_explorer(
+                                                                            &song.path,
+                                                                        );
+                                                                    }
+                                                                    if widgets::ghost_button(
+                                                                        ui,
+                                                                        app.t("Play", "播放"),
+                                                                        Some(Icon::Play),
+                                                                        &palette,
+                                                                    )
+                                                                    .clicked()
+                                                                    {
+                                                                        app.play_context(
+                                                                            keys.clone(),
+                                                                            index,
+                                                                            &name,
+                                                                        );
+                                                                    }
+                                                                },
+                                                            );
+                                                        });
+                                                        if index + 1 < group.len() {
+                                                            ui.add_space(4.0);
+                                                        }
+                                                    }
+                                                });
+                                            ui.add_space(6.0);
+                                        }
+                                    });
+                            }
+                            ui.add_space(12.0);
+                            ui.horizontal(|ui| {
+                                if widgets::primary_button(
+                                    ui,
+                                    app.t("Close", "关闭"),
+                                    Some(Icon::Check),
+                                    &palette,
+                                )
+                                .clicked()
+                                {
                                     close = true;
                                 }
                             });

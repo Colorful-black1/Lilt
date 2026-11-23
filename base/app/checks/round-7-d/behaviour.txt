@@ -1,0 +1,50 @@
+Stop-after and duplicate-song checks
+
+Desktop stop-after
+  Starter-like library with Glass Horizon (48 s) followed by Soft Static.
+  LILT_SEEK=45.5, LILT_STOP_AFTER=1.
+  Result: playback paused at 0:48 / 0:48 on Glass Horizon; the queue's next
+  item stayed Soft Static. No transition to the next track.
+
+Desktop duplicate detection
+  Temporary library:
+    01 - Glass Horizon.wav
+    Glass Horizon copy.wav
+    Glass Horizon copy 2.wav
+    02 - Soft Static.wav
+    Soft Static alt.wav
+  The three Glass files share the WAV INFO title/artist and length; the two
+  Soft Static files do the same.
+  Dialog: 2 duplicate groups · 5 files.
+  The first Glass row is marked KEEP; the remaining two rows are listed with
+  WAV · 256 kbps · 1.5 MB · 0:48 and their full paths. A 720x1280 window
+  renders the same dialog without clipped controls.
+
+Android stop-after
+  Search query "Glass" returned: Glass (0:03), Glass Horizon (0:20) and a
+  second Glass Horizon copy. Tapping Glass built a three-item queue.
+  Tapping Stop after this song immediately started the 100 ms service check.
+  After 5 seconds the player still showed Glass at 0:00 / 0:03, paused, with
+  the notice "Stopped after this song". It did not advance to Glass Horizon.
+  A separate capture on Glass Horizon shows the active
+  "Stopping after this song" state before the end.
+
+Android duplicate detection
+  Copy on the emulator:
+    /sdcard/Music/LiltTest/05 - Glass Horizon copy.mp3
+  MediaStore picked up the copy and the app rescan raised the library to 33
+  songs. Settings showed "Duplicate songs · 1 group · 2 files".
+  Database rows:
+    1000000017  Glass Horizon  Aurora Drift  20088 ms  60607 bytes
+                 01 - Glass Horizon.mp3
+    1000000392  Glass Horizon  Aurora Drift  20088 ms  60607 bytes
+                 05 - Glass Horizon copy.mp3
+  The detection screen marked 01 - Glass Horizon.mp3 as KEEP and listed both
+  copies as MP3 · 24 kbps · 59 KB · 0:20 with their folder paths.
+
+The size-rule false-positive check
+  The generated 3-second index tracks in Music/LiltIndex have several equal
+  byte sizes. An early build grouped 30 of them into 8 false groups. The rule
+  was narrowed to normalised title + artist + length only, and a unit test
+  (same_size_and_length_alone_is_not_enough / sameSizeAndLengthAloneIsNotEnough)
+  guards it. The final Android scan reports only the real Glass Horizon pair.

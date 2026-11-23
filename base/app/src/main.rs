@@ -5,6 +5,7 @@ mod audio;
 mod backup;
 mod console;
 mod desktop;
+mod duplicates;
 mod i18n;
 mod icon;
 mod icons;
