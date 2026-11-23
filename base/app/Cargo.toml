@@ -16,6 +16,11 @@ rodio = { version = "0.20.1", default-features = false, features = ["symphonia-a
 cpal = "0.15.3"
 rfd = "0.17.2"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+tray-icon = { version = "0.26.1", default-features = false }
+global-hotkey = "0.10.0"
+raw-window-handle = "0.6.2"
+
 [profile.dev]
 opt-level = 1
 

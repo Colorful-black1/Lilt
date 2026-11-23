@@ -44,7 +44,9 @@ For a settings-page check, `LILT_PAGE=settings` opens Settings first, and
 `LILT_SETTINGS_SCROLL=1050` starts its scroll area at the Playback card (used by the
 screenshots in `checks/`). For lyric checks, `LILT_START_PAGE=now`, `LILT_LYRICS=1`,
 `LILT_LYRICS_OFFSET=500` and `LILT_PAUSE_AFTER_SEEK=1` open the now-playing lyric panel
-at a fixed position with an offset applied.
+at a fixed position with an offset applied. For tray and hotkey checks,
+`LILT_DESKTOP_LOG=<file>` appends native action lines (tray click, tray menu, hotkey,
+show/hide) to that file without enabling the developer console.
 
 ## First launch
 
@@ -100,6 +102,13 @@ Set `LILT_DATA_DIR` to use a different data folder.
   `+500` ms and reset, limited to ±60 s); positive values delay the lyrics. Clicking a
   lyric line seeks to its adjusted time. Settings has lyric font size (10–24 px) and
   opacity (30–100%) sliders with a live preview.
+- **Windows desktop integration.** A self-drawn tray icon with left-click restore and a
+  right-click menu (Show Lilt, Play/Pause, Previous, Next, Quit Lilt). Closing hides to
+  the tray by default; minimizing does too when enabled. Playback, track changes, sleep
+  timers, fades and state saves keep advancing while hidden. Global hotkeys work while
+  another app is focused: `Ctrl+Alt+Space` (play/pause), left/right (previous/next),
+  up/down (volume ±5%) and `L` (lyrics panel). All three behaviours are toggleable in
+  **Settings → Desktop integration**.
 - 10-band equalizer at the target's exact frequencies and Q, 22 target presets, three
   preamp modes, bass boost, virtualizer, 0–200 balance, headroom suggestion and five
   stored device profiles; changes apply to the live audio source and persist after
@@ -122,6 +131,17 @@ Set `LILT_DATA_DIR` to use a different data folder.
 | Ctrl+F | Focus search |
 | Escape | Close the top panel / clear search |
 
+Global hotkeys (registered system-wide while Lilt runs, and also effective when the main
+window is hidden in the tray):
+
+| Key | Action |
+|---|---|
+| Ctrl+Alt+Space | Play / pause |
+| Ctrl+Alt+Right | Next |
+| Ctrl+Alt+Left | Previous |
+| Ctrl+Alt+Up / Down | Volume ±5% |
+| Ctrl+Alt+L | Lyrics panel |
+
 ## Platform note
 
 The requested target is an Android app. This folder holds the desktop program; the
@@ -131,3 +151,5 @@ APK by changing a file extension; the Android path is a real second build with t
 requested Media3 foreground service, Room library and Compose screens.
 
 No network permission or network SDK is present. Everything runs from local files.
+The tray icon and global hotkeys use `tray-icon` and `global-hotkey` and are built for
+Windows; the rest of the desktop program still builds on other platforms.

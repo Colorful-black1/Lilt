@@ -2324,6 +2324,134 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                 common::section_title(
                     ui,
                     palette,
+                    app.t("Desktop integration", "桌面集成"),
+                    app.t(
+                        "Tray icon and system-wide shortcuts for the Windows build.",
+                        "Windows 版的托盘图标与系统级快捷键。",
+                    ),
+                );
+                ui.add_space(6.0);
+                let mut close_to_tray = app.state.settings.close_to_tray;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Close to tray", "关闭到托盘"),
+                    app.t(
+                        "The close button hides the window and playback keeps running.",
+                        "点击关闭按钮后隐藏窗口，音乐继续播放。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut close_to_tray, palette).clicked() {
+                            app.state.settings.close_to_tray = close_to_tray;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                let mut minimize_to_tray = app.state.settings.minimize_to_tray;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Minimize to tray", "最小化到托盘"),
+                    app.t(
+                        "Minimizing also removes the taskbar button.",
+                        "最小化时同时隐藏任务栏按钮。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut minimize_to_tray, palette).clicked() {
+                            app.state.settings.minimize_to_tray = minimize_to_tray;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                let mut global_hotkeys = app.state.settings.global_hotkeys;
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Global hotkeys", "全局热键"),
+                    app.t(
+                        "Control playback while another app is focused.",
+                        "在其他应用获得焦点时控制播放。",
+                    ),
+                    |ui| {
+                        if widgets::toggle_switch(ui, &mut global_hotkeys, palette).clicked() {
+                            app.state.settings.global_hotkeys = global_hotkeys;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                if cfg!(target_os = "windows") {
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(app.t(
+                            "Available even when Lilt is in the tray:",
+                            "Lilt 在托盘后台时同样生效：",
+                        ))
+                        .size(10.5)
+                        .color(palette.muted),
+                    );
+                    ui.add_space(2.0);
+                    for (keys, label) in [
+                        ("Ctrl + Alt + Space", app.t("Play / pause", "播放 / 暂停")),
+                        ("Ctrl + Alt + ←", app.t("Previous track", "上一首")),
+                        ("Ctrl + Alt + →", app.t("Next track", "下一首")),
+                        ("Ctrl + Alt + ↑ / ↓", app.t("Volume ±5%", "音量 ±5%")),
+                        ("Ctrl + Alt + L", app.t("Lyrics panel", "歌词面板")),
+                    ] {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(keys)
+                                    .font(FontId::monospace(10.5))
+                                    .color(palette.accent),
+                            );
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                ui.label(RichText::new(label).size(11.0).color(palette.text));
+                            });
+                        });
+                    }
+                } else {
+                    ui.label(
+                        RichText::new(app.t(
+                            "Tray integration is available in the Windows build.",
+                            "托盘集成仅在 Windows 版提供。",
+                        ))
+                        .size(10.5)
+                        .color(palette.muted),
+                    );
+                }
+                if let Some(error) = &app.desktop_error {
+                    ui.add_space(4.0);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(format!(
+                                "{} {error}",
+                                app.t("Desktop integration unavailable:", "桌面集成不可用：")
+                            ))
+                            .size(10.5)
+                            .color(palette.warn),
+                        )
+                        .wrap(),
+                    );
+                }
+                if let Some(error) = &app.hotkey_error {
+                    ui.add_space(4.0);
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(format!(
+                                "{} {error}",
+                                app.t("Some shortcuts could not be registered:", "部分快捷键注册失败：")
+                            ))
+                            .size(10.5)
+                            .color(palette.warn),
+                        )
+                        .wrap(),
+                    );
+                }
+            });
+            ui.add_space(12.0);
+            card_frame(palette).show(ui, |ui| {
+                common::section_title(
+                    ui,
+                    palette,
                     app.t("Developer", "开发者"),
                     app.t(
                         "Diagnostics. Leave this off for normal use.",

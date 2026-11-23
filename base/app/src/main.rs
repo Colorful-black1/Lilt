@@ -3,7 +3,9 @@
 mod app;
 mod audio;
 mod console;
+mod desktop;
 mod i18n;
+mod icon;
 mod icons;
 mod library;
 mod model;
@@ -79,6 +81,7 @@ fn main() -> eframe::Result {
         .with_inner_size(size)
         .with_min_inner_size([720.0, 540.0])
         .with_title("Lilt")
+        .with_icon(icon::app_icon())
         .with_resizable(true);
     if screenshot.is_some() {
         viewport = viewport.with_active(false);

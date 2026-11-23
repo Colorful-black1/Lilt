@@ -620,6 +620,12 @@ pub struct Settings {
     /// Shows the developer console window. Off by default; release builds are
     /// GUI-subsystem executables and do not open a terminal unless this is on.
     pub developer_mode: bool,
+    /// The window close button keeps Lilt in the notification area.
+    pub close_to_tray: bool,
+    /// Minimizing the window also hides it from the taskbar.
+    pub minimize_to_tray: bool,
+    /// Register the system-wide Ctrl+Alt shortcuts while Lilt is running.
+    pub global_hotkeys: bool,
 }
 
 impl Default for Settings {
@@ -677,6 +683,9 @@ impl Default for Settings {
             scan_small_files: false,
             min_duration_seconds: 0,
             developer_mode: false,
+            close_to_tray: true,
+            minimize_to_tray: false,
+            global_hotkeys: true,
         }
     }
 }
@@ -1063,6 +1072,9 @@ mod tests {
         assert_eq!(settings.fade_out_ms, 0);
         assert_eq!(settings.lyrics_font_size, 13.0);
         assert_eq!(settings.lyrics_opacity, 100);
+        assert!(settings.close_to_tray);
+        assert!(!settings.minimize_to_tray);
+        assert!(settings.global_hotkeys);
         assert_eq!(settings.sleep_history_hm, vec![(1, 30), (0, 15)]);
         assert_eq!(settings.sleep_history_n, vec![10, 5]);
 
@@ -1132,5 +1144,20 @@ mod tests {
         let parsed: Persisted =
             serde_json::from_str(r#"{"settings":{"developer_mode":true}}"#).unwrap();
         assert!(parsed.settings.developer_mode);
+    }
+
+    #[test]
+    fn desktop_settings_default_and_load_from_old_state_files() {
+        let parsed: Persisted = serde_json::from_str("{}").unwrap();
+        assert!(parsed.settings.close_to_tray);
+        assert!(!parsed.settings.minimize_to_tray);
+        assert!(parsed.settings.global_hotkeys);
+        let parsed: Persisted = serde_json::from_str(
+            r#"{"settings":{"close_to_tray":false,"minimize_to_tray":true,"global_hotkeys":false}}"#,
+        )
+        .unwrap();
+        assert!(!parsed.settings.close_to_tray);
+        assert!(parsed.settings.minimize_to_tray);
+        assert!(!parsed.settings.global_hotkeys);
     }
 }

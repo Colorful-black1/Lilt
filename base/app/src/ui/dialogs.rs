@@ -1583,6 +1583,39 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                                 });
                                 ui.add_space(3.0);
                             }
+                            ui.add_space(4.0);
+                            ui.label(
+                                RichText::new(app.t(
+                                    "Global shortcuts, also while Lilt is in the tray",
+                                    "全局快捷键，Lilt 在托盘后台时同样有效",
+                                ))
+                                .size(10.0)
+                                .color(palette.muted),
+                            );
+                            ui.add_space(4.0);
+                            for (keys, label) in [
+                                ("Ctrl + Alt + Space", app.t("Play / pause", "播放 / 暂停")),
+                                ("Ctrl + Alt + →", app.t("Next track", "下一首")),
+                                ("Ctrl + Alt + ←", app.t("Previous track", "上一首")),
+                                ("Ctrl + Alt + ↑ / ↓", app.t("Volume ±5%", "音量 ±5%")),
+                                ("Ctrl + Alt + L", app.t("Lyrics panel", "歌词面板")),
+                            ] {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        RichText::new(keys)
+                                            .font(FontId::monospace(10.5))
+                                            .color(palette.accent),
+                                    );
+                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                        ui.label(
+                                            RichText::new(label)
+                                                .size(11.0)
+                                                .color(palette.text),
+                                        );
+                                    });
+                                });
+                                ui.add_space(3.0);
+                            }
                         }
                     }
                 });

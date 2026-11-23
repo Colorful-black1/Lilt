@@ -61,7 +61,7 @@
 
 尚未实现：
 
-- 系统托盘、关闭到托盘、全局热键、Windows SMTC。
+- Windows SMTC。
 - 桌面歌词浮窗、迷你播放器。
 - 真正的音频交叉淡化。
 - A-B 循环、单曲播放（播完停止）。
@@ -141,7 +141,7 @@
 | 书签/笔记 | ✅ | ✅ | 位置 + 备注，播放页快捷跳转 |
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
 | 主题/语言 | ✅ | △ | Android 缺昼夜主题 |
-| 系统集成 | △ | ✅ | PC 缺托盘/热键/桌面歌词；Android 缺小部件/Auto/磁贴 |
+| 系统集成 | ✅ | ✅ | PC 托盘/关闭到托盘/全局热键已完成，缺桌面歌词/迷你播放器/SMTC；Android 缺小部件/Auto/磁贴 |
 | 备份/恢复 | ❌ | ❌ | 两端都缺 |
 | 音频工具 | ❌ | ❌ | 两端都缺 |
 | 桌面/悬浮体验 | ❌ | ❌ | PC 缺桌面歌词/迷你播放器；Android 缺悬浮歌词 |
@@ -345,7 +345,9 @@
 - `Ctrl+Alt+Left`：上一首
 - `Ctrl+Alt+Right`：下一首
 - `Ctrl+Alt+Up/Down`：音量
-- `Ctrl+Alt+L`：桌面歌词开关
+- `Ctrl+Alt+L`：歌词面板开关（6-D2 将切换为桌面歌词窗口）
+
+状态（2026-11-23）：系统托盘、关闭/最小化到托盘和 6 组全局热键已在 Round 6-D1 完成。Ctrl+Alt+L 目前打开正在播放页的歌词面板；桌面歌词窗口、迷你播放器、SMTC 和任务栏缩略图按钮仍待做。
 
 ### 5.3 Android 系统集成
 
@@ -431,8 +433,10 @@
 
 ### 6.4 PC 桌面集成
 
-- 托盘：`tray-icon` 或 Win32 `Shell_NotifyIcon`。
-- 全局热键：`global-hotkey` 或 Win32 `RegisterHotKey`。
+- 托盘：已用 `tray-icon` 0.26（Windows 专用依赖）；图标由 `src/icon.rs` 自绘 32×32 RGBA，窗口和托盘共用。
+- 全局热键：已用 `global-hotkey` 0.10；默认 6 组，可在设置中关闭，注册冲突会在设置页显示。
+- 隐藏窗口：Windows 下 winit 不处理隐藏窗口的常规重绘，托盘/热键回调会向主窗口投递 `WM_PAINT` 唤醒更新；播放、扫描、睡眠定时或待保存时另有 100 ms 心跳。
+- 安全兜底：只有确认托盘图标已注册时才允许关闭/最小化到托盘，避免窗口隐藏后无法找回。
 - 媒体键/SMTC：Windows `SystemMediaTransportControls`。
 - 桌面歌词：无边框、透明、置顶、可锁定、可鼠标穿透的第二个窗口。
 - 迷你播放器：独立小窗口或主窗口精简布局。
@@ -555,18 +559,39 @@
 
 未纳入本轮：歌词颜色、双语行、桌面歌词、Android 悬浮歌词。
 
-### 第 6-D 轮：PC 桌面集成
+### 第 6-D1 轮：PC 托盘、关闭到托盘与全局热键（已完成）
 
 交付：
 
-- PC 桌面歌词、托盘、全局热键、迷你播放器、SMTC。
+- Windows 托盘图标：左键显示/聚焦主窗口，右键菜单为 Show Lilt、Play/Pause、Previous、Next、Quit Lilt；工具提示显示当前曲目。
+- 关闭到托盘（默认开）与最小化到托盘（默认关）；托盘图标未注册时自动禁用关闭到托盘。
+- 6 组全局热键（默认开，可在设置关闭）：`Ctrl+Alt+Space`、`Ctrl+Alt+Left/Right`、`Ctrl+Alt+Up/Down`、`Ctrl+Alt+L`。
+- 隐藏状态下继续播放；曲目切换、睡眠定时、淡入淡出和状态保存由 `WM_PAINT` 唤醒与 100 ms 心跳推进。
+- 设置页新增 Desktop integration 卡片，快捷键弹窗新增全局热键段；注册失败会在设置页提示。
+- 桌面 21 个单元测试，覆盖托盘菜单映射、6 组热键 ID 唯一、图标像素、旧设置默认值与歌词偏移。
+
+验收：
+
+- 关闭或最小化后窗口隐藏、进程与播放继续；托盘左键可恢复，最小化状态也能正确还原。
+- 6 组热键在窗口隐藏时均生效；音量步进 5%。
+- 托盘菜单的暂停、上一首、下一首、显示和退出均生效，退出前保存状态。
+- 隐藏时睡眠定时能暂停播放，曲目结束能进入下一首。
+- 1180×780、720×1280 下设置页无控件重叠。
+- 结果见 `base/app/checks/round-6-d1/`。
+
+未纳入本轮：桌面歌词窗口、迷你播放器、SMTC、任务栏缩略图按钮、热键自定义、托盘气泡通知。
+
+### 第 6-D2 轮：PC 桌面歌词、迷你播放器与 SMTC（待做）
+
+交付：
+
+- PC 桌面歌词浮窗、迷你播放器、Windows SMTC。
 - Android 悬浮歌词（可选）。
 
 验收：
 
 - 桌面歌词可锁定、可穿透、不遮挡其他窗口。
-- 全局热键在应用后台时生效。
-- 关闭到托盘后音乐继续播放。
+- 迷你播放器和 SMTC 的播放状态与主窗口一致。
 
 ### 第 7 轮：音频与曲库工具
 
@@ -627,7 +652,7 @@
 
 1. Android 标签编辑先做“虚拟覆盖”还是直接写回文件？（已选择虚拟覆盖，Room v6；文件写回未做）
 2. 歌词是否只支持 LRC/内嵌，还是也要支持 VTT/KRC？
-3. PC 全局热键的默认组合是否采用本文建议？
+3. PC 全局热键的默认组合是否采用本文建议？（已采用，Round 6-D1；可在设置关闭）
 4. Android 小部件、磁贴、Android Auto 的优先级是否高于音频工具？
 5. APE/DSD/CUE 是否有真实使用需求，值得投入高成本？
 6. 备份文件是否需要跨 PC/Android 共用格式？
@@ -650,9 +675,10 @@
 | 2026-11-22 | Round 6-A | 完成 | PC/Android 当前歌曲定位、Android 播放列表/队列上下移动、队列详情页、21 个单元测试 |
 | 2026-11-23 | Round 6-B | 完成 | Room v6 虚拟标签覆盖、单曲标签编辑、统一读取合并、当前播放 metadata 刷新、24 个单元测试 |
 | 2026-11-23 | Round 6-C | 完成 | 歌词每首偏移、字号/透明度、PC/Android 控件与预览、Room v7、25 个单元测试、6 个迁移测试 |
-| 下一步 | Round 6-D | 待定 | PC 托盘/热键/迷你播放器/桌面歌词/SMTC；拖拽排序、批量标签、备份恢复或 ReplayGain |
+| 2026-11-23 | Round 6-D1 | 完成 | PC 托盘、关闭/最小化到托盘、6 组全局热键、隐藏播放心跳、设置卡片、21 个单元测试 |
+| 下一步 | Round 6-D2 | 待定 | PC 桌面歌词/迷你播放器/SMTC；拖拽排序、批量标签、备份恢复或 ReplayGain |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`。
 
 ---
 
@@ -688,6 +714,9 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/checks/round-6/README.md`：当前歌曲定位、播放列表/队列排序验证
 - `base/app/checks/round-6-b/README.md`：单曲虚拟标签编辑与 Room v6 验证
 - `base/app/checks/round-6-c/README.md`：歌词偏移、字号/透明度与 Room v7 验证
+- `base/app/checks/round-6-d1/README.md`：托盘、关闭到托盘与全局热键验证
+- `base/app/src/desktop.rs`：Windows 托盘菜单、全局热键、隐藏唤醒与心跳
+- `base/app/src/icon.rs`：窗口/托盘共用的自绘图标
 
 ---
 
@@ -701,3 +730,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.4 | 2026-11-22 | Round 6-A：PC/Android 当前歌曲定位、Android 播放列表/队列上下移动、队列详情页 |
 | v0.5 | 2026-11-23 | Round 6-B：Android Room v6 虚拟标签覆盖、单曲标签编辑、统一读取合并与播放 metadata 刷新 |
 | v0.6 | 2026-11-23 | Round 6-C：PC/Android 每首歌词偏移、字号与透明度、Room v7、偏移控件与调整后时间预览 |
+| v0.7 | 2026-11-23 | Round 6-D1：PC 托盘、关闭/最小化到托盘、6 组全局热键、隐藏播放心跳与设置卡片 |

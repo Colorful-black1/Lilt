@@ -1,4 +1,5 @@
 use crate::audio::AudioEngine;
+use crate::desktop::{self, DesktopAction, DesktopIntegration};
 use crate::i18n::tr;
 use crate::library;
 use crate::model::*;
@@ -219,6 +220,14 @@ pub struct LiltApp {
     pub context_menu_song: Option<String>,
     pub scroll_to_current: bool,
     pub fallback_attempted: bool,
+    pub desktop: Option<DesktopIntegration>,
+    pub desktop_error: Option<String>,
+    pub hotkey_error: Option<String>,
+    pub hidden_to_tray: bool,
+    pub quitting: bool,
+    pub was_minimized: bool,
+    desktop_attempts: u8,
+    desktop_next_try: Instant,
 }
 
 impl LiltApp {
@@ -336,6 +345,14 @@ impl LiltApp {
             context_menu_song: None,
             scroll_to_current: false,
             fallback_attempted: false,
+            desktop: None,
+            desktop_error: None,
+            hotkey_error: None,
+            hidden_to_tray: false,
+            quitting: false,
+            was_minimized: false,
+            desktop_attempts: 0,
+            desktop_next_try: Instant::now() + Duration::from_millis(800),
         };
 
         if app.state.settings.scan_on_start {
@@ -1338,6 +1355,24 @@ impl LiltApp {
             audio.set_volume(vol);
         }
         self.dirty = true;
+    }
+
+    /// Used by the global volume shortcuts. Steps stay at 5%, matching the
+    /// practical granularity of the player bar and tray actions.
+    pub fn adjust_volume(&mut self, delta: f32) {
+        let next = (self.state.settings.volume + delta).clamp(0.0, 1.0);
+        self.set_volume(next);
+        let percent = (next * 100.0).round() as u32;
+        self.notify(format!("{} {percent}%", self.t("Volume", "音量")));
+    }
+
+    pub fn toggle_lyrics_panel(&mut self) {
+        if self.lyrics_open {
+            self.lyrics_open = false;
+        } else {
+            self.lyrics_open = true;
+            self.now_playing = true;
+        }
     }
 
     pub fn set_speed(&mut self, value: f32) {
@@ -2680,6 +2715,179 @@ impl LiltApp {
         self.cover_cache.clear();
     }
 
+    /// Tray menu, tray clicks and registered shortcuts all arrive here.
+    /// Actions are queued by the native callbacks and handled on the UI thread.
+    fn update_desktop(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        if self.desktop.is_none()
+            && self.screenshot.is_none()
+            && self.desktop_attempts < 3
+            && Instant::now() >= self.desktop_next_try
+        {
+            self.desktop_attempts += 1;
+            match DesktopIntegration::new(
+                ctx,
+                self.lang(),
+                self.state.settings.global_hotkeys,
+            ) {
+                Ok(desktop) => {
+                    self.desktop = Some(desktop);
+                    self.desktop_error = None;
+                }
+                Err(error) => {
+                    crate::console::log(format!("Desktop integration unavailable: {error}"));
+                    self.desktop_error = Some(error);
+                    self.desktop_next_try = Instant::now() + Duration::from_secs(2);
+                }
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            if let (Ok(handle), Some(desktop)) = (frame.window_handle(), self.desktop.as_ref()) {
+                if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                    desktop.set_main_window(win32.hwnd.get());
+                }
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = frame;
+
+        if self.desktop.is_some() {
+            if let Some(desktop) = &mut self.desktop {
+                desktop.set_hotkeys_enabled(self.state.settings.global_hotkeys);
+                self.hotkey_error = desktop.hotkey_error().map(str::to_owned);
+            }
+            let pending = self
+                .desktop
+                .as_ref()
+                .map(DesktopIntegration::pending_actions)
+                .unwrap_or(0);
+            if pending > 0 {
+                desktop::log_line(&format!("polling {pending} desktop action(s)"));
+            }
+            let actions = self
+                .desktop
+                .as_mut()
+                .map(|desktop| desktop.poll_actions())
+                .unwrap_or_default();
+            for action in actions {
+                self.handle_desktop_action(ctx, action);
+            }
+            let track = self.current_song().map(|song| {
+                let title = song.display_title();
+                let artist = song.display_artist();
+                if artist.is_empty() {
+                    title.to_owned()
+                } else {
+                    format!("{title} — {artist}")
+                }
+            });
+            let language = self.lang();
+            let playing = self.playing;
+            if let Some(desktop) = &mut self.desktop {
+                desktop.sync(language, playing, track.as_deref());
+            }
+        }
+
+        let tray_ready = self
+            .desktop
+            .as_ref()
+            .is_some_and(|desktop| desktop.tray_ready());
+        if self.desktop.is_some() {
+            self.desktop_error = if tray_ready {
+                None
+            } else {
+                Some(
+                    self.t(
+                        "The tray icon could not be registered, so close-to-tray stays off.",
+                        "托盘图标注册失败，关闭到托盘暂不可用。",
+                    )
+                    .to_owned(),
+                )
+            };
+        }
+
+        let minimized = ctx.input(|input| input.viewport().minimized.unwrap_or(false));
+        if minimized
+            && !self.was_minimized
+            && !self.hidden_to_tray
+            && tray_ready
+            && self.state.settings.minimize_to_tray
+        {
+            self.hide_to_tray(ctx);
+        }
+        self.was_minimized = minimized || self.hidden_to_tray;
+
+        if ctx.input(|input| input.viewport().close_requested())
+            && !self.quitting
+            && !self.close_after_screenshot
+            && self.state.settings.close_to_tray
+            && tray_ready
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.hide_to_tray(ctx);
+        }
+
+        let busy = self.hidden_to_tray
+            && (self.playing
+                || self.scanning
+                || self.scan_rx.is_some()
+                || self.sleep_deadline.is_some()
+                || self.dirty);
+        if let Some(desktop) = &self.desktop {
+            desktop.set_hidden(self.hidden_to_tray);
+            desktop.set_heartbeat(busy);
+        }
+    }
+
+    fn handle_desktop_action(&mut self, ctx: &egui::Context, action: DesktopAction) {
+        desktop::log_line(&format!(
+            "apply {action:?} playing={} volume={:.2}",
+            self.playing, self.state.settings.volume
+        ));
+        match action {
+            DesktopAction::Show => self.show_main_window(ctx),
+            DesktopAction::TogglePlay => self.toggle_play(),
+            DesktopAction::Previous => self.prev_track(),
+            DesktopAction::Next => self.next_track(false),
+            DesktopAction::VolumeUp => self.adjust_volume(0.05),
+            DesktopAction::VolumeDown => self.adjust_volume(-0.05),
+            DesktopAction::ToggleLyrics => self.toggle_lyrics_panel(),
+            DesktopAction::Quit => {
+                self.quitting = true;
+                self.save_now();
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
+    }
+
+    fn hide_to_tray(&mut self, ctx: &egui::Context) {
+        if !self
+            .desktop
+            .as_ref()
+            .is_some_and(|desktop| desktop.tray_ready())
+        {
+            return;
+        }
+        self.hidden_to_tray = true;
+        self.was_minimized = true;
+        self.save_now();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        ctx.request_repaint();
+        desktop::log_line("window hidden to tray");
+    }
+
+    fn show_main_window(&mut self, ctx: &egui::Context) {
+        self.hidden_to_tray = false;
+        self.was_minimized = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        ctx.request_repaint();
+        desktop::log_line("window shown from tray");
+    }
+
     fn update_theme(&mut self, ctx: &egui::Context) {
         let system_dark = ctx.theme() == egui::Theme::Dark;
         let daylight = self.is_daylight();
@@ -2958,7 +3166,8 @@ pub struct SearchResults {
 }
 
 impl eframe::App for LiltApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.update_desktop(ctx, frame);
         self.update_theme(ctx);
         self.poll_scan();
         self.update_sleep_timer();
@@ -2981,6 +3190,9 @@ impl eframe::App for LiltApp {
             || self.scanning
             || self.sleep_deadline.is_some()
             || self.scan_rx.is_some()
+            || (self.desktop.is_none()
+                && self.screenshot.is_none()
+                && self.desktop_attempts < 3)
         {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
