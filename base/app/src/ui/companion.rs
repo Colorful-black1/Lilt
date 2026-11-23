@@ -164,7 +164,7 @@ impl CompanionWindows {
                     .unwrap_or((None, None));
                 (
                     stored_position.unwrap_or_else(|| default_lyrics_position(ctx)),
-                    stored_size.unwrap_or_else(|| Vec2::new(780.0, 176.0)),
+                    stored_size.unwrap_or_else(|| Vec2::new(900.0, 190.0)),
                 )
             };
             let mut builder = egui::ViewportBuilder::default()
@@ -173,7 +173,7 @@ impl CompanionWindows {
                 .with_always_on_top()
                 .with_taskbar(false)
                 .with_resizable(true)
-                .with_min_inner_size([420.0, 160.0])
+                .with_min_inner_size([460.0, 160.0])
                 .with_close_button(false)
                 .with_minimize_button(false)
                 .with_maximize_button(false)
@@ -266,7 +266,10 @@ fn default_lyrics_position(ctx: &egui::Context) -> egui::Pos2 {
     let monitor = ctx
         .input(|input| input.viewport().monitor_size)
         .unwrap_or(Vec2::new(1920.0, 1080.0));
-    egui::pos2((monitor.x - 780.0) * 0.5, monitor.y - 260.0)
+    egui::pos2(
+        ((monitor.x - 900.0) * 0.5).max(20.0),
+        (monitor.y - 280.0).max(20.0),
+    )
 }
 
 fn default_mini_position(ctx: &egui::Context) -> egui::Pos2 {
@@ -366,50 +369,254 @@ fn draw_cover(ui: &mut Ui, snapshot: &CompanionSnapshot, size: f32, palette: &Pa
     }
 }
 
-fn draw_lyrics_card(ui: &Ui, rect: Rect, palette: &Palette) {
-    let radius = 18.0;
-    ui.painter().rect_filled(
-        rect.translate(Vec2::new(0.0, 4.0)),
-        radius,
-        Color32::from_rgba_unmultiplied(0, 0, 0, 72),
-    );
-    ui.painter()
-        .rect_filled(rect, radius, Color32::from_rgb(10, 9, 8));
+fn draw_lyrics_frame(ui: &Ui, rect: Rect, palette: &Palette) {
     ui.painter().rect_stroke(
         rect,
-        radius,
-        Stroke::new(1.0, with_alpha(palette.accent, 58)),
+        18.0,
+        Stroke::new(1.0, with_alpha(palette.accent, 175)),
         StrokeKind::Inside,
-    );
-    let highlight = Rect::from_min_max(
-        rect.left_top() + Vec2::new(18.0, 1.0),
-        egui::pos2(rect.right() - 18.0, rect.top() + 2.0),
-    );
-    ui.painter().line_segment(
-        [highlight.left_center(), highlight.right_center()],
-        Stroke::new(1.0, with_alpha(Color32::WHITE, 16)),
     );
 }
 
-/// Draws one lyric line with a soft shadow so the transparent overlay stays
-/// readable over bright desktops and photographs.
-fn shadow_label(ui: &mut Ui, text: &str, font: FontId, color: Color32, shadow: Color32) {
-    if text.is_empty() {
-        return;
+/// Shrinks a font until its measured text fits the available box. The overlay
+/// never wraps or ellipsizes lyric lines, so this is what keeps long lines fully
+/// visible at any window width.
+fn fit_font_size(
+    base_size: f32,
+    natural_width: f32,
+    natural_height: f32,
+    max_width: f32,
+    max_height: f32,
+) -> f32 {
+    let mut scale = 1.0_f32;
+    if natural_width > max_width.max(1.0) {
+        scale = scale.min(max_width.max(1.0) / natural_width);
     }
-    let width = ui.available_width().max(1.0);
-    let galley = ui
+    if natural_height > max_height.max(1.0) {
+        scale = scale.min(max_height.max(1.0) / natural_height);
+    }
+    (base_size * scale).max(1.0)
+}
+
+fn lyric_galley(
+    ui: &Ui,
+    text: &str,
+    base_size: f32,
+    color: Color32,
+    max_width: f32,
+    max_height: f32,
+) -> (f32, Arc<egui::Galley>) {
+    let measured = ui
         .painter()
-        .layout(text.to_owned(), font.clone(), color, width);
-    let size = galley.size();
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, size.y), Sense::hover());
-    let position = egui::pos2(rect.center().x - size.x * 0.5, rect.top());
-    if shadow.a() > 0 {
-        let shadow_galley = ui.painter().layout(text.to_owned(), font, shadow, width);
-        ui.painter()
-            .galley(position + Vec2::new(0.0, 1.5), shadow_galley, shadow);
+        .layout_no_wrap(text.to_owned(), display_font(base_size), color);
+    let fitted = fit_font_size(
+        base_size,
+        measured.size().x,
+        measured.size().y,
+        max_width,
+        max_height,
+    );
+    // Leave a hair of room so rounding cannot clip the final glyph.
+    let fitted = if fitted < base_size {
+        (fitted * 0.995).max(1.0)
+    } else {
+        base_size
+    };
+    if (fitted - base_size).abs() < 0.01 {
+        (base_size, measured)
+    } else {
+        let galley = ui
+            .painter()
+            .layout_no_wrap(text.to_owned(), display_font(fitted), color);
+        (fitted, galley)
     }
-    ui.painter().galley(position, galley, color);
+}
+
+/// Draws a dark outline around the glyphs. KuGou-style desktop lyrics stay
+/// readable over bright and busy wallpapers because the fill never touches the
+/// background directly.
+fn paint_outlined_line(
+    ui: &Ui,
+    text: &str,
+    size: f32,
+    galley: &Arc<egui::Galley>,
+    position: egui::Pos2,
+    color: Color32,
+    outline: Color32,
+) {
+    if outline.a() > 0 {
+        let stroke_galley =
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), display_font(size), outline);
+        let radius = (size * 0.065).clamp(1.0, 3.0);
+        for (dx, dy) in [
+            (-radius, 0.0),
+            (radius, 0.0),
+            (0.0, -radius),
+            (0.0, radius),
+            (-radius, -radius),
+            (radius, -radius),
+            (-radius, radius),
+            (radius, radius),
+        ] {
+            ui.painter()
+                .galley(position + Vec2::new(dx, dy), stroke_galley.clone(), outline);
+        }
+    }
+    ui.painter().galley(position, galley.clone(), color);
+}
+
+fn lyric_pair(
+    lyrics: &[(f64, String)],
+    position: f64,
+    offset_ms: i64,
+) -> (Option<usize>, Option<usize>) {
+    let first_visible = lyrics.iter().position(|(_, line)| !line.trim().is_empty());
+    let timed = lyrics.iter().any(|(time, _)| *time > 0.0);
+    let current = if timed {
+        active_lyric(lyrics, position, offset_ms)
+            .map(|(index, _)| index)
+            .or(first_visible)
+    } else {
+        first_visible
+    };
+    let next = current.and_then(|index| {
+        lyrics
+            .iter()
+            .enumerate()
+            .skip(index + 1)
+            .find(|(_, (_, line))| !line.trim().is_empty())
+            .map(|(index, _)| index)
+    });
+    (current, next)
+}
+
+fn lyrics_toolbar(
+    ui: &mut Ui,
+    snapshot: &CompanionSnapshot,
+    actions: &Arc<Mutex<Vec<CompanionAction>>>,
+    main_window: &Arc<AtomicIsize>,
+    palette: Palette,
+    toolbar_button: f32,
+) {
+    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        if icons::icon_button(
+            ui,
+            Icon::Close,
+            toolbar_button,
+            with_alpha(Color32::WHITE, 210),
+            with_alpha(Color32::WHITE, 34),
+            snapshot.t("Close desktop lyrics", "关闭桌面歌词"),
+        )
+        .clicked()
+        {
+            push_action(actions, main_window, CompanionAction::CloseLyrics);
+        }
+        if icons::icon_button(
+            ui,
+            Icon::Lock,
+            toolbar_button,
+            with_alpha(Color32::WHITE, 210),
+            with_alpha(Color32::WHITE, 34),
+            snapshot.t("Lock and click through", "锁定并鼠标穿透"),
+        )
+        .clicked()
+        {
+            push_action(actions, main_window, CompanionAction::ToggleLyricsLock);
+        }
+        if icons::icon_button(
+            ui,
+            Icon::Expand,
+            toolbar_button,
+            with_alpha(Color32::WHITE, 210),
+            with_alpha(Color32::WHITE, 34),
+            snapshot.t("Open player", "打开播放页"),
+        )
+        .clicked()
+        {
+            push_action(actions, main_window, CompanionAction::OpenNowPlaying);
+        }
+        let control_color = if snapshot.has_song {
+            with_alpha(Color32::WHITE, 220)
+        } else {
+            with_alpha(Color32::WHITE, 70)
+        };
+        if icons::icon_button(
+            ui,
+            Icon::Next,
+            toolbar_button,
+            control_color,
+            with_alpha(Color32::WHITE, 34),
+            snapshot.t("Next", "下一首"),
+        )
+        .clicked()
+            && snapshot.has_song
+        {
+            push_action(actions, main_window, CompanionAction::Next);
+        }
+        let play_icon = if snapshot.playing {
+            Icon::Pause
+        } else {
+            Icon::Play
+        };
+        let play_label = if snapshot.playing {
+            snapshot.t("Pause", "暂停")
+        } else {
+            snapshot.t("Play", "播放")
+        };
+        if icons::icon_button(
+            ui,
+            play_icon,
+            toolbar_button,
+            control_color,
+            with_alpha(Color32::WHITE, 34),
+            play_label,
+        )
+        .clicked()
+            && snapshot.has_song
+        {
+            push_action(actions, main_window, CompanionAction::TogglePlay);
+        }
+        if icons::icon_button(
+            ui,
+            Icon::Prev,
+            toolbar_button,
+            control_color,
+            with_alpha(Color32::WHITE, 34),
+            snapshot.t("Previous", "上一首"),
+        )
+        .clicked()
+            && snapshot.has_song
+        {
+            push_action(actions, main_window, CompanionAction::Previous);
+        }
+        let heart_color = if snapshot.favorite {
+            palette.accent
+        } else if snapshot.has_song {
+            with_alpha(Color32::WHITE, 220)
+        } else {
+            with_alpha(Color32::WHITE, 70)
+        };
+        let heart_label = if snapshot.favorite {
+            snapshot.t("Remove from favorites", "取消收藏")
+        } else {
+            snapshot.t("Add to favorites", "添加到我喜欢")
+        };
+        if icons::icon_button(
+            ui,
+            Icon::Heart,
+            toolbar_button,
+            heart_color,
+            with_alpha(Color32::WHITE, 34),
+            heart_label,
+        )
+        .clicked()
+            && snapshot.has_song
+        {
+            push_action(actions, main_window, CompanionAction::ToggleFavorite);
+        }
+    });
 }
 
 fn render_lyrics(
@@ -436,348 +643,215 @@ fn render_lyrics(
     let opacity = (snapshot.lyrics_opacity as f32 / 100.0).clamp(0.3, 1.0);
     let alpha = |value: u8| ((value as f32) * opacity).round() as u8;
     let locked = snapshot.lyrics_locked;
-    let shadow = if locked {
-        Color32::TRANSPARENT
-    } else {
-        Color32::from_rgba_unmultiplied(6, 5, 4, alpha(190))
-    };
+    let outline = with_alpha(Color32::from_rgb(8, 7, 6), 235);
     let active_size = snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0);
     let toolbar_button = 32.0;
 
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
         .show(ctx, |ui| {
-            let card = ui.max_rect().shrink2(Vec2::new(6.0, 5.0));
+            let card = ui.max_rect().shrink2(Vec2::new(4.0, 4.0));
             if lyrics_chrome_visible(locked) {
-                draw_lyrics_card(ui, card, &palette);
+                draw_lyrics_frame(ui, card, &palette);
             }
-            let inset = if locked {
-                Vec2::new(20.0, 16.0)
-            } else {
-                Vec2::new(16.0, 7.0)
-            };
-            let inner = card.shrink2(inset);
+            let inner = card.shrink2(Vec2::new(20.0, 8.0));
             let mut body = inner;
-            let header_height = if locked { 24.0 } else { 34.0 };
-            let header = Rect::from_min_size(inner.min, Vec2::new(inner.width(), header_height));
 
             if lyrics_chrome_visible(locked) {
-                ui.allocate_ui_at_rect(header, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        let controls_width = 7.0 * toolbar_button + 6.0 * 2.0;
-                        let drag_width = (ui.available_width() - controls_width - 6.0).max(56.0);
-                        let (drag_rect, drag) =
-                            ui.allocate_exact_size(Vec2::new(drag_width, 30.0), Sense::drag());
-                        icons::paint(
-                            ui.painter(),
-                            Rect::from_center_size(
-                                egui::pos2(drag_rect.left() + 6.0, drag_rect.center().y),
-                                Vec2::splat(12.0),
-                            ),
-                            Icon::Grip,
-                            with_alpha(ink, 110),
-                            1.2,
-                        );
-                        if inner.width() >= 560.0 {
-                            let clip = ui.painter().with_clip_rect(drag_rect);
-                            clip.text(
-                                egui::pos2(drag_rect.left() + 17.0, drag_rect.center().y),
-                                Align2::LEFT_CENTER,
-                                snapshot.t("LILT LYRICS", "LILT 桌面歌词"),
-                                FontId::proportional(9.0),
-                                with_alpha(ink, 140),
-                            );
-                        }
-                        if drag.drag_started() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                        }
-                        if drag.double_clicked() {
-                            push_action(actions, main_window, CompanionAction::OpenNowPlaying);
-                        }
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.spacing_mut().item_spacing.x = 2.0;
-                            if icons::icon_button(
-                                ui,
-                                Icon::Close,
-                                toolbar_button,
-                                with_alpha(ink, 210),
-                                with_alpha(ink, 30),
-                                snapshot.t("Close desktop lyrics", "关闭桌面歌词"),
-                            )
-                            .clicked()
-                            {
-                                push_action(actions, main_window, CompanionAction::CloseLyrics);
-                            }
-                            if icons::icon_button(
-                                ui,
-                                Icon::Lock,
-                                toolbar_button,
-                                with_alpha(ink, 210),
-                                with_alpha(ink, 30),
-                                snapshot.t("Lock and click through", "锁定并鼠标穿透"),
-                            )
-                            .clicked()
-                            {
-                                push_action(
-                                    actions,
-                                    main_window,
-                                    CompanionAction::ToggleLyricsLock,
-                                );
-                            }
-                            if icons::icon_button(
-                                ui,
-                                Icon::Expand,
-                                toolbar_button,
-                                with_alpha(ink, 210),
-                                with_alpha(ink, 30),
-                                snapshot.t("Open player", "打开播放页"),
-                            )
-                            .clicked()
-                            {
-                                push_action(actions, main_window, CompanionAction::OpenNowPlaying);
-                            }
-                            let control_color = if snapshot.has_song {
-                                with_alpha(ink, 220)
-                            } else {
-                                with_alpha(ink, 64)
-                            };
-                            if icons::icon_button(
-                                ui,
-                                Icon::Next,
-                                toolbar_button,
-                                control_color,
-                                with_alpha(ink, 30),
-                                snapshot.t("Next", "下一首"),
-                            )
-                            .clicked()
-                                && snapshot.has_song
-                            {
-                                push_action(actions, main_window, CompanionAction::Next);
-                            }
-                            let play_icon = if snapshot.playing {
-                                Icon::Pause
-                            } else {
-                                Icon::Play
-                            };
-                            let play_label = if snapshot.playing {
-                                snapshot.t("Pause", "暂停")
-                            } else {
-                                snapshot.t("Play", "播放")
-                            };
-                            if icons::icon_button(
-                                ui,
-                                play_icon,
-                                toolbar_button,
-                                control_color,
-                                with_alpha(ink, 30),
-                                play_label,
-                            )
-                            .clicked()
-                                && snapshot.has_song
-                            {
-                                push_action(actions, main_window, CompanionAction::TogglePlay);
-                            }
-                            if icons::icon_button(
-                                ui,
-                                Icon::Prev,
-                                toolbar_button,
-                                control_color,
-                                with_alpha(ink, 30),
-                                snapshot.t("Previous", "上一首"),
-                            )
-                            .clicked()
-                                && snapshot.has_song
-                            {
-                                push_action(actions, main_window, CompanionAction::Previous);
-                            }
-                            let heart_color = if snapshot.favorite {
-                                palette.accent
-                            } else if snapshot.has_song {
-                                with_alpha(ink, 220)
-                            } else {
-                                with_alpha(ink, 64)
-                            };
-                            let heart_label = if snapshot.favorite {
-                                snapshot.t("Remove from favorites", "取消收藏")
-                            } else {
-                                snapshot.t("Add to favorites", "添加到我喜欢")
-                            };
-                            if icons::icon_button(
-                                ui,
-                                Icon::Heart,
-                                toolbar_button,
-                                heart_color,
-                                with_alpha(ink, 30),
-                                heart_label,
-                            )
-                            .clicked()
-                                && snapshot.has_song
-                            {
-                                push_action(actions, main_window, CompanionAction::ToggleFavorite);
-                            }
-                        });
-                    });
+                let header = Rect::from_min_size(inner.min, Vec2::new(inner.width(), 38.0));
+                let pill_width = 7.0 * toolbar_button + 6.0 * 2.0 + 20.0;
+                let pill = Rect::from_min_size(
+                    egui::pos2(header.right() - pill_width, header.top() + 1.0),
+                    Vec2::new(pill_width, 36.0),
+                );
+                let drag_rect = Rect::from_min_max(
+                    header.min,
+                    egui::pos2(
+                        (pill.left() - 10.0).max(header.left() + 30.0),
+                        header.bottom(),
+                    ),
+                );
+                let drag = ui.allocate_rect(drag_rect, Sense::drag());
+                icons::paint(
+                    ui.painter(),
+                    Rect::from_center_size(
+                        egui::pos2(drag_rect.left() + 10.0, drag_rect.center().y),
+                        Vec2::splat(22.0),
+                    ),
+                    Icon::Grip,
+                    with_alpha(ink, 140),
+                    1.2,
+                );
+                if drag.drag_started() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                }
+                if drag.double_clicked() {
+                    push_action(actions, main_window, CompanionAction::OpenNowPlaying);
+                }
+                ui.painter()
+                    .rect_filled(pill, 18.0, Color32::from_rgb(15, 13, 11));
+                ui.painter().rect_stroke(
+                    pill,
+                    18.0,
+                    Stroke::new(1.0, with_alpha(palette.accent, 90)),
+                    StrokeKind::Inside,
+                );
+                ui.allocate_ui_at_rect(pill.shrink2(Vec2::new(10.0, 2.0)), |ui| {
+                    lyrics_toolbar(ui, &snapshot, actions, main_window, palette, toolbar_button);
                 });
-                body.min.y = header.bottom() + 4.0;
+                body.min.y = header.bottom() + 8.0;
             } else {
                 // The separate unlock puck sits in this strip; keep the lyric
                 // lines below it.
-                body.min.y = header.bottom() + 2.0;
+                body.min.y = inner.top() + 30.0;
+            }
+            body.max.y = inner.bottom() - 2.0;
+
+            // The whole lyric area can be dragged, like KuGou's overlay. The
+            // toolbar lives in the header above, so this never steals its
+            // clicks.
+            let body_drag = ui.allocate_rect(body, Sense::drag());
+            if body_drag.drag_started() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+            }
+            if body_drag.double_clicked() {
+                push_action(actions, main_window, CompanionAction::OpenNowPlaying);
             }
 
-            body.max.y -= if locked { 8.0 } else { 5.0 };
-            ui.allocate_ui_at_rect(body, |ui| {
-                ui.set_width(body.width());
-                ui.set_clip_rect(body);
-                ui.spacing_mut().item_spacing.y = 2.0;
-                ui.vertical_centered(|ui| {
-                    ui.add_space(1.0);
-                    let has_lyrics = !snapshot.lyrics.is_empty();
-                    let show_meta = inner.width() >= 560.0;
-                    if has_lyrics && !locked && show_meta {
-                        let meta = if snapshot.artist.is_empty() {
-                            snapshot.title.clone()
-                        } else {
-                            format!("{}  ·  {}", snapshot.title, snapshot.artist)
-                        };
-                        shadow_label(
-                            ui,
-                            &meta,
-                            FontId::proportional(9.5),
-                            with_alpha(ink, alpha(120)),
-                            shadow,
-                        );
-                        ui.add_space(2.0);
-                    } else if !has_lyrics && !locked && show_meta {
-                        let meta = if snapshot.artist.is_empty() {
-                            snapshot.album.clone()
-                        } else if snapshot.album.is_empty() {
-                            snapshot.artist.clone()
-                        } else {
-                            format!("{}  ·  {}", snapshot.artist, snapshot.album)
-                        };
-                        if !meta.is_empty() {
-                            shadow_label(
-                                ui,
-                                &meta,
-                                FontId::proportional(9.5),
-                                with_alpha(ink, alpha(120)),
-                                shadow,
-                            );
-                            ui.add_space(2.0);
-                        }
-                    }
-
-                    if !has_lyrics {
-                        shadow_label(
-                            ui,
-                            &snapshot.title,
-                            display_font(active_size * 0.78),
-                            with_alpha(ink, alpha(235)),
-                            shadow,
-                        );
-                        shadow_label(
-                            ui,
-                            snapshot.t("No lyrics for this track", "这首歌没有歌词"),
-                            FontId::proportional(10.5),
-                            with_alpha(ink, alpha(110)),
-                            shadow,
-                        );
-                    } else {
-                        let timed = snapshot.lyrics.iter().any(|(time, _)| *time > 0.0);
-                        let lyric_position =
-                            library::lyrics_position(snapshot.position, snapshot.lyrics_offset_ms);
-                        let active_line = if timed {
-                            snapshot
-                                .lyrics
-                                .iter()
-                                .enumerate()
-                                .rev()
-                                .find(|(_, (time, line))| {
-                                    *time <= lyric_position + 0.1 && !line.trim().is_empty()
-                                })
-                                .map(|(index, _)| index)
-                        } else {
-                            snapshot
-                                .lyrics
-                                .iter()
-                                .position(|(_, line)| !line.trim().is_empty())
-                        };
-                        let center = active_line.unwrap_or(0);
-                        let neighbor_size = (active_size * 0.50).clamp(12.0, 20.0);
-                        let active_height = active_size * 1.22;
-                        let neighbor_height = neighbor_size * 1.22;
-                        let lyrics_room = (body.height() - 18.0).max(20.0);
-                        let mut indices = vec![center];
-                        if active_height + neighbor_height * 2.0 + 4.0 <= lyrics_room {
-                            if center > 0 {
-                                indices.insert(0, center - 1);
-                            }
-                            if center + 1 < snapshot.lyrics.len() {
-                                indices.push(center + 1);
-                            }
-                        } else if active_height + neighbor_height + 2.0 <= lyrics_room {
-                            if center + 1 < snapshot.lyrics.len() {
-                                indices.push(center + 1);
-                            } else if center > 0 {
-                                indices.insert(0, center - 1);
-                            }
-                        }
-                        let mut painted = 0;
-                        for index in indices {
-                            let Some((_, line)) = snapshot.lyrics.get(index) else {
-                                continue;
-                            };
-                            if line.trim().is_empty() {
-                                continue;
-                            }
-                            let active = Some(index) == active_line;
-                            let color = if active {
-                                with_alpha(palette.accent, alpha(255))
-                            } else {
-                                with_alpha(ink, alpha(150))
-                            };
-                            shadow_label(
-                                ui,
-                                line,
-                                display_font(if active { active_size } else { neighbor_size }),
-                                color,
-                                shadow,
-                            );
-                            painted += 1;
-                            if active {
-                                ui.add_space(1.0);
-                            }
-                        }
-                        if painted == 0 {
-                            shadow_label(
-                                ui,
-                                snapshot.t("Waiting for the first line", "等待第一句歌词"),
-                                FontId::proportional(13.0),
-                                with_alpha(ink, alpha(150)),
-                                shadow,
-                            );
-                        }
-                    }
-                });
-            });
-
-            if lyrics_chrome_visible(locked) {
-                let duration = snapshot.duration.max(0.001);
-                let fraction = (snapshot.position / duration).clamp(0.0, 1.0) as f32;
-                let rail = Rect::from_min_size(
-                    egui::pos2(card.left() + 20.0, card.bottom() - 4.0),
-                    Vec2::new((card.width() - 40.0).max(1.0), 2.0),
+            let has_lyrics = snapshot
+                .lyrics
+                .iter()
+                .any(|(_, line)| !line.trim().is_empty());
+            let (main_line, sub_line) = if has_lyrics {
+                let (current, next) = lyric_pair(
+                    &snapshot.lyrics,
+                    snapshot.position,
+                    snapshot.lyrics_offset_ms,
                 );
-                ui.painter().rect_filled(rail, 1.0, with_alpha(ink, 28));
-                ui.painter().rect_filled(
-                    Rect::from_min_size(
-                        rail.min,
-                        Vec2::new(rail.width() * fraction, rail.height()),
-                    ),
-                    1.0,
-                    with_alpha(palette.accent, 190),
+                let main = current
+                    .and_then(|index| snapshot.lyrics.get(index))
+                    .map(|(_, line)| line.clone())
+                    .unwrap_or_default();
+                let sub = next
+                    .and_then(|index| snapshot.lyrics.get(index))
+                    .map(|(_, line)| line.clone())
+                    .unwrap_or_default();
+                (main, sub)
+            } else {
+                (
+                    snapshot.title.clone(),
+                    snapshot
+                        .t("No lyrics for this track", "这首歌没有歌词")
+                        .to_owned(),
+                )
+            };
+
+            if main_line.trim().is_empty() && sub_line.trim().is_empty() {
+                return;
+            }
+
+            let main_color = if has_lyrics {
+                with_alpha(palette.accent, alpha(255))
+            } else {
+                with_alpha(ink, alpha(235))
+            };
+            let sub_color = if has_lyrics {
+                with_alpha(palette.accent, alpha(205))
+            } else {
+                with_alpha(ink, alpha(150))
+            };
+
+            let gap = 4.0;
+            let mut main_base = if has_lyrics {
+                active_size
+            } else {
+                active_size * 0.85
+            };
+            let mut sub_base = (active_size * 0.88).max(12.0);
+            let mut main = lyric_galley(
+                ui,
+                &main_line,
+                main_base,
+                main_color,
+                body.width(),
+                body.height(),
+            );
+            let mut sub = if sub_line.trim().is_empty() {
+                None
+            } else {
+                Some(lyric_galley(
+                    ui,
+                    &sub_line,
+                    sub_base,
+                    sub_color,
+                    body.width(),
+                    body.height(),
+                ))
+            };
+            // A very long active line can shrink below the next line. Keep the
+            // visual hierarchy even when the window is narrow.
+            if let Some((sub_size, _)) = &sub {
+                if *sub_size > main.0 * 0.94 {
+                    sub_base = (main.0 * 0.94).max(1.0);
+                    sub = Some(lyric_galley(
+                        ui,
+                        &sub_line,
+                        sub_base,
+                        sub_color,
+                        body.width(),
+                        body.height(),
+                    ));
+                }
+            }
+
+            let rendered_height = main.1.size().y
+                + sub.as_ref().map_or(0.0, |(_, galley)| galley.size().y)
+                + if sub.is_some() { gap } else { 0.0 };
+            if rendered_height > body.height() {
+                let factor = ((body.height() - if sub.is_some() { gap } else { 0.0 }).max(1.0)
+                    / rendered_height)
+                    .min(1.0);
+                main_base = (main_base * factor).max(1.0);
+                sub_base = (sub_base * factor).max(1.0);
+                main = lyric_galley(
+                    ui,
+                    &main_line,
+                    main_base,
+                    main_color,
+                    body.width(),
+                    body.height(),
+                );
+                sub = if sub_line.trim().is_empty() {
+                    None
+                } else {
+                    Some(lyric_galley(
+                        ui,
+                        &sub_line,
+                        sub_base,
+                        sub_color,
+                        body.width(),
+                        body.height(),
+                    ))
+                };
+            }
+
+            let main_position = body.left_top();
+            paint_outlined_line(
+                ui,
+                &main_line,
+                main.0,
+                &main.1,
+                main_position,
+                main_color,
+                outline,
+            );
+            if let Some((sub_size, sub_galley)) = &sub {
+                let position = egui::pos2(
+                    body.right() - sub_galley.size().x,
+                    body.bottom() - sub_galley.size().y,
+                );
+                paint_outlined_line(
+                    ui, &sub_line, *sub_size, sub_galley, position, sub_color, outline,
                 );
             }
         });
@@ -1112,9 +1186,35 @@ mod tests {
     use super::*;
 
     #[test]
-    fn locked_lyrics_hide_the_card_and_controls() {
+    fn locked_lyrics_hide_the_frame_and_controls() {
         assert!(lyrics_chrome_visible(false));
         assert!(!lyrics_chrome_visible(true));
+    }
+
+    #[test]
+    fn font_size_shrinks_to_fit_width_and_height() {
+        assert!((fit_font_size(40.0, 1000.0, 50.0, 500.0, 100.0) - 20.0).abs() < 0.01);
+        assert!((fit_font_size(40.0, 200.0, 200.0, 500.0, 100.0) - 20.0).abs() < 0.01);
+        assert!((fit_font_size(40.0, 200.0, 40.0, 500.0, 100.0) - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn lyric_pair_skips_blank_lines_and_keeps_next_line() {
+        let lyrics = vec![
+            (0.0, "intro".to_owned()),
+            (2.0, "one".to_owned()),
+            (4.0, String::new()),
+            (6.0, "two".to_owned()),
+        ];
+        assert_eq!(lyric_pair(&lyrics, 3.0, 0), (Some(1), Some(3)));
+        assert_eq!(lyric_pair(&lyrics, 7.0, 0), (Some(3), None));
+        assert_eq!(lyric_pair(&lyrics, 0.5, 0), (Some(0), Some(1)));
+    }
+
+    #[test]
+    fn lyric_pair_uses_the_first_line_before_its_timestamp() {
+        let lyrics = vec![(2.0, "later".to_owned()), (4.0, "next".to_owned())];
+        assert_eq!(lyric_pair(&lyrics, 0.5, 0), (Some(0), Some(1)));
     }
 
     #[test]

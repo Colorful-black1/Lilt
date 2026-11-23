@@ -1,0 +1,8 @@
+﻿Desktop lyric window WM_NCHITTEST and layered attributes
+
+locked:   hit=-1 layered=True key=0 alpha=0 flags=1
+unlocked: hit=1 layered=True key=0 alpha=0 flags=1
+
+Both states use the black colour key (flags=1), so no dark card is drawn.
+The lyric window is click-through only while locked (hit=-1, HTTRANSPARENT).
+Window positioned at 300,430 with a 900x190 client area; tested point (690,450).

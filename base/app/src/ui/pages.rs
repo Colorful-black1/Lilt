@@ -2452,8 +2452,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Desktop lyrics", "桌面歌词"),
                     app.t(
-                        "A rounded, always-on-top lyric window with a translucent panel.",
-                        "圆角、置顶的独立歌词窗口，面板半透明。",
+                        "A borderless always-on-top overlay: current line on the left, next line on the right. Long lines shrink to show in full.",
+                        "无边框置顶歌词浮窗：当前行靠左、下一行靠右；长歌词自动缩放，完整显示。",
                     ),
                     |ui| {
                         if widgets::toggle_switch(ui, &mut desktop_lyrics, palette).clicked() {
@@ -2468,8 +2468,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Lock desktop lyrics", "锁定桌面歌词"),
                     app.t(
-                        "Hide the controls, prevent dragging and let clicks pass through. Unlock with the small lock button or the tray menu.",
-                        "隐藏控件、禁止拖动，并让鼠标点击穿透窗口。点击歌词上的小锁按钮或使用托盘菜单解锁。",
+                        "Hide the frame and toolbar, prevent dragging and let clicks pass through. Unlock with the small lock button, the tray menu or this switch.",
+                        "隐藏边框和工具栏、禁止拖动，并让鼠标点击穿透窗口。点击歌词上方的小锁按钮、托盘菜单或此开关解锁。",
                     ),
                     |ui| {
                         if widgets::toggle_switch(ui, &mut lyrics_locked, palette).clicked() {
@@ -2484,8 +2484,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Desktop lyric size", "桌面歌词字号"),
                     app.t(
-                        "Active line size in the desktop lyric window.",
-                        "桌面歌词窗口当前行的字号。",
+                        "Maximum size of the active line; long lines shrink to fit the window.",
+                        "桌面歌词当前行的最大字号；长歌词会缩小以完整显示。",
                     ),
                     |ui| {
                         let response = ui.add(

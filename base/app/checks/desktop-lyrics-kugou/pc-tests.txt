@@ -1,0 +1,12 @@
+Desktop test run (cargo test)
+
+running 46 tests
+test result: ok. 46 passed; 0 failed; 0 ignored
+
+Desktop lyric tests added or updated this round:
+- ui::companion::tests::locked_lyrics_hide_the_frame_and_controls
+- ui::companion::tests::font_size_shrinks_to_fit_width_and_height
+- ui::companion::tests::lyric_pair_skips_blank_lines_and_keeps_next_line
+- ui::companion::tests::lyric_pair_uses_the_first_line_before_its_timestamp
+- ui::companion::tests::unlock_puck_only_appears_for_visible_locked_lyrics
+- ui::companion::tests::active_line_uses_offset_and_skips_blank_lines

@@ -86,8 +86,6 @@ mod platform {
     const GWL_EXSTYLE: i32 = -20;
     const WS_EX_LAYERED: i32 = 0x0008_0000;
     const LWA_COLORKEY: u32 = 0x0000_0001;
-    const LWA_ALPHA: u32 = 0x0000_0002;
-    const LYRICS_ALPHA: u8 = 215;
 
     type ActionQueue = Arc<Mutex<Vec<DesktopAction>>>;
 
@@ -99,8 +97,6 @@ mod platform {
         bottom: i32,
     }
 
-    static LYRICS_LAYER_HWND: AtomicIsize = AtomicIsize::new(0);
-    static LYRICS_LAYER_SIZE: AtomicU64 = AtomicU64::new(0);
     static LYRICS_SUBCLASS_HWND: AtomicIsize = AtomicIsize::new(0);
     static LYRICS_ORIGINAL_PROC: AtomicIsize = AtomicIsize::new(0);
     static LYRICS_CLICK_THROUGH: AtomicBool = AtomicBool::new(false);
@@ -818,9 +814,10 @@ mod platform {
         }));
     }
 
-    /// Applies the rounded companion window region and the desktop lyric
-    /// visibility state: a constant window alpha while unlocked, and a black
-    /// colour key while locked so only the lyrics remain visible.
+    /// Applies the black colour key used by both desktop-lyric states. The
+    /// window has no card background now: only lyric text, its outline, the
+    /// unlocked frame and toolbar remain visible. The mini player keeps its
+    /// own rounded window region.
     pub fn configure_companion_window(title: &str, kind: CompanionWindowKind, click_through: bool) {
         let hwnd = match kind {
             CompanionWindowKind::Lyrics => find_window_by_title(title, &LYRICS_WINDOW),
@@ -836,20 +833,15 @@ mod platform {
             install_lyrics_hit_test(hwnd, click_through);
         }
         if lyrics || unlock {
-            let locked = lyrics && click_through;
             unsafe {
                 let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
                 if ex_style & WS_EX_LAYERED == 0 {
                     SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED);
                 }
-                if locked || unlock {
-                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_COLORKEY);
-                } else {
-                    SetLayeredWindowAttributes(hwnd, 0, LYRICS_ALPHA, LWA_ALPHA);
-                }
+                SetLayeredWindowAttributes(hwnd, 0, 0, LWA_COLORKEY);
             }
         }
-        if unlock {
+        if unlock || lyrics {
             return;
         }
         let mut rect = WinRect {
@@ -864,11 +856,7 @@ mod platform {
         let width = (rect.right - rect.left).max(1);
         let height = (rect.bottom - rect.top).max(1);
         let size_key = ((width as u64) << 32) | height as u64;
-        let (last_hwnd, last_size) = if lyrics {
-            (&LYRICS_LAYER_HWND, &LYRICS_LAYER_SIZE)
-        } else {
-            (&MINI_LAYER_HWND, &MINI_LAYER_SIZE)
-        };
+        let (last_hwnd, last_size) = (&MINI_LAYER_HWND, &MINI_LAYER_SIZE);
         let hwnd_id = hwnd as isize;
         if last_hwnd.load(Ordering::Relaxed) == hwnd_id
             && last_size.load(Ordering::Relaxed) == size_key

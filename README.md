@@ -158,7 +158,7 @@ Pop-Location
 
 ## 验收证据
 
-- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`：桌面版与 Android 版各轮截图、UI dump、测试说明
+- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`：桌面版与 Android 版各轮截图、UI dump、测试说明
 - `base/app/shots/`：布局检查截图
 - `base/checks/`：工作区级检查截图
 

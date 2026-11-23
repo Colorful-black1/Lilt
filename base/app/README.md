@@ -135,13 +135,17 @@ Set `LILT_DATA_DIR` to use a different data folder.
   desktop lyrics, Mini player, Quit Lilt). Closing hides to the tray by default;
   minimizing does too when enabled. Playback, track changes, sleep timers, fades and
   state saves keep advancing while hidden.
-- **Desktop lyrics.** A separate always-on-top lyric window shows the current, previous and
-  next lyric lines with the same per-song offset and opacity settings as the now-playing
-  panel. When unlocked it uses a semi-transparent rounded card with a 32 px toolbar:
-  favourite, previous, play/pause, next, open player, lock and close. The header can be
-  dragged and the window resized. Locking removes the card, toolbar and progress rail, makes
-  the window fully transparent and click-through, and leaves crisp lyrics plus a small lock
-  button above them; click it to unlock. The tray menu and Settings also unlock it.
+- **Desktop lyrics.** A borderless, always-on-top overlay in the style of KuGou's desktop
+  lyrics: the current line is left aligned at the top, the next line is right aligned at
+  the bottom, and both use the same per-song offset and opacity settings as the now-playing
+  panel. Lines never wrap or ellipsize; the font shrinks to fit so the full text is visible
+  even in a narrow window. Text is drawn with a dark outline instead of a card background,
+  so it stays readable over bright wallpapers. When unlocked it shows a thin accent frame
+  and a floating 32 px toolbar (favourite, previous, play/pause, next, open player, lock and
+  close); the whole lyric area can be dragged and double-click opens Now Playing. Locking
+  removes the frame and toolbar, makes the window fully transparent and click-through, and
+  leaves the outlined lyrics plus a small lock button above them; click it, use the tray
+  menu or use Settings to unlock. The default size is 900×190 (minimum 460×160).
   `Ctrl+Alt+L` toggles the window.
 - **Mini player.** A compact always-on-top window with cover art, title/artist/album,
   previous/play/next, shuffle/repeat, elapsed time and a seek bar. Its transport and seek

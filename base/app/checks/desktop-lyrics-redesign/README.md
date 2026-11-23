@@ -1,5 +1,9 @@
 # Desktop lyrics redesign — transparency and unlock
 
+> Historical note: this design was superseded by the KuGou-style two-line overlay in
+> `../desktop-lyrics-kugou/`. The screenshots here describe the previous build, not the
+> current behaviour.
+
 ## What changed
 
 The old desktop lyric window had two problems:
