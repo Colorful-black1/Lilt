@@ -369,12 +369,27 @@ fn draw_cover(ui: &mut Ui, snapshot: &CompanionSnapshot, size: f32, palette: &Pa
     }
 }
 
-fn draw_lyrics_frame(ui: &Ui, rect: Rect, palette: &Palette) {
+/// Unlocked lyrics sit on a semi-transparent card. On Windows the window
+/// itself carries the alpha (`LWA_ALPHA`), so an opaque fill here becomes
+/// translucent on screen while the text and toolbar stay readable. Locked
+/// lyrics skip this card entirely and use the colour-key transparency.
+fn draw_lyrics_card(ui: &Ui, rect: Rect, palette: &Palette) {
+    let radius = 18.0;
+    ui.painter()
+        .rect_filled(rect, radius, Color32::from_rgb(13, 11, 10));
     ui.painter().rect_stroke(
         rect,
-        18.0,
-        Stroke::new(1.0, with_alpha(palette.accent, 175)),
+        radius,
+        Stroke::new(1.0, with_alpha(palette.accent, 70)),
         StrokeKind::Inside,
+    );
+    let highlight = Rect::from_min_max(
+        rect.left_top() + Vec2::new(18.0, 1.0),
+        egui::pos2(rect.right() - 18.0, rect.top() + 2.0),
+    );
+    ui.painter().line_segment(
+        [highlight.left_center(), highlight.right_center()],
+        Stroke::new(1.0, with_alpha(Color32::WHITE, 14)),
     );
 }
 
@@ -650,9 +665,9 @@ fn render_lyrics(
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
         .show(ctx, |ui| {
-            let card = ui.max_rect().shrink2(Vec2::new(4.0, 4.0));
+            let card = ui.max_rect().shrink2(Vec2::new(6.0, 5.0));
             if lyrics_chrome_visible(locked) {
-                draw_lyrics_frame(ui, card, &palette);
+                draw_lyrics_card(ui, card, &palette);
             }
             let inner = card.shrink2(Vec2::new(20.0, 8.0));
             let mut body = inner;

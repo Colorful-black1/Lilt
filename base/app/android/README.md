@@ -47,8 +47,8 @@ For a store or a shareable release build, create your own signing key and config
 4. For the notification controls on Android 13+, allow notifications when asked.
 5. Optional: open **Settings → Floating lyrics** and turn on **Show over other apps**. If
    Android opens the display-over-other-apps screen, allow Lilt there; this is only needed
-   for the floating lyric card. **Lock position and controls** can be undone on the same
-   card.
+   for the floating lyric overlay. The now-playing page's **词** button shows or hides it,
+   and **Lock position and controls** can be undone in Settings.
 
 This debug APK is for testing and sideloading, not for a store listing. A store build
 needs a release signing key and an `.aab` produced with `bundleRelease`.
@@ -77,14 +77,18 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   `-100`, `+100`, `+500` ms and reset, limited to ±60 s); positive values delay the lyrics.
   The editor shows the adjusted timestamps and saves the offset with the text. Settings has
   lyric font size (12–24 sp) and opacity (35–100%) sliders with a live preview.
-- **Floating lyrics.** A draggable always-on-top lyric card outside the app. It shows the
-  previous, current and next LRC lines with the same per-song offset and opacity plus a
-  separate 18–44 sp size, a progress line and previous/play-pause/next/open controls. It
-  needs the optional **display over other apps** permission; Settings opens the system
-  screen when it is missing. The lock button hides the controls, disables dragging and makes
-  the whole card click-through (`FLAG_NOT_TOUCHABLE`); unlock it in Settings. The card runs
-  inside the existing playback service, not a second foreground service, so it always uses
-  the same MediaSession as the notification.
+- **Floating lyrics.** A compact always-on-top lyric outside the app. It shows only the
+  current LRC line with the same per-song offset and opacity, plus a separate 18–44 sp
+  maximum size; the line auto-shrinks so it fits on one row. It needs the optional
+  **display over other apps** permission; Settings opens the system screen when it is
+  missing. Unlocked mode is a small semi-transparent card with a drag grip, lock and close
+  buttons. Locked mode removes the card and buttons completely, leaves only the outlined
+  lyric and makes the window click-through (`FLAG_NOT_TOUCHABLE`); unlock it in Settings.
+  The now-playing page has a **词** quick button that only shows or hides the overlay, while
+  size, lock state and accent stay in Settings, where the floating size slider also has
+  explicit **缩小 / 放大** buttons. The overlay runs inside the existing playback service,
+  not a second foreground service, so it always uses the same MediaSession as the
+  notification.
 - **Home-screen widget.** A resizable RemoteViews card with cover, title, artist,
   elapsed/total time, progress and previous/play-pause/next buttons; tapping the card opens
   Lilt. The playback service pushes state to it on changes and once a second while playing,

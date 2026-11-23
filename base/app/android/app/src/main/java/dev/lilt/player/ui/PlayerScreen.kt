@@ -1,5 +1,9 @@
 package dev.lilt.player.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -73,6 +77,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -98,6 +103,11 @@ fun PlayerScreen(
     onOpenLyrics: (Long) -> Unit,
     onEditTags: (Long) -> Unit,
 ) {
+    val context = LocalContext.current
+    val overlayPermissionHint = t(
+        "Allow display over other apps to show floating lyrics.",
+        "请允许显示在其他应用上层以显示悬浮歌词。",
+    )
     val state by vm.player.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val playlists by vm.playlists.collectAsStateWithLifecycle()
@@ -106,6 +116,7 @@ fun PlayerScreen(
     val speed by vm.playbackSpeed.collectAsStateWithLifecycle()
     val lyricsFontSize by vm.lyricsFontSize.collectAsStateWithLifecycle()
     val lyricsOpacity by vm.lyricsOpacity.collectAsStateWithLifecycle()
+    val floatingLyrics by vm.floatingLyrics.collectAsStateWithLifecycle()
     val lyrics by remember(state.mediaId) { vm.lyricsFor(state.mediaId) }
         .collectAsStateWithLifecycle(initialValue = null)
     val sleep by vm.sleep.collectAsStateWithLifecycle()
@@ -384,7 +395,34 @@ fun PlayerScreen(
                         bookmarkPosition = state.positionMs
                         showBookmark = true
                     }
-                    QuickAction(t("Queues", "队列"), Icons.Rounded.QueueMusic, onOpenQueues)
+                    QuickAction(
+                        t("Queues", "队列"),
+                        Icons.Rounded.QueueMusic,
+                        onClick = onOpenQueues,
+                    )
+                    QuickAction(
+                        label = t("Overlay", "词"),
+                        icon = Icons.Rounded.Lyrics,
+                        active = floatingLyrics,
+                    ) {
+                        val enabled = !floatingLyrics
+                        vm.setFloatingLyrics(enabled)
+                        if (enabled && !Settings.canDrawOverlays(context)) {
+                            Toast.makeText(
+                                context,
+                                overlayPermissionHint,
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}"),
+                                    ),
+                                )
+                            }
+                        }
+                    }
                 }
                 if (currentBookmarks.isNotEmpty()) {
                     Row(
@@ -658,15 +696,21 @@ private fun SyncedLyrics(
 private fun QuickAction(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val tint = if (active) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(10.dp),
     ) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = tint)
     }
 }
 

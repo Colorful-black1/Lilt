@@ -1,23 +1,28 @@
-# Desktop lyrics — KuGou-style left/right lines and full-width fitting
+# Desktop lyrics — KuGou-style left/right lines and semi-transparent card
 
 ## Goal
 
-The previous desktop overlay stacked three centred lyric lines inside a dark card.
-This round changes it to the layout KuGou uses on desktop:
+The previous desktop overlay stacked three centred lyric lines. This round changes it
+to the layout KuGou uses on desktop:
 
 - the current lyric line sits on the **top-left**, aligned to the left edge;
 - the next lyric line sits on the **bottom-right**, aligned to the right edge;
 - both lines stay on a single row, never wrapped or ellipsized;
 - the font shrinks automatically if either line is wider (or taller) than the
   window, so the full text is always visible;
-- the text has a dark painted outline instead of a card background, so it stays
-  readable over bright wallpapers without a dark rectangle.
+- the lyric text has a dark painted outline, so it stays readable over the
+  semi-transparent card and bright wallpapers.
 
-The unlocked window has a thin accent frame and a floating dark toolbar with 32 px
-buttons: favourite, previous, play/pause, next, open player, lock and close. The
-lyric body itself is also draggable (double-click opens Now Playing). Locked mode
-draws no frame, toolbar or progress rail: only the outlined lyrics and the small
-unlock puck remain. The whole lyric area can be clicked through while locked.
+Unlocked mode uses a **semi-transparent rounded card** with a thin accent frame and
+a floating dark toolbar of 32 px buttons (favourite, previous, play/pause, next,
+open player, lock and close). The whole lyric body is draggable and double-click
+opens Now Playing. Locked mode draws **no card, frame or toolbar**: only the
+outlined lyrics and the small unlock puck remain, fully transparent and
+click-through.
+
+The Settings page now has `A−` / `A+` buttons beside the desktop lyric size slider.
+The Now Playing page also has a `词` / **Lyrics overlay** quick button that shows or
+hides the desktop lyrics without opening Settings.
 
 ## Implementation
 
@@ -28,18 +33,23 @@ unlock puck remain. The whole lyric area can be clicked through while locked.
     height. There is no wrapping or truncation.
   - `paint_outlined_line` paints a near-black outline in eight directions, then
     the accent-coloured fill.
-  - the unlocked layout uses a 38 px header with the grip and a 32 px-button
-    toolbar pill; the current line starts below it, left aligned.
+  - the unlocked layout draws the dark rounded card, a 38 px header with the grip
+    and a 32 px-button toolbar pill; the current line starts below it, left
+    aligned.
   - the next line is painted at the bottom-right of the available body.
   - default window size is `900x190`; the minimum is `460x160`.
 - `base/app/src/desktop.rs`
-  - the lyric window now always uses `LWA_COLORKEY` (black key). The dark card
-    alpha path is gone, so both states are genuinely transparent.
+  - unlocked lyrics use `LWA_ALPHA` (215/255) plus a rounded window region, which
+    makes the card genuinely semi-transparent.
+  - locked lyrics switch to `LWA_COLORKEY` with no card; only the painted text and
+    outline remain.
   - `WM_NCHITTEST -> HTTRANSPARENT` is applied only while locked.
   - the mini player keeps its own rounded window region.
 - `base/app/src/ui/pages.rs`
-  - Settings copy now describes the outline overlay, left/right layout and
-    auto-fitting instead of a translucent panel.
+  - Settings copy describes the left/right layout, auto-fitting and the two card
+    states; the size row has A−/A+ buttons.
+- `base/app/src/ui/dialogs.rs`
+  - the Now Playing quick-action row has a `词` / Lyrics overlay toggle.
 
 ## Verification
 
@@ -59,42 +69,41 @@ Native window check at 300,430 with a 900x190 client area, tested point
 (690,450):
 
 ```text
-locked:   hit=-1 (HTTRANSPARENT) layered=True key=0 alpha=0 flags=1
-unlocked: hit=1  (HTCLIENT)     layered=True key=0 alpha=0 flags=1
+locked:   hit=-1 (HTTRANSPARENT) layered=True key=0 alpha=0   flags=1 (LWA_COLORKEY)
+unlocked: hit=1  (HTCLIENT)     layered=True key=0 alpha=215 flags=2 (LWA_ALPHA)
 ```
 
-The `flags=1` result is `LWA_COLORKEY`, confirming there is no dark alpha card in
-either state.
+This confirms the locked state is fully transparent/click-through and the unlocked
+state uses a semi-transparent card.
 
 ## Evidence
 
 All screenshots were taken with the release build. The main window was moved
-off-screen and the lyric window was placed over a synthetic white/pastel desktop
-so the transparency and outline are visible. The two long Chinese lines in the
-narrow screenshots are synthetic test text used to prove that long lines scale to
-fit without clipping.
+off-screen and the lyric window was placed over a synthetic white/pastel desktop so
+the card transparency, outline and toolbar are visible. The two long Chinese lines
+in the narrow screenshots are synthetic test text used to prove that long lines
+scale to fit without clipping.
 
 | File | What it shows |
 |---|---|
-| `01-pc-lyrics-unlocked-900x190.png` | Current line left, next line right, accent frame, 32 px toolbar |
+| `01-pc-lyrics-unlocked-900x190.png` | Semi-transparent card, current line left, next line right, 32 px toolbar |
 | `02-pc-lyrics-locked-900x190.png` | Fully transparent locked overlay: no card/toolbar, crisp outlined text, unlock puck |
 | `03-pc-lyrics-narrow-460x160.png` | Minimum width: a long line is scaled to fit completely, next line right aligned |
 | `04-pc-lyrics-narrow-680x160.png` | Reference-like width: both long lines fully visible |
 | `05-pc-lyrics-no-lyrics-900x190.png` | Unlocked no-lyrics state: title left, empty-state message right |
 | `06-pc-lyrics-favorite-900x190.png` | Favourite heart filled with the accent colour |
-| `07-pc-lyrics-no-lyrics-locked-900x190.png` | Locked no-lyrics state with the unlock puck |
+| `07-pc-lyrics-no-lyrics-locked-900x190.png` | Locked no-lyrics state: only text and the unlock puck |
 | `hit-test.txt` | Native hit-test and layered-window values |
 | `pc-tests.txt` | 46-test result and relevant test names |
 
 ## Packaged artifacts
 
 ```text
-dist/Lilt-0.1.0-win64/Lilt.exe        11,197,952 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,191,219 bytes
+dist/Lilt-0.1.0-win64/Lilt.exe        11,204,096 bytes  (PE subsystem 2)
+dist/Lilt-0.1.0-win64-portable.zip    18,193,446 bytes
 ```
 
-`package.ps1 pc` completed successfully after the change. The Android APK is
-unchanged in this round.
+`package.ps1 pc` completed successfully after the change.
 
 ## Limitations
 
@@ -107,4 +116,4 @@ unchanged in this round.
   scale like a vector stroke; very small fitted sizes use a 1 px outline.
 - The toolbar is always visible while unlocked (not hover-only), so it takes a
   38 px strip at the top of the window.
-- Android is untouched in this round.
+- Android has separate evidence in `../android-floating-lyrics-compact/`.

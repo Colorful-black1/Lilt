@@ -370,6 +370,7 @@ fun SettingsScreen(
                     range = 12f..24f,
                     steps = 23,
                     format = { "%.1f sp".format(it) },
+                    zoom = true,
                     onChange = vm::setLyricsFontSize,
                 )
                 LyricsDisplaySlider(
@@ -404,8 +405,8 @@ fun SettingsScreen(
             SettingCard(t("Floating lyrics", "悬浮歌词")) {
                 Text(
                     t(
-                        "A draggable lyric window that stays above other apps. It only draws local lyrics and never uses the network.",
-                        "悬浮在其他应用上方的可拖动歌词窗。只显示本地歌词，不联网。",
+                        "A draggable single-line lyric that stays above other apps. Locked mode leaves only the lyric text with no card or buttons. It only reads local lyrics and never uses the network.",
+                        "悬浮在其他应用上方的单行歌词。锁定后只保留歌词文字，没有背景卡片和按钮。只读取本地歌词，不联网。",
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -446,8 +447,8 @@ fun SettingsScreen(
                 SettingSwitch(
                     title = t("Lock position and controls", "锁定位置与控件"),
                     body = t(
-                        "Hides the buttons and stops touch input until unlocked here.",
-                        "隐藏按钮并让窗口不再接收触摸，需在这里解锁。",
+                        "Hides the drag bar, buttons and card background, leaving only the lyric. Touch input is disabled until unlocked here.",
+                        "隐藏拖动条、按钮和背景，只保留歌词；窗口不再接收触摸，需在这里解锁。",
                     ),
                     checked = floatingLocked,
                 ) { vm.setFloatingLyricsLocked(it) }
@@ -457,6 +458,7 @@ fun SettingsScreen(
                     range = 18f..44f,
                     steps = 51,
                     format = { "%.1f sp".format(it) },
+                    zoom = true,
                     onChange = vm::setFloatingFontSize,
                 )
                 Spacer(Modifier.height(8.dp))
@@ -663,9 +665,14 @@ private fun LyricsDisplaySlider(
     range: ClosedFloatingPointRange<Float>,
     steps: Int,
     format: (Float) -> String,
+    zoom: Boolean = false,
     onChange: (Float) -> Unit,
 ) {
     var local by remember(value) { mutableFloatStateOf(value) }
+    fun commit(next: Float) {
+        local = next.coerceIn(range.start, range.endInclusive)
+        onChange(local)
+    }
     Column(Modifier.padding(top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -679,13 +686,32 @@ private fun LyricsDisplaySlider(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Slider(
-            value = local,
-            onValueChange = { local = it },
-            valueRange = range,
-            steps = steps,
-            onValueChangeFinished = { onChange(local) },
-        )
+        if (zoom) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { commit(local - 1f) }) {
+                    Text(t("Smaller", "缩小"))
+                }
+                Slider(
+                    value = local,
+                    onValueChange = { local = it },
+                    valueRange = range,
+                    steps = steps,
+                    modifier = Modifier.weight(1f),
+                    onValueChangeFinished = { onChange(local) },
+                )
+                TextButton(onClick = { commit(local + 1f) }) {
+                    Text(t("Larger", "放大"))
+                }
+            }
+        } else {
+            Slider(
+                value = local,
+                onValueChange = { local = it },
+                valueRange = range,
+                steps = steps,
+                onValueChangeFinished = { onChange(local) },
+            )
+        }
     }
 }
 

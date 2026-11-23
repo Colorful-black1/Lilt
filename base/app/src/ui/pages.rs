@@ -2468,8 +2468,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Lock desktop lyrics", "锁定桌面歌词"),
                     app.t(
-                        "Hide the frame and toolbar, prevent dragging and let clicks pass through. Unlock with the small lock button, the tray menu or this switch.",
-                        "隐藏边框和工具栏、禁止拖动，并让鼠标点击穿透窗口。点击歌词上方的小锁按钮、托盘菜单或此开关解锁。",
+                        "Hide the card, frame and toolbar, prevent dragging and let clicks pass through. Unlock with the small lock button, the tray menu or this switch.",
+                        "隐藏卡片、边框和工具栏、禁止拖动，并让鼠标点击穿透窗口。点击歌词上方的小锁按钮、托盘菜单或此开关解锁。",
                     ),
                     |ui| {
                         if widgets::toggle_switch(ui, &mut lyrics_locked, palette).clicked() {
@@ -2488,15 +2488,35 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                         "桌面歌词当前行的最大字号；长歌词会缩小以完整显示。",
                     ),
                     |ui| {
-                        let response = ui.add(
-                            egui::Slider::new(&mut desktop_font, 18.0..=56.0)
-                                .step_by(1.0)
-                                .suffix(" px"),
-                        );
-                        if response.changed() {
-                            app.state.settings.desktop_lyrics_font_size = desktop_font;
-                            app.mark_dirty();
-                        }
+                        ui.horizontal(|ui| {
+                            if ui
+                                .small_button("A−")
+                                .on_hover_text(app.t("Smaller", "缩小"))
+                                .clicked()
+                            {
+                                desktop_font = (desktop_font - 2.0).max(18.0);
+                                app.state.settings.desktop_lyrics_font_size = desktop_font;
+                                app.mark_dirty();
+                            }
+                            let response = ui.add(
+                                egui::Slider::new(&mut desktop_font, 18.0..=56.0)
+                                    .step_by(1.0)
+                                    .suffix(" px"),
+                            );
+                            if response.changed() {
+                                app.state.settings.desktop_lyrics_font_size = desktop_font;
+                                app.mark_dirty();
+                            }
+                            if ui
+                                .small_button("A+")
+                                .on_hover_text(app.t("Larger", "放大"))
+                                .clicked()
+                            {
+                                desktop_font = (desktop_font + 2.0).min(56.0);
+                                app.state.settings.desktop_lyrics_font_size = desktop_font;
+                                app.mark_dirty();
+                            }
+                        });
                     },
                 );
                 let mut mini_player = app.state.settings.mini_player;

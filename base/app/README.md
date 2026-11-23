@@ -139,14 +139,15 @@ Set `LILT_DATA_DIR` to use a different data folder.
   lyrics: the current line is left aligned at the top, the next line is right aligned at
   the bottom, and both use the same per-song offset and opacity settings as the now-playing
   panel. Lines never wrap or ellipsize; the font shrinks to fit so the full text is visible
-  even in a narrow window. Text is drawn with a dark outline instead of a card background,
-  so it stays readable over bright wallpapers. When unlocked it shows a thin accent frame
-  and a floating 32 px toolbar (favourite, previous, play/pause, next, open player, lock and
-  close); the whole lyric area can be dragged and double-click opens Now Playing. Locking
-  removes the frame and toolbar, makes the window fully transparent and click-through, and
-  leaves the outlined lyrics plus a small lock button above them; click it, use the tray
-  menu or use Settings to unlock. The default size is 900×190 (minimum 460×160).
-  `Ctrl+Alt+L` toggles the window.
+  even in a narrow window. Text is drawn with a dark outline. When unlocked the overlay is a
+  semi-transparent rounded dark card with a thin accent frame and a floating 32 px toolbar
+  (favourite, previous, play/pause, next, open player, lock and close); the whole lyric area
+  can be dragged and double-click opens Now Playing. Locking removes the card and toolbar,
+  makes the window fully transparent and click-through, and leaves only the outlined lyrics
+  plus a small lock button above them; click it, use the tray menu or use Settings to
+  unlock. Settings has A−/A+ buttons beside the desktop lyric size slider, and Now Playing
+  has a `词` quick button that only shows or hides the overlay. The default size is 900×190
+  (minimum 460×160). `Ctrl+Alt+L` toggles the window.
 - **Mini player.** A compact always-on-top window with cover art, title/artist/album,
   previous/play/next, shuffle/repeat, elapsed time and a seek bar. Its transport and seek
   actions go through the same playback engine and stay in sync with the main window. The

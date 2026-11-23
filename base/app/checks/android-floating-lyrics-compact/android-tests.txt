@@ -1,0 +1,18 @@
+Android test run
+
+Unit tests:
+  .\gradlew.bat testDebugUnitTest
+  BackupTest              7
+  DuplicateToolsTest      5
+  LibraryTest            30
+  MissingFilesTest        2
+  PlaybackToolsTest       3
+  total                  47 passed, 0 failed
+
+Room migration tests:
+  .\gradlew.bat connectedDebugAndroidTest
+  Starting 7 tests on lilt35(AVD) - 15
+  Finished 7 tests
+  BUILD SUCCESSFUL
+
+The Room schema and migration path were not changed in this round.

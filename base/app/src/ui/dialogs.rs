@@ -496,6 +496,20 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 }
                                                 if widgets::ghost_button(
                                                     ui,
+                                                    app.t("Lyrics overlay", "词"),
+                                                    Some(Icon::DesktopLyrics),
+                                                    &op,
+                                                )
+                                                .on_hover_text(app.t(
+                                                    "Show or hide desktop lyrics. Size, opacity and lock are in Settings.",
+                                                    "显示或隐藏桌面歌词；字号、透明度和锁定在设置中调整。",
+                                                ))
+                                                .clicked()
+                                                {
+                                                    app.toggle_desktop_lyrics();
+                                                }
+                                                if widgets::ghost_button(
+                                                    ui,
                                                     app.t("Tags", "标签"),
                                                     Some(Icon::Tag),
                                                     &op,
