@@ -1,0 +1,7 @@
+Desktop lyric window WM_NCHITTEST (screen point inside the window)
+
+locked:   -1 (HTTRANSPARENT)
+unlocked:  1 (HTCLIENT)
+
+Both results came from SendMessage(WM_NCHITTEST) after positioning the lyric
+window at 300,430 with a 780x176 client area. The point was (690,450).

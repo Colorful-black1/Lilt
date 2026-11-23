@@ -20,6 +20,13 @@ pub enum DesktopAction {
     Quit,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompanionWindowKind {
+    Lyrics,
+    Mini,
+    Unlock,
+}
+
 /// Metadata and timeline for the Windows system media flyout.
 #[derive(Clone, Debug, Default)]
 pub struct MediaInfo {
@@ -35,7 +42,7 @@ pub struct MediaInfo {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{DesktopAction, MediaInfo};
+    use super::{CompanionWindowKind, DesktopAction, MediaInfo};
     use crate::icon;
     use crate::model::{Language, RepeatMode};
     use eframe::egui;
@@ -76,6 +83,12 @@ mod platform {
     const MENU_MINI_PLAYER: &str = "mini_player";
     const MENU_QUIT: &str = "quit";
 
+    const GWL_EXSTYLE: i32 = -20;
+    const WS_EX_LAYERED: i32 = 0x0008_0000;
+    const LWA_COLORKEY: u32 = 0x0000_0001;
+    const LWA_ALPHA: u32 = 0x0000_0002;
+    const LYRICS_ALPHA: u8 = 215;
+
     type ActionQueue = Arc<Mutex<Vec<DesktopAction>>>;
 
     #[repr(C)]
@@ -88,8 +101,14 @@ mod platform {
 
     static LYRICS_LAYER_HWND: AtomicIsize = AtomicIsize::new(0);
     static LYRICS_LAYER_SIZE: AtomicU64 = AtomicU64::new(0);
+    static LYRICS_SUBCLASS_HWND: AtomicIsize = AtomicIsize::new(0);
+    static LYRICS_ORIGINAL_PROC: AtomicIsize = AtomicIsize::new(0);
+    static LYRICS_CLICK_THROUGH: AtomicBool = AtomicBool::new(false);
+    static LYRICS_WINDOW: AtomicIsize = AtomicIsize::new(0);
     static MINI_LAYER_HWND: AtomicIsize = AtomicIsize::new(0);
     static MINI_LAYER_SIZE: AtomicU64 = AtomicU64::new(0);
+    static MINI_WINDOW: AtomicIsize = AtomicIsize::new(0);
+    static UNLOCK_WINDOW: AtomicIsize = AtomicIsize::new(0);
 
     pub struct DesktopIntegration {
         tray: TrayIcon,
@@ -720,6 +739,41 @@ mod platform {
         }
     }
 
+    struct WindowTitleFinder {
+        target: Vec<u16>,
+        found: *mut c_void,
+    }
+
+    unsafe extern "system" fn find_window_title(hwnd: *mut c_void, lparam: isize) -> i32 {
+        let finder = &mut *(lparam as *mut WindowTitleFinder);
+        let mut buffer = [0u16; 256];
+        let length = GetWindowTextW(hwnd, buffer.as_mut_ptr(), buffer.len() as i32);
+        if length > 0 && buffer[..length as usize] == finder.target[..] {
+            finder.found = hwnd;
+            return 0;
+        }
+        1
+    }
+
+    fn find_window_by_title(title: &str, cached: &AtomicIsize) -> *mut c_void {
+        let known = cached.load(Ordering::Relaxed);
+        if known != 0 && unsafe { IsWindow(known as *mut c_void) } != 0 {
+            return known as *mut c_void;
+        }
+        let mut finder = WindowTitleFinder {
+            target: title.encode_utf16().collect(),
+            found: std::ptr::null_mut(),
+        };
+        unsafe {
+            EnumWindows(
+                find_window_title,
+                &mut finder as *mut WindowTitleFinder as isize,
+            );
+        }
+        cached.store(finder.found as isize, Ordering::Relaxed);
+        finder.found
+    }
+
     fn push_action(queue: &ActionQueue, action: DesktopAction) {
         if let Ok(mut guard) = queue.lock() {
             guard.push(action);
@@ -764,14 +818,38 @@ mod platform {
         }));
     }
 
-    /// Apply a rounded window region and, for the lyric overlay, a small
-    /// window-wide alpha. The companion content is still rendered by egui;
-    /// this only removes the rectangle outside the rounded card and gives the
-    /// desktop lyric panel its translucent look.
-    pub fn configure_companion_window(title: &str, alpha: Option<u8>) {
-        let wide: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
-        let hwnd = unsafe { FindWindowW(std::ptr::null(), wide.as_ptr()) };
+    /// Applies the rounded companion window region and the desktop lyric
+    /// visibility state: a constant window alpha while unlocked, and a black
+    /// colour key while locked so only the lyrics remain visible.
+    pub fn configure_companion_window(title: &str, kind: CompanionWindowKind, click_through: bool) {
+        let hwnd = match kind {
+            CompanionWindowKind::Lyrics => find_window_by_title(title, &LYRICS_WINDOW),
+            CompanionWindowKind::Mini => find_window_by_title(title, &MINI_WINDOW),
+            CompanionWindowKind::Unlock => find_window_by_title(title, &UNLOCK_WINDOW),
+        };
         if hwnd.is_null() {
+            return;
+        }
+        let lyrics = matches!(kind, CompanionWindowKind::Lyrics);
+        let unlock = matches!(kind, CompanionWindowKind::Unlock);
+        if lyrics {
+            install_lyrics_hit_test(hwnd, click_through);
+        }
+        if lyrics || unlock {
+            let locked = lyrics && click_through;
+            unsafe {
+                let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+                if ex_style & WS_EX_LAYERED == 0 {
+                    SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED);
+                }
+                if locked || unlock {
+                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_COLORKEY);
+                } else {
+                    SetLayeredWindowAttributes(hwnd, 0, LYRICS_ALPHA, LWA_ALPHA);
+                }
+            }
+        }
+        if unlock {
             return;
         }
         let mut rect = WinRect {
@@ -786,31 +864,12 @@ mod platform {
         let width = (rect.right - rect.left).max(1);
         let height = (rect.bottom - rect.top).max(1);
         let size_key = ((width as u64) << 32) | height as u64;
-        let (last_hwnd, last_size) = if alpha.is_some() {
+        let (last_hwnd, last_size) = if lyrics {
             (&LYRICS_LAYER_HWND, &LYRICS_LAYER_SIZE)
         } else {
             (&MINI_LAYER_HWND, &MINI_LAYER_SIZE)
         };
         let hwnd_id = hwnd as isize;
-        unsafe {
-            if let Some(alpha) = alpha {
-                let ex_style = GetWindowLongW(hwnd, -20);
-                let mut key = 0u32;
-                let mut current_alpha = 255u8;
-                let mut flags = 0u32;
-                let has_alpha = GetLayeredWindowAttributes(
-                    hwnd,
-                    &mut key,
-                    &mut current_alpha,
-                    &mut flags,
-                ) != 0
-                    && flags & 0x0000_0002 != 0;
-                if ex_style & 0x0008_0000 == 0 || !has_alpha || current_alpha != alpha {
-                    SetWindowLongW(hwnd, -20, ex_style | 0x0008_0000);
-                    SetLayeredWindowAttributes(hwnd, 0, alpha, 0x0000_0002);
-                }
-            }
-        }
         if last_hwnd.load(Ordering::Relaxed) == hwnd_id
             && last_size.load(Ordering::Relaxed) == size_key
         {
@@ -838,6 +897,41 @@ mod platform {
         }
     }
 
+    /// The widget is always clickable, but a locked lyric window must not
+    /// intercept clicks meant for the desktop. `WM_NCHITTEST` is used instead
+    /// of `WS_EX_TRANSPARENT` so the layered window's colour-key transparency
+    /// keeps working.
+    fn install_lyrics_hit_test(hwnd: *mut c_void, click_through: bool) {
+        let hwnd_id = hwnd as isize;
+        if LYRICS_SUBCLASS_HWND.load(Ordering::Relaxed) != hwnd_id {
+            let previous = unsafe {
+                SetWindowLongPtrW(hwnd, GWLP_WNDPROC, lyrics_window_proc as usize as isize)
+            };
+            if previous != 0 {
+                LYRICS_ORIGINAL_PROC.store(previous, Ordering::Relaxed);
+                LYRICS_SUBCLASS_HWND.store(hwnd_id, Ordering::Relaxed);
+            }
+        }
+        LYRICS_CLICK_THROUGH.store(click_through, Ordering::Relaxed);
+    }
+
+    unsafe extern "system" fn lyrics_window_proc(
+        hwnd: *mut c_void,
+        message: u32,
+        wparam: usize,
+        lparam: isize,
+    ) -> isize {
+        if message == WM_NCHITTEST && LYRICS_CLICK_THROUGH.load(Ordering::Relaxed) {
+            return HTTRANSPARENT;
+        }
+        let original = LYRICS_ORIGINAL_PROC.load(Ordering::Relaxed);
+        if original != 0 {
+            CallWindowProcW(original, hwnd, message, wparam, lparam)
+        } else {
+            DefWindowProcW(hwnd, message, wparam, lparam)
+        }
+    }
+
     /// Wake the root window from the companion viewports or another callback.
     /// A hidden window still receives `WM_PAINT`, which winit turns into an
     /// update even when scheduled repaints are not delivered.
@@ -860,11 +954,19 @@ mod platform {
     }
 
     const WM_PAINT: u32 = 0x000F;
+    const WM_NCHITTEST: u32 = 0x0084;
+    const GWLP_WNDPROC: i32 = -4;
+    const HTTRANSPARENT: isize = -1;
 
     #[link(name = "user32")]
     extern "system" {
         fn PostMessageW(hwnd: *mut c_void, msg: u32, wparam: usize, lparam: isize) -> i32;
-        fn FindWindowW(class_name: *const u16, window_name: *const u16) -> *mut c_void;
+        fn EnumWindows(
+            callback: unsafe extern "system" fn(*mut c_void, isize) -> i32,
+            lparam: isize,
+        ) -> i32;
+        fn GetWindowTextW(hwnd: *mut c_void, text: *mut u16, max: i32) -> i32;
+        fn IsWindow(hwnd: *mut c_void) -> i32;
         fn GetWindowLongW(hwnd: *mut c_void, index: i32) -> i32;
         fn SetWindowLongW(hwnd: *mut c_void, index: i32, value: i32) -> i32;
         fn SetLayeredWindowAttributes(
@@ -873,12 +975,15 @@ mod platform {
             alpha: u8,
             flags: u32,
         ) -> i32;
-        fn GetLayeredWindowAttributes(
+        fn SetWindowLongPtrW(hwnd: *mut c_void, index: i32, value: isize) -> isize;
+        fn CallWindowProcW(
+            previous: isize,
             hwnd: *mut c_void,
-            color_key: *mut u32,
-            alpha: *mut u8,
-            flags: *mut u32,
-        ) -> i32;
+            msg: u32,
+            wparam: usize,
+            lparam: isize,
+        ) -> isize;
+        fn DefWindowProcW(hwnd: *mut c_void, msg: u32, wparam: usize, lparam: isize) -> isize;
         fn GetClientRect(hwnd: *mut c_void, rect: *mut WinRect) -> i32;
         fn CreateRoundRectRgn(
             left: i32,
@@ -997,7 +1102,7 @@ mod platform {
 
 #[cfg(not(target_os = "windows"))]
 mod platform {
-    use super::DesktopAction;
+    use super::{CompanionWindowKind, DesktopAction};
     use crate::model::Language;
     use eframe::egui;
 
@@ -1060,7 +1165,12 @@ mod platform {
 
     pub fn wake_main_window(_hwnd: isize) {}
 
-    pub fn configure_companion_window(_title: &str, _alpha: Option<u8>) {}
+    pub fn configure_companion_window(
+        _title: &str,
+        _kind: CompanionWindowKind,
+        _click_through: bool,
+    ) {
+    }
 }
 
 pub use platform::*;
@@ -1070,7 +1180,8 @@ pub fn wake_main_window(hwnd: isize) {
     platform::wake_main_window(hwnd);
 }
 
-/// Apply the native rounded/window translucency used by the companion windows.
-pub fn configure_companion_window(title: &str, alpha: Option<u8>) {
-    platform::configure_companion_window(title, alpha);
+/// Apply the native rounded shape and, for the lyric window, the click-through
+/// state used by the companion windows.
+pub fn configure_companion_window(title: &str, kind: CompanionWindowKind, click_through: bool) {
+    platform::configure_companion_window(title, kind, click_through);
 }

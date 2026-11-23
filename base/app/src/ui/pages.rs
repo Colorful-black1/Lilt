@@ -2468,8 +2468,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Lock desktop lyrics", "锁定桌面歌词"),
                     app.t(
-                        "Hide the controls, prevent dragging and let clicks pass through.",
-                        "隐藏控件、禁止拖动，并让鼠标点击穿透窗口。",
+                        "Hide the controls, prevent dragging and let clicks pass through. Unlock with the small lock button or the tray menu.",
+                        "隐藏控件、禁止拖动，并让鼠标点击穿透窗口。点击歌词上的小锁按钮或使用托盘菜单解锁。",
                     ),
                     |ui| {
                         if widgets::toggle_switch(ui, &mut lyrics_locked, palette).clicked() {

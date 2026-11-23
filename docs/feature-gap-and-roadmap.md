@@ -146,14 +146,14 @@
 | 书签/笔记 | ✅ | ✅ | 位置 + 备注，播放页快捷跳转 |
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
 | 主题/语言 | ✅ | △ | Android 缺昼夜主题 |
-| 系统集成 | ✅ | ✅ | PC 托盘/热键/桌面歌词/迷你播放器/SMTC 已完成；Android 悬浮歌词/小部件已完成，缺 Auto/磁贴 |
+| 系统集成 | ✅ | ✅ | PC 托盘/热键/透明桌面歌词与浮钮解锁/迷你播放器/SMTC 已完成；Android 悬浮歌词/小部件已完成，缺 Auto/磁贴 |
 | 备份/恢复 | ✅ | ✅ | 本地 JSON 备份与恢复已完成；PC/Android 格式各自独立，跨平台导入未做 |
 | A-B 循环 | ✅ | ✅ | 两端均支持 A/B 点与循环；切歌自动清除 |
 | 失效文件重连 | ✅ | ✅ | PC 保留歌单键并可选新文件；Android 用 `missing_songs` 保留元数据并在事务内改写引用 |
 | 单曲停止 | ✅ | ✅ | 两端一键在本曲结束后暂停；切歌自动取消 |
 | 重复歌曲检测 | ✅ | ✅ | 规范化标题/艺术家/时长分组，最佳副本优先；只报告不删除 |
 | 音频工具 | △ | △ | 交叉淡化、批量文件操作、裁剪/CUE/转换仍缺 |
-| 桌面/悬浮体验 | △ | △ | PC 已完成桌面歌词与迷你播放器；Android 已完成悬浮歌词，缺锁屏歌词 |
+| 桌面/悬浮体验 | △ | △ | PC 已完成半透明/锁定透明桌面歌词、浮钮解锁与迷你播放器；Android 已完成悬浮歌词，缺锁屏歌词 |
 
 ---
 
@@ -327,7 +327,7 @@
 | Android 悬浮歌词 | 高 | 中 | P2 |
 | Android 锁屏歌词 | 中 | 高 | P2 |
 
-状态（2026-11-23）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，支持锁定与鼠标穿透；Android 悬浮歌词已在 Round 7-A 完成，支持拖动、锁定与穿透。颜色自定义、双语/翻译行和 Android 锁屏歌词仍未做。
+状态（2026-11-23）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，并在后续修复中改为解锁态半透明、锁定态全透明、带可点击小锁浮钮及收藏/上一首/下一首控制；Android 悬浮歌词已在 Round 7-A 完成，支持拖动、锁定与穿透。颜色自定义、双语/翻译行和 Android 锁屏歌词仍未做。
 
 技术说明：
 
@@ -450,7 +450,7 @@
 - 隐藏窗口：Windows 下 winit 不处理隐藏窗口的常规重绘，托盘/热键回调会向主窗口投递 `WM_PAINT` 唤醒更新；播放、扫描、睡眠定时或待保存时另有 100 ms 心跳。
 - 安全兜底：只有确认托盘图标已注册时才允许关闭/最小化到托盘，避免窗口隐藏后无法找回。
 - 媒体键/SMTC：已用 `windows` crate 的 `SystemMediaTransportControls`，通过主窗口句柄注册；元数据、播放状态、时间轴、随机/循环和播放/暂停/上一首/下一首按钮与主窗口同步。
-- 桌面歌词：egui deferred viewport，无边框、半透明、置顶、可拖动/缩放；使用现有每首歌词偏移与透明度。锁定时隐藏控件并通过 `WS_EX_TRANSPARENT` 鼠标穿透，可在托盘菜单或设置中解锁。
+- 桌面歌词：egui deferred viewport，无边框、置顶、可拖动/缩放；使用现有每首歌词偏移与透明度。解锁态用约 80% 不透明度的分层窗口，锁定态切到黑色 color key，只保留歌词。Windows 用 `WM_NCHITTEST -> HTTRANSPARENT` 实现点击穿透，并用独立的小锁浮钮、托盘菜单或设置页解锁；解锁态工具栏支持收藏、上一首、播放/暂停、下一首、打开播放器、锁定和关闭。
 - 迷你播放器：独立置顶小窗口，封面、标题/艺术家/专辑、上一首/播放/下一首、随机/循环、进度拖动。
 - 首次显示位置：桌面歌词默认在屏幕底部居中，迷你播放器默认在右上角；同一会话内关闭/重开会记住拖动后的位置和尺寸。
 
@@ -609,7 +609,7 @@
 验收：
 
 - 桌面歌词在 2560×1440 下以 780×176 显示，长歌词不溢出卡片；字号增大时自动减少显示行数。
-- 锁定后窗口扩展样式含 `WS_EX_TRANSPARENT`，鼠标位置命中下层窗口；托盘菜单可解锁恢复交互。
+- 锁定后窗口鼠标穿透，鼠标位置命中下层窗口；后续桌面歌词改造改用 `WM_NCHITTEST` 并保留分层透明，托盘菜单或小锁浮钮可解锁恢复交互。
 - 拖动后位置为 `+100, -82`，隐藏再显示仍保持相同位置和尺寸。
 - 迷你播放器的播放/暂停、上一首、下一首、关闭与主窗口状态一致；主窗口隐藏到托盘时两个浮动窗口继续显示。
 - SMTC 会话可读取 `Glass Horizon / Lumen Field / Aurora Drift` 和 Paused/Playing，脚本触发 Play/Next 后主窗口进入播放并切到下一首。
@@ -711,6 +711,25 @@
 - 失效文件可重新指向新路径（Round 7-C 已验证）。
 - 备份恢复后播放列表、队列、收藏、设置一致（Round 7-B 已验证）。
 
+### 第 7-D 轮后修复：桌面歌词透明化与锁定解锁（已完成）
+
+交付：
+
+- PC 桌面歌词解锁态改为约 80% 不透明度的半透明圆角面板；锁定态取消面板、工具栏和进度条，只保留歌词与文字阴影。
+- 锁定态在歌词顶部显示一个独立的小锁浮钮；歌词本体仍整窗鼠标穿透，小锁可点击解锁。托盘菜单和设置页仍可解锁。
+- 解锁态工具栏新增收藏、上一首、播放/暂停、下一首、打开播放器、锁定和关闭；收藏复用现有单曲收藏状态。
+- Windows 使用分层窗口的 `LWA_ALPHA`（解锁）与 `LWA_COLORKEY`（锁定）切换外观，并用 `WM_NCHITTEST` 子类化实现穿透，避免 `WS_EX_LAYERED` 破坏透明。
+- 窄窗口自动隐藏品牌与元信息；420×150 时工具栏完整，长歌词换行不裁切。
+- PC 43 个单元测试。
+
+验收：
+
+- 解锁态在彩色内容上显示半透明面板，锁定态没有黑色卡片，只显示歌词和小锁。
+- 锁定态 `WM_NCHITTEST` 返回 `HTTRANSPARENT`；解锁后恢复普通命中测试。
+- 证据见 `base/app/checks/desktop-lyrics-redesign/`。
+
+未纳入本轮：歌词颜色/双语行自定义、Android 锁屏歌词、锁屏快速设置磁贴。
+
 ### 第 8 轮：Android 系统集成
 
 交付：
@@ -784,10 +803,11 @@
 | 2026-11-23 | Round 7-B | 完成 | PC/Android 本地 JSON 备份与恢复、版本校验、引用回退、设置页入口、PC 29 项 + Android 37 项单元测试 |
 | 2026-11-23 | Round 7-C | 完成 | PC/Android A-B 循环、失效文件重连、Room v8 `missing_songs`、PC 32 项 + Android 41 项 + 7 项迁移测试 |
 | 2026-11-23 | Round 7-D | 完成 | PC/Android 单曲停止、重复歌曲检测、PC 37 项 + Android 47 项 + 7 项迁移测试 |
+| 2026-11-23 | 桌面歌词改造 | 完成 | PC 解锁态半透明、锁定态全透明、浮钮解锁、收藏/上一首/下一首/播放控制、PC 43 项测试 |
 | 2026-11-23 | Bugfix | 完成 | PC M4A/MP4 解码崩溃修复、内容探测标签/时长、损坏文件错误提示、PC 41 项测试 |
 | 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`。
 
 ---
 
@@ -843,9 +863,10 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/checks/round-6-c/README.md`：歌词偏移、字号/透明度与 Room v7 验证
 - `base/app/checks/round-6-d1/README.md`：托盘、关闭到托盘与全局热键验证
 - `base/app/checks/round-6-d2/README.md`：桌面歌词、锁定穿透、迷你播放器与 SMTC 验证
+- `base/app/checks/desktop-lyrics-redesign/README.md`：桌面歌词透明化、锁定态、浮钮解锁与工具栏验证
 - `base/app/checks/round-7-a/README.md`：Android 悬浮歌词、锁定穿透与主屏小部件验证
-- `base/app/src/desktop.rs`：Windows 托盘菜单、全局热键、隐藏唤醒、心跳与 SMTC
-- `base/app/src/ui/companion.rs`：桌面歌词与迷你播放器两个 deferred viewport
+- `base/app/src/desktop.rs`：Windows 托盘菜单、全局热键、隐藏唤醒、心跳、分层歌词窗口、命中测试与 SMTC
+- `base/app/src/ui/companion.rs`：桌面歌词、解锁浮钮与迷你播放器 deferred viewport
 - `base/app/src/icon.rs`：窗口/托盘共用的自绘图标
 
 ---
@@ -867,3 +888,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.11 | 2026-11-23 | Round 7-C：PC/Android A-B 循环、失效文件重连、Room v8 `missing_songs`、设置与歌单入口 |
 | v0.12 | 2026-11-23 | Round 7-D：PC/Android 单曲停止、重复歌曲检测、最佳副本标记与试听入口 |
 | v0.12.1 | 2026-11-23 | Bugfix：PC 本地 Symphonia 解码器、M4A/MP4 崩溃修复、内容探测标签/时长 |
+| v0.12.2 | 2026-11-23 | 桌面歌词改造：解锁态半透明、锁定态全透明、浮钮解锁、收藏/上一首/下一首/播放控制 |

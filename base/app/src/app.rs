@@ -3313,6 +3313,8 @@ impl LiltApp {
                 .map(|song| song.display_album().to_owned())
                 .unwrap_or_default(),
             playing: self.playing,
+            has_song: current.is_some(),
+            favorite: current.as_ref().is_some_and(|song| song.favorite),
             position: self.position().min(duration.max(0.0)),
             duration,
             volume: self.state.settings.volume,
@@ -3347,6 +3349,11 @@ impl LiltApp {
                 CompanionAction::Seek(seconds) => self.seek_to(seconds),
                 CompanionAction::ToggleShuffle => self.toggle_shuffle(),
                 CompanionAction::CycleRepeat => self.cycle_repeat(),
+                CompanionAction::ToggleFavorite => {
+                    if let Some(key) = self.current_key.clone() {
+                        self.toggle_favorite(&key);
+                    }
+                }
                 CompanionAction::ShowMain => {
                     self.state.settings.mini_player = false;
                     self.mark_dirty();
@@ -3863,6 +3870,20 @@ pub struct SearchResults {
 }
 
 impl eframe::App for LiltApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        // Windows desktop lyrics are layered windows: unlocked uses a constant
+        // alpha and locked keys pure black out of the window. Other platforms
+        // use the regular transparent-window path.
+        #[cfg(target_os = "windows")]
+        {
+            [0.0, 0.0, 0.0, 1.0]
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            [0.0, 0.0, 0.0, 0.0]
+        }
+    }
+
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.update_desktop(ctx, frame);
         self.handle_companion_actions(ctx);
