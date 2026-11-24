@@ -792,6 +792,22 @@
 
 未纳入本轮：AI 自动触发、后台全库预取、跨平台歌词同步、在线封面。
 
+### 第 8-B 轮后修复：正在播放页控制行对齐（已完成）
+
+交付：
+
+- PC 正在播放页的控制行改为固定 54 px 高、`left_to_right(Align::Center)`，随机、上一首、播放、下一首、循环共用同一条垂直中心线。
+- 控制组宽度改为按五个按钮的实际尺寸和间距计算，不再硬编码 268 px；播放按钮与进度条中心对齐。
+- 修复前上一首比下一首高 8 px、播放按钮偏左约 17 px；修复后五个控件中心均为 `y=369.5`，播放按钮距进度条中心 0.5 px。
+- PC 61 项单元测试通过；PE subsystem 2。
+
+验收：
+
+- 同一测试状态与进度下，用 PrintWindow 对比修复前后截图。
+- 证据见 `base/app/checks/now-playing-transport-alignment/`。
+
+未纳入本轮：迷你播放器与底部播放条（底部播放条已在 v0.12.6 修复）。
+
 ### 第 9 轮：Android 系统集成
 
 交付：
@@ -872,6 +888,7 @@
 | 2026-11-23 | 桌面/悬浮歌词精简 | 完成 | PC 解锁半透明卡片/锁定全透明、字号 A−/A+、播放页“词”；Android 单行无卡片锁定态、字号缩放、“词”开关；PC 46 + Android 47 + 7 项迁移测试 |
 | 2026-11-23 | 桌面歌词按钮放大 | 完成 | PC 工具栏 32 → 44 px（窄窗口 38 px），图标同步放大，PC 46 项测试 |
 | 2026-11-24 | 底部播放条对齐 | 完成 | 固定三栏布局、上一首/下一首与播放按钮垂直居中、长标题不再推动中心按钮、PC 46 项测试 |
+| 2026-11-24 | 正在播放页控制行对齐 | 完成 | 固定 54 px 控制行、五键同轴、播放按钮与进度条居中、PC 61 项测试 |
 | 2026-11-23 | Bugfix | 完成 | PC M4A/MP4 解码崩溃修复、内容探测标签/时长、损坏文件错误提示、PC 41 项测试 |
 | 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
@@ -944,6 +961,7 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/checks/desktop-lyrics-kugou/README.md`：酷狗式左右双行、半透明解锁卡片、全透明锁定态、A−/A+ 与“词”快捷开关验证
 - `base/app/checks/android-floating-lyrics-compact/README.md`：Android 单行悬浮歌词、无卡片锁定态、字号缩放与“词”开关验证
 - `base/app/checks/player-bar-alignment/README.md`：底部播放条固定三栏、长标题不漂移与按钮垂直对齐验证
+- `base/app/checks/now-playing-transport-alignment/README.md`：正在播放页控制行五键同轴与播放按钮居中验证
 - `base/app/checks/round-7-a/README.md`：Android 悬浮歌词、锁定穿透与主屏小部件验证
 - `base/app/src/desktop.rs`：Windows 托盘菜单、全局热键、隐藏唤醒、心跳、分层歌词窗口、命中测试与 SMTC
 - `base/app/src/ui/companion.rs`：桌面歌词、解锁浮钮与迷你播放器 deferred viewport
@@ -975,3 +993,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.12.6 | 2026-11-24 | 底部播放条对齐：固定三栏布局、播放按钮居中、上一首/下一首垂直对齐 |
 | v0.13.0 | 2026-11-24 | Round 8-A：PC 自动 LRCLIB、候选版本、缓存、手动 AI 预览、星轨链路供应商、DPAPI Key |
 | v0.13.1 | 2026-11-24 | Round 8-B：Android 自动 LRCLIB、候选选择、AI 预览、Room v9、Keystore Key、INTERNET 权限 |
+| v0.13.2 | 2026-11-24 | 正在播放页控制行对齐：固定 54 px 行高、上一首/下一首同轴、播放按钮与进度条居中 |

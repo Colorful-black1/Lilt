@@ -1,0 +1,14 @@
+Captured image size: 1196x819 (1180x780 client area plus title bar)
+Source: release build, PrintWindow, same one-track state and seek position
+
+                         before    after
+seek bar centre x        774.0     774.0
+play button centre x     757.5     774.5
+shuffle centre y         359.5     369.5
+previous centre y        361.5     369.5
+play centre y            369.5     369.5
+next centre y            369.5     369.5
+repeat centre y          369.5     369.5
+
+before: previous is 8 px above next; play is 16.5 px left of the seek bar centre
+after:  all controls share y=369.5; play is 0.5 px right of the seek bar centre

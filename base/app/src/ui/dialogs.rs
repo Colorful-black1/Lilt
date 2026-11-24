@@ -347,8 +347,22 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 );
                                             });
                                             ui.add_space(4.0);
-                                            ui.horizontal(|ui| {
-                                                let group = 268.0;
+                                            // A fixed-height row keeps every control on the same centre
+                                            // line: a plain `horizontal` only centres items that fit in
+                                            // its 18 px default height, so the taller play button used to
+                                            // push the following buttons down by 8 px.
+                                            let play_size = 54.0;
+                                            let skip_size = 38.0;
+                                            let edge_size = 34.0;
+                                            let spacing = ui.spacing().item_spacing.x;
+                                            let group = edge_size * 2.0
+                                                + skip_size * 2.0
+                                                + play_size
+                                                + spacing * 4.0;
+                                            ui.allocate_ui_with_layout(
+                                                Vec2::new(ui.available_width(), play_size),
+                                                Layout::left_to_right(Align::Center),
+                                                |ui| {
                                                 ui.add_space(
                                                     ((ui.available_width() - group) / 2.0)
                                                         .max(0.0),
@@ -356,7 +370,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 if icons::icon_button(
                                                     ui,
                                                     Icon::Shuffle,
-                                                    34.0,
+                                                    edge_size,
                                                     if app.shuffle {
                                                         palette.accent
                                                     } else {
@@ -372,7 +386,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 if icons::icon_button(
                                                     ui,
                                                     Icon::Prev,
-                                                    38.0,
+                                                    skip_size,
                                                     ink,
                                                     with_alpha(ink, 18),
                                                     app.t("Previous", "上一首"),
@@ -381,15 +395,20 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 {
                                                     prev = true;
                                                 }
-                                                if widgets::play_button(ui, 54.0, app.playing, &palette)
-                                                    .clicked()
+                                                if widgets::play_button(
+                                                    ui,
+                                                    play_size,
+                                                    app.playing,
+                                                    &palette,
+                                                )
+                                                .clicked()
                                                 {
                                                     toggle_play = true;
                                                 }
                                                 if icons::icon_button(
                                                     ui,
                                                     Icon::Next,
-                                                    38.0,
+                                                    skip_size,
                                                     ink,
                                                     with_alpha(ink, 18),
                                                     app.t("Next", "下一首"),
@@ -406,7 +425,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                 if icons::icon_button(
                                                     ui,
                                                     repeat_icon,
-                                                    34.0,
+                                                    edge_size,
                                                     if app.repeat != RepeatMode::Off {
                                                         palette.accent
                                                     } else {
