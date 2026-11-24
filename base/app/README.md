@@ -110,9 +110,11 @@ Set `LILT_DATA_DIR` to use a different data folder.
   the left, a large lyric sheet on the right, and one transport bar along the bottom. The
   lyric sheet and controls have no card fill or border and sit on the cover-tinted page
   background. A full-window progress line separates the lyrics from the controls; the
-  played part uses the theme accent. The current line follows playback, is kept in the
-  middle, and has a short accent underline. Clicking any timed line seeks to it. The
-  **Details** tab keeps Up next and the file card.
+  played part uses the theme accent. Quick actions sit at the two outer edges while
+  shuffle, previous, play/pause, next and repeat stay exactly centred; narrow windows use
+  icon-only actions. The current line follows playback, is kept in the middle, and has a
+  short accent underline. Clicking any timed line seeks to it. The **Details** tab keeps Up
+  next and the file card.
 - Up to 20 named queues with unique names, no duplicates, remembered positions, loading
   from a playlist, M3U export, and the target's Replace/Merge policy for same-name
   creation (Replace is the default).
