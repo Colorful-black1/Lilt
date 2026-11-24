@@ -67,6 +67,8 @@ class BackupTest {
             playbackSpeed = 1.25f,
             fadeInMs = 750,
             floatingFontSize = 31.5f,
+            floatingPlayedColor = 0xFF12AB34.toInt(),
+            floatingUnplayedColor = 0xFFF0E6DC.toInt(),
         ),
         eq = BackupEq(
             enabled = true,
@@ -97,6 +99,8 @@ class BackupTest {
         assertEquals("zh", decoded.settings.language)
         assertEquals(1.25f, decoded.settings.playbackSpeed, 0.001f)
         assertEquals(31.5f, decoded.settings.floatingFontSize, 0.001f)
+        assertEquals(0xFF12AB34.toInt(), decoded.settings.floatingPlayedColor)
+        assertEquals(0xFFF0E6DC.toInt(), decoded.settings.floatingUnplayedColor)
         assertEquals("headroom", decoded.eq?.preampMode)
         assertFalse(decoded.eq?.perDevice ?: true)
     }

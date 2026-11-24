@@ -366,6 +366,8 @@ data class BackupSettings(
     val floatingLyrics: Boolean = false,
     val floatingLyricsLocked: Boolean = false,
     val floatingFontSize: Float = 26f,
+    val floatingPlayedColor: Int? = null,
+    val floatingUnplayedColor: Int? = null,
     val onlineLyrics: Boolean = true,
     val aiProvider: String = "deepseek",
     val aiBaseUrl: String = "https://api.deepseek.com/v1",
@@ -393,6 +395,8 @@ data class BackupSettings(
         put("floatingLyrics", floatingLyrics)
         put("floatingLyricsLocked", floatingLyricsLocked)
         put("floatingFontSize", floatingFontSize)
+        floatingPlayedColor?.let { put("floatingPlayedColor", it) }
+        floatingUnplayedColor?.let { put("floatingUnplayedColor", it) }
         put("onlineLyrics", onlineLyrics)
         put("aiProvider", aiProvider)
         put("aiBaseUrl", aiBaseUrl)
@@ -442,6 +446,8 @@ data class BackupSettings(
             floatingLyrics = json.booleanOr("floatingLyrics", false),
             floatingLyricsLocked = json.booleanOr("floatingLyricsLocked", false),
             floatingFontSize = json.floatOr("floatingFontSize", 26f, 18f, 44f),
+            floatingPlayedColor = json.optionalOpaqueColor("floatingPlayedColor"),
+            floatingUnplayedColor = json.optionalOpaqueColor("floatingUnplayedColor"),
             onlineLyrics = json.booleanOr("onlineLyrics", true),
             aiProvider = findAiProvider(json.stringOr("aiProvider", "deepseek")).id,
             aiBaseUrl = json.stringOr("aiBaseUrl", "https://api.deepseek.com/v1"),
@@ -569,6 +575,11 @@ private fun JSONObject.longOr(key: String, fallback: Long): Long {
 private fun JSONObject.floatOr(key: String, fallback: Float, min: Float, max: Float): Float {
     val value = if (has(key) && !isNull(key)) optDouble(key, fallback.toDouble()) else fallback.toDouble()
     return if (value.isFinite()) value.toFloat().coerceIn(min, max) else fallback
+}
+
+private fun JSONObject.optionalOpaqueColor(key: String): Int? {
+    if (!has(key) || isNull(key)) return null
+    return optInt(key, 0) or 0xFF000000.toInt()
 }
 
 private fun JSONArray?.objects(): List<JSONObject> {

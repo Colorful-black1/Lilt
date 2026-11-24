@@ -3,8 +3,10 @@ package dev.lilt.player.playback
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PixelFormat
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -36,6 +38,9 @@ data class FloatingLyricsState(
     val lyrics: LrcDocument?,
     val offsetMs: Int,
     val accent: Int,
+    val playedColor: Int,
+    val unplayedColor: Int,
+    val progress: Float,
     val opacity: Float,
     val fontSp: Float,
     val locked: Boolean,
@@ -76,7 +81,7 @@ class FloatingLyricsOverlay(
     private var root: LinearLayout? = null
     private var params: WindowManager.LayoutParams? = null
     private var header: LinearLayout? = null
-    private var activeText: TextView? = null
+    private var activeText: OutlinedTextView? = null
     private var lockButton: ImageButton? = null
     private var closeButton: ImageButton? = null
 
@@ -85,7 +90,9 @@ class FloatingLyricsOverlay(
     private var lastAccent: Int = 0
     private var lastOpacity: Float = 0f
     private var lastLine: String? = null
-    private var lastActiveColor: Int = 0
+    private var lastUnplayedColor: Int = 0
+    private var lastPlayedColor: Int = 0
+    private var lastProgress: Float = -1f
     private var dragStartX = 0
     private var dragStartY = 0
     private var dragDownRawX = 0f
@@ -184,11 +191,26 @@ class FloatingLyricsOverlay(
         val activeColor = when {
             !state.hasTrack -> withAlpha(INK, 235)
             state.lyrics == null || state.lyrics.isEmpty -> withAlpha(INK, 245)
-            else -> state.accent
+            else -> state.unplayedColor
         }
-        if (activeColor != lastActiveColor || force) {
-            lastActiveColor = activeColor
+        val playedColor = if (state.hasTrack && state.lyrics != null && !state.lyrics.isEmpty) {
+            state.playedColor
+        } else {
+            activeColor
+        }
+        val progress = if (state.hasTrack && state.lyrics != null && !state.lyrics.isEmpty) {
+            state.progress
+        } else {
+            0f
+        }
+        if (activeColor != lastUnplayedColor || force) {
+            lastUnplayedColor = activeColor
             activeText?.setTextColor(activeColor)
+        }
+        if (playedColor != lastPlayedColor || progress != lastProgress || force) {
+            lastPlayedColor = playedColor
+            lastProgress = progress
+            activeText?.setLyricProgress(playedColor, progress)
         }
     }
 
@@ -222,7 +244,9 @@ class FloatingLyricsOverlay(
         lastAccent = 0
         lastOpacity = 0f
         lastLine = null
-        lastActiveColor = 0
+        lastUnplayedColor = 0
+        lastPlayedColor = 0
+        lastProgress = -1f
     }
 
     private fun buildView(): LinearLayout {
@@ -299,7 +323,9 @@ class FloatingLyricsOverlay(
         this.lastAccent = 0
         this.lastOpacity = 0f
         this.lastLine = null
-        this.lastActiveColor = 0
+        this.lastUnplayedColor = 0
+        this.lastPlayedColor = 0
+        this.lastProgress = -1f
         return root
     }
 
@@ -342,7 +368,7 @@ class FloatingLyricsOverlay(
         }
     }
 
-    private fun lyricLine(sizeSp: Float): TextView =
+    private fun lyricLine(sizeSp: Float): OutlinedTextView =
         OutlinedTextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
             setTextColor(withAlpha(INK, 195))
@@ -484,15 +510,46 @@ class FloatingLyricsOverlay(
  */
 private class OutlinedTextView(context: Context) : TextView(context) {
     private val outlineColor = 0xE6000000.toInt()
+    private var playedColor = 0
+    private var progress = 0f
+
+    fun setLyricProgress(color: Int, value: Float) {
+        val clean = value.coerceIn(0f, 1f)
+        if (color != playedColor || kotlin.math.abs(clean - progress) > 0.001f) {
+            playedColor = color
+            progress = clean
+            invalidate()
+        }
+    }
 
     override fun onDraw(canvas: Canvas) {
         val fillColor = currentTextColor
+        val amount = progress.coerceIn(0f, 1f)
+        paint.shader = null
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = (textSize * 0.06f).coerceAtLeast(2.0f)
         paint.color = outlineColor
         super.onDraw(canvas)
+
         paint.style = Paint.Style.FILL
-        paint.color = fillColor
+        paint.color = if (amount >= 1f) playedColor else fillColor
+        val textLayout = layout
+        if (amount > 0f && amount < 1f && playedColor != fillColor && textLayout != null) {
+            val lineLeft = textLayout.getLineLeft(0)
+            val lineRight = textLayout.getLineRight(0)
+            if (lineRight > lineLeft) {
+                paint.shader = LinearGradient(
+                    lineLeft,
+                    0f,
+                    lineRight,
+                    0f,
+                    intArrayOf(playedColor, playedColor, fillColor, fillColor),
+                    floatArrayOf(0f, amount, amount, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+            }
+        }
         super.onDraw(canvas)
+        paint.shader = null
     }
 }

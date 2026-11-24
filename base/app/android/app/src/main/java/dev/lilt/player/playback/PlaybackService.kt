@@ -40,6 +40,7 @@ import dev.lilt.player.library.accentArgb
 import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.bassBoostDb
 import dev.lilt.player.library.clampFloatingFontSize
+import dev.lilt.player.library.floatingLyricProgress
 import dev.lilt.player.library.parseLrc
 import dev.lilt.player.library.stopAfterShouldStop
 import dev.lilt.player.widget.WidgetRenderer
@@ -142,7 +143,8 @@ class PlaybackService : MediaSessionService() {
         override fun run() {
             if (overlay?.showing == true) {
                 overlay?.applyState(overlayState())
-                mainHandler.postDelayed(this, 250)
+                val delay = if (player?.isPlaying == true) 50L else 250L
+                mainHandler.postDelayed(this, delay)
             }
         }
     }
@@ -189,6 +191,8 @@ class PlaybackService : MediaSessionService() {
                 "floating_lyrics" -> syncOverlay()
                 "floating_lyrics_locked",
                 "floating_font_size",
+                "floating_played_color",
+                "floating_unplayed_color",
                 "lyrics_opacity",
                 "accent",
                 "language",
@@ -517,6 +521,15 @@ class PlaybackService : MediaSessionService() {
         val item = exo?.currentMediaItem
         val duration = exo?.duration?.takeIf { it > 0L } ?: 0L
         val position = exo?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val accent = accentArgb(settingsPrefs.getString("accent", "ember") ?: "ember")
+        val playedColor = settingsPrefs.getInt("floating_played_color", Int.MIN_VALUE)
+            .takeIf { it != Int.MIN_VALUE }
+            ?.let { it or 0xFF000000.toInt() }
+            ?: accent
+        val unplayedColor = settingsPrefs.getInt("floating_unplayed_color", Int.MIN_VALUE)
+            .takeIf { it != Int.MIN_VALUE }
+            ?.let { it or 0xFF000000.toInt() }
+            ?: 0xFFF8F3EA.toInt()
         return FloatingLyricsState(
             mediaId = item?.mediaId?.toLongOrNull() ?: -1L,
             title = item?.mediaMetadata?.title?.toString().orEmpty(),
@@ -526,7 +539,10 @@ class PlaybackService : MediaSessionService() {
             durationMs = duration,
             lyrics = overlayLyrics,
             offsetMs = overlayLyricsOffset,
-            accent = accentArgb(settingsPrefs.getString("accent", "ember") ?: "ember"),
+            accent = accent,
+            playedColor = playedColor,
+            unplayedColor = unplayedColor,
+            progress = floatingLyricProgress(overlayLyrics, position, overlayLyricsOffset),
             opacity = settingsPrefs.getFloat("lyrics_opacity", 1f).coerceIn(0.35f, 1f),
             fontSp = clampFloatingFontSize(
                 settingsPrefs.getFloat("floating_font_size", 26f),

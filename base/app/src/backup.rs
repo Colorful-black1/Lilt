@@ -384,6 +384,23 @@ mod tests {
     }
 
     #[test]
+    fn backup_keeps_desktop_lyric_progress_colors() {
+        let mut state = sample_state();
+        state.settings.desktop_lyrics_played_color = Some([12, 34, 56]);
+        state.settings.desktop_lyrics_unplayed_color = Some([210, 220, 230]);
+        let text = serde_json::to_string(&make_backup(&state)).unwrap();
+        let parsed = from_json(&text).unwrap();
+        assert_eq!(
+            parsed.data.settings.desktop_lyrics_played_color,
+            Some([12, 34, 56])
+        );
+        assert_eq!(
+            parsed.data.settings.desktop_lyrics_unplayed_color,
+            Some([210, 220, 230])
+        );
+    }
+
+    #[test]
     fn backup_sanitizes_hand_edited_values() {
         let mut backup = make_backup(&sample_state());
         backup.data.settings.volume = 7.0;

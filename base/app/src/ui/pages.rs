@@ -2768,6 +2768,80 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                         });
                     },
                 );
+                let default_unplayed = Color32::from_rgb(0xF8, 0xF3, 0xEA);
+                let mut played = app
+                    .state
+                    .settings
+                    .desktop_lyrics_played_color
+                    .map(|[r, g, b]| Color32::from_rgb(r, g, b))
+                    .unwrap_or(palette.accent);
+                let mut unplayed = app
+                    .state
+                    .settings
+                    .desktop_lyrics_unplayed_color
+                    .map(|[r, g, b]| Color32::from_rgb(r, g, b))
+                    .unwrap_or(default_unplayed);
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Played lyric color", "已播放歌词颜色"),
+                    app.t(
+                        "The sung part of the active line. Follows the theme accent until you pick a colour.",
+                        "当前行已经唱过的部分；未自定义前跟随主题强调色。",
+                    ),
+                    |ui| {
+                        if ui.color_edit_button_srgba(&mut played).changed() {
+                            played = Color32::from_rgb(played.r(), played.g(), played.b());
+                            app.state.settings.desktop_lyrics_played_color =
+                                Some([played.r(), played.g(), played.b()]);
+                            app.mark_dirty();
+                        }
+                        if app.state.settings.desktop_lyrics_played_color.is_some()
+                            && ui
+                                .small_button("↺")
+                                .on_hover_text(app.t(
+                                    "Follow the theme accent",
+                                    "恢复跟随主题强调色",
+                                ))
+                                .clicked()
+                        {
+                            app.state.settings.desktop_lyrics_played_color = None;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                setting_row(
+                    ui,
+                    palette,
+                    app.t("Remaining lyric color", "未播放歌词颜色"),
+                    app.t(
+                        "The part still to sing and the next line.",
+                        "当前行还没唱到的部分，以及下一行。",
+                    ),
+                    |ui| {
+                        if ui.color_edit_button_srgba(&mut unplayed).changed() {
+                            unplayed = Color32::from_rgb(unplayed.r(), unplayed.g(), unplayed.b());
+                            app.state.settings.desktop_lyrics_unplayed_color =
+                                Some([unplayed.r(), unplayed.g(), unplayed.b()]);
+                            app.mark_dirty();
+                        }
+                        if app.state.settings.desktop_lyrics_unplayed_color.is_some()
+                            && ui
+                                .small_button("↺")
+                                .on_hover_text(app.t("Use warm white", "恢复暖白色"))
+                                .clicked()
+                        {
+                            app.state.settings.desktop_lyrics_unplayed_color = None;
+                            app.mark_dirty();
+                        }
+                    },
+                );
+                ui.add_space(2.0);
+                let preview = app
+                    .t("Played part / remaining part", "已播放部分 / 未播放部分")
+                    .to_owned();
+                lyrics_color_preview(ui, &preview, played, unplayed, 18.0);
+                ui.add_space(2.0);
                 let mut mini_player = app.state.settings.mini_player;
                 setting_row(
                     ui,
@@ -3249,4 +3323,30 @@ fn search_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
                 }
             }
         });
+}
+
+fn lyrics_color_preview(ui: &mut Ui, text: &str, played: Color32, unplayed: Color32, size: f32) {
+    let base = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), display_font(size), unplayed);
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), base.size().y + 8.0),
+        Sense::hover(),
+    );
+    let position = egui::pos2(rect.left(), rect.center().y - base.size().y * 0.5);
+    let played_galley = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), display_font(size), played);
+    ui.painter().galley(position, base, unplayed);
+    let clip = Rect::from_min_max(
+        position,
+        egui::pos2(
+            position.x + played_galley.size().x * 0.55,
+            position.y + played_galley.size().y,
+        ),
+    )
+    .intersect(ui.clip_rect());
+    ui.painter()
+        .with_clip_rect(clip)
+        .galley(position, played_galley, played);
 }

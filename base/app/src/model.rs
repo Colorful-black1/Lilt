@@ -675,6 +675,12 @@ pub struct Settings {
     pub desktop_lyrics_locked: bool,
     /// Active line size for the desktop lyric window, 18-56 px.
     pub desktop_lyrics_font_size: f32,
+    /// Colour of the already-sung part of the active desktop lyric line.
+    /// `None` follows the current theme accent.
+    pub desktop_lyrics_played_color: Option<[u8; 3]>,
+    /// Colour of the not-yet-sung part and the next desktop lyric line.
+    /// `None` uses warm white.
+    pub desktop_lyrics_unplayed_color: Option<[u8; 3]>,
     /// Compact always-on-top player window.
     pub mini_player: bool,
     /// Fetches missing lyrics from LRCLIB when a song starts. The AI fallback is
@@ -749,6 +755,8 @@ impl Default for Settings {
             desktop_lyrics: false,
             desktop_lyrics_locked: false,
             desktop_lyrics_font_size: 34.0,
+            desktop_lyrics_played_color: None,
+            desktop_lyrics_unplayed_color: None,
             mini_player: false,
             online_lyrics: true,
             ai_provider: "deepseek".to_owned(),
@@ -1148,6 +1156,8 @@ mod tests {
         assert!(!settings.desktop_lyrics);
         assert!(!settings.desktop_lyrics_locked);
         assert_eq!(settings.desktop_lyrics_font_size, 34.0);
+        assert_eq!(settings.desktop_lyrics_played_color, None);
+        assert_eq!(settings.desktop_lyrics_unplayed_color, None);
         assert!(!settings.mini_player);
         assert_eq!(settings.sleep_history_hm, vec![(1, 30), (0, 15)]);
         assert_eq!(settings.sleep_history_n, vec![10, 5]);
@@ -1229,8 +1239,10 @@ mod tests {
         assert!(!parsed.settings.desktop_lyrics);
         assert!(!parsed.settings.mini_player);
         assert_eq!(parsed.settings.desktop_lyrics_font_size, 34.0);
+        assert_eq!(parsed.settings.desktop_lyrics_played_color, None);
+        assert_eq!(parsed.settings.desktop_lyrics_unplayed_color, None);
         let parsed: Persisted = serde_json::from_str(
-            r#"{"settings":{"close_to_tray":false,"minimize_to_tray":true,"global_hotkeys":false,"desktop_lyrics":true,"desktop_lyrics_locked":true,"desktop_lyrics_font_size":42,"mini_player":true}}"#,
+            r#"{"settings":{"close_to_tray":false,"minimize_to_tray":true,"global_hotkeys":false,"desktop_lyrics":true,"desktop_lyrics_locked":true,"desktop_lyrics_font_size":42,"desktop_lyrics_played_color":[18,52,86],"desktop_lyrics_unplayed_color":[240,230,220],"mini_player":true}}"#,
         )
         .unwrap();
         assert!(!parsed.settings.close_to_tray);
@@ -1239,6 +1251,14 @@ mod tests {
         assert!(parsed.settings.desktop_lyrics);
         assert!(parsed.settings.desktop_lyrics_locked);
         assert_eq!(parsed.settings.desktop_lyrics_font_size, 42.0);
+        assert_eq!(
+            parsed.settings.desktop_lyrics_played_color,
+            Some([18, 52, 86])
+        );
+        assert_eq!(
+            parsed.settings.desktop_lyrics_unplayed_color,
+            Some([240, 230, 220])
+        );
         assert!(parsed.settings.mini_player);
     }
 

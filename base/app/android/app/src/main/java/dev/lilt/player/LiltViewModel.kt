@@ -177,6 +177,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val floatingLyrics = settings.floatingLyrics
     val floatingLyricsLocked = settings.floatingLyricsLocked
     val floatingFontSize = settings.floatingFontSize
+    val floatingPlayedColor = settings.floatingPlayedColor
+    val floatingUnplayedColor = settings.floatingUnplayedColor
     val onlineLyrics = settings.onlineLyrics
     val aiProvider = settings.aiProvider
     val aiBaseUrl = settings.aiBaseUrl
@@ -962,6 +964,10 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setFloatingFontSize(value: Float) = settings.setFloatingFontSize(value)
+
+    fun setFloatingPlayedColor(value: Int?) = settings.setFloatingPlayedColor(value)
+
+    fun setFloatingUnplayedColor(value: Int?) = settings.setFloatingUnplayedColor(value)
 
     suspend fun exportBackup(): String = backupManager.export(settings)
 

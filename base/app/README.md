@@ -154,8 +154,12 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **Desktop lyrics.** A borderless, always-on-top overlay in the style of KuGou's desktop
   lyrics: the current line is left aligned at the top, the next line is right aligned at
   the bottom, and both use the same per-song offset and opacity settings as the now-playing
-  panel. Lines never wrap or ellipsize; the font shrinks to fit so the full text is visible
-  even in a narrow window. Text is drawn with a dark outline. When unlocked the overlay is a
+  panel. The active line fills from left to right as it is sung: the already-played part uses
+  the played colour and the remaining part uses the unplayed colour. Both colours can be
+  changed in **Settings → Desktop integration** and previewed live; the next line uses the
+  unplayed colour at lower opacity. Lines never wrap or ellipsize; the font shrinks to fit
+  so the full text is visible even in a narrow window. Text is drawn with a dark outline.
+  When unlocked the overlay is a
   semi-transparent rounded dark card with a thin accent frame and a large floating toolbar
   (44 px targets, 38 px in narrow windows)
   (favourite, previous, play/pause, next, open player, lock and close); the whole lyric area

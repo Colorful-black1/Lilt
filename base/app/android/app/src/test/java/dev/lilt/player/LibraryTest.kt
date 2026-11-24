@@ -20,6 +20,7 @@ import dev.lilt.player.library.balanceOffsetsDb
 import dev.lilt.player.library.clampFloatingFontSize
 import dev.lilt.player.library.clampLyricsOffset
 import dev.lilt.player.library.floatingLyricLines
+import dev.lilt.player.library.floatingLyricProgress
 import dev.lilt.player.library.formatAdjustedTimestamp
 import dev.lilt.player.library.letterOf
 import dev.lilt.player.library.widgetProgress
@@ -325,6 +326,19 @@ class LibraryTest {
         val empty = floatingLyricLines(null, 0, 0)
         assertEquals("", empty.active)
         assertEquals(-1, empty.activeIndex)
+    }
+
+    @Test
+    fun floatingLyricProgressWipesBetweenTimedLines() {
+        val document = parseLrc(
+            "[00:10.00]First\n[00:12.00]Second\n[00:14.00]Third",
+        )
+        assertEquals(0f, floatingLyricProgress(document, 10_000, 0), 0.001f)
+        assertEquals(0.5f, floatingLyricProgress(document, 11_000, 0), 0.001f)
+        assertEquals(0.5f, floatingLyricProgress(document, 12_000, 1_000), 0.001f)
+        assertEquals(1f / 3f, floatingLyricProgress(document, 16_000, 0), 0.001f)
+        assertEquals(1f, floatingLyricProgress(parseLrc("One\nTwo"), 9_000, 0), 0.001f)
+        assertEquals(0f, floatingLyricProgress(null, 9_000, 0), 0.001f)
     }
 
     @Test

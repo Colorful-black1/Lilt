@@ -3884,6 +3884,18 @@ impl LiltApp {
             .unwrap_or(0);
         let lyrics = self.lyrics.clone().unwrap_or_default();
         let duration = current.as_ref().map(|song| song.duration).unwrap_or(0.0);
+        let played_color = self
+            .state
+            .settings
+            .desktop_lyrics_played_color
+            .map(|[r, g, b]| egui::Color32::from_rgb(r, g, b))
+            .unwrap_or(self.palette.accent);
+        let unplayed_color = self
+            .state
+            .settings
+            .desktop_lyrics_unplayed_color
+            .map(|[r, g, b]| egui::Color32::from_rgb(r, g, b))
+            .unwrap_or_else(|| egui::Color32::from_rgb(0xF8, 0xF3, 0xEA));
         CompanionSnapshot {
             language: self.lang(),
             palette: self.palette,
@@ -3911,6 +3923,8 @@ impl LiltApp {
             lyrics_offset_ms,
             lyrics_opacity: self.state.settings.lyrics_opacity,
             desktop_lyrics_font_size: self.state.settings.desktop_lyrics_font_size,
+            desktop_lyrics_played_color: played_color,
+            desktop_lyrics_unplayed_color: unplayed_color,
             lyrics_locked: self.state.settings.desktop_lyrics_locked,
             cover,
         }

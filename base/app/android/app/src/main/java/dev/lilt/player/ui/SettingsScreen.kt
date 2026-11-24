@@ -4,13 +4,18 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Typeface
+import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +65,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +82,7 @@ import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.ScanState
 import dev.lilt.player.library.AI_PROVIDERS
 import dev.lilt.player.library.DuplicateCandidate
+import dev.lilt.player.library.accentArgb
 import dev.lilt.player.library.findAiProvider
 import dev.lilt.player.library.findDuplicateGroups
 import dev.lilt.player.widget.LiltWidgetProvider
@@ -109,6 +117,8 @@ fun SettingsScreen(
     val floatingLyrics by vm.floatingLyrics.collectAsStateWithLifecycle()
     val floatingLocked by vm.floatingLyricsLocked.collectAsStateWithLifecycle()
     val floatingFontSize by vm.floatingFontSize.collectAsStateWithLifecycle()
+    val floatingPlayedColor by vm.floatingPlayedColor.collectAsStateWithLifecycle()
+    val floatingUnplayedColor by vm.floatingUnplayedColor.collectAsStateWithLifecycle()
     val onlineLyrics by vm.onlineLyrics.collectAsStateWithLifecycle()
     val aiProvider by vm.aiProvider.collectAsStateWithLifecycle()
     val aiBaseUrl by vm.aiBaseUrl.collectAsStateWithLifecycle()
@@ -141,6 +151,10 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current
+    val defaultFloatingUnplayed = 0xFFF8F3EA.toInt()
+    val effectivePlayedColor = floatingPlayedColor ?: accentArgb(accent)
+    val effectiveUnplayedColor = floatingUnplayedColor ?: defaultFloatingUnplayed
+    var colorTarget by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { vm.refreshMissingFiles() }
     val isChinese = language == "zh"
     fun countText(count: Int, one: String, many: String, zh: String): String =
@@ -684,6 +698,50 @@ fun SettingsScreen(
                     zoom = true,
                     onChange = vm::setFloatingFontSize,
                 )
+                FloatingColorRow(
+                    title = t("Played color", "已播放颜色"),
+                    body = t(
+                        "The part of the active line that has already been sung.",
+                        "当前行已经唱过的部分。",
+                    ),
+                    color = effectivePlayedColor,
+                    resetLabel = if (floatingPlayedColor != null) t("Theme", "主题") else null,
+                    onPick = { colorTarget = "played" },
+                    onReset = { vm.setFloatingPlayedColor(null) },
+                )
+                FloatingColorRow(
+                    title = t("Unplayed color", "未播放颜色"),
+                    body = t(
+                        "The part still to sing. Defaults to warm white.",
+                        "当前行还没唱到的部分，默认暖白色。",
+                    ),
+                    color = effectiveUnplayedColor,
+                    resetLabel = if (floatingUnplayedColor != null) t("Default", "默认") else null,
+                    onPick = { colorTarget = "unplayed" },
+                    onReset = { vm.setFloatingUnplayedColor(null) },
+                )
+                FloatingLyricPreview(
+                    played = effectivePlayedColor,
+                    unplayed = effectiveUnplayedColor,
+                )
+                colorTarget?.let { target ->
+                    LyricsColorDialog(
+                        initial = if (target == "played") {
+                            effectivePlayedColor
+                        } else {
+                            effectiveUnplayedColor
+                        },
+                        onDismiss = { colorTarget = null },
+                        onSave = { color ->
+                            if (target == "played") {
+                                vm.setFloatingPlayedColor(color)
+                            } else {
+                                vm.setFloatingUnplayedColor(color)
+                            }
+                            colorTarget = null
+                        },
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 val widgetUnavailable = t(
                     "Add Lilt from your launcher's widget picker.",
@@ -1019,8 +1077,7 @@ private fun SettingSwitch(title: String, body: String, checked: Boolean, onChang
 }
 
 @Composable
-private fun SettingLink(title: String, body: String, onClick: () -> Unit) {
-    Row(
+private fun SettingLink(title: String, body: String, onClick: () -> Unit) {    Row(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1068,6 +1125,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 t("Local lyrics with LRC timing and import", "本地歌词、LRC 时间轴与导入"),
                 t("Optional online lyrics from LRCLIB, plus a manual AI fallback", "可选的 LRCLIB 在线歌词与手动 AI 兜底"),
                 t("Per-song lyric offset, font size and opacity", "每首歌歌词偏移、字号与透明度"),
+                t("Played/unplayed lyric colours with progress fill", "已播放/未播放歌词颜色与进度染色"),
                 t("Virtual single-song tag editing", "单曲虚拟标签编辑"),
                 t("Foreground service, notification and lock-screen controls", "前台服务、通知栏与锁屏控制"),
                 t("Named queues with M3U import and export", "命名队列与 M3U 导入导出"),
@@ -1095,4 +1153,119 @@ fun AboutScreen(onBack: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun FloatingColorRow(
+    title: String,
+    body: String,
+    color: Int,
+    resetLabel: String?,
+    onPick: () -> Unit,
+    onReset: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (resetLabel != null) {
+            TextButton(onClick = onReset) { Text(resetLabel) }
+        }
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Color(color))
+                .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                .clickable(onClick = onPick),
+        )
+    }
+}
+
+@Composable
+private fun FloatingLyricPreview(played: Int, unplayed: Int) {
+    val text = t("Played part / remaining part", "已播放部分 / 未播放部分")
+    Canvas(Modifier.fillMaxWidth().height(40.dp)) {
+        val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            textSize = 20.sp.toPx()
+        }
+        val x = 2.dp.toPx()
+        val baseline = size.height * 0.68f
+        paint.color = unplayed
+        drawContext.canvas.nativeCanvas.drawText(text, x, baseline, paint)
+        val textWidth = paint.measureText(text)
+        drawContext.canvas.nativeCanvas.save()
+        drawContext.canvas.nativeCanvas.clipRect(
+            x,
+            0f,
+            x + textWidth * 0.55f,
+            size.height,
+        )
+        paint.color = played
+        drawContext.canvas.nativeCanvas.drawText(text, x, baseline, paint)
+        drawContext.canvas.nativeCanvas.restore()
+    }
+}
+
+@Composable
+private fun LyricsColorDialog(
+    initial: Int,
+    onDismiss: () -> Unit,
+    onSave: (Int) -> Unit,
+) {
+    val hsv = remember(initial) {
+        FloatArray(3).also { AndroidColor.colorToHSV(initial, it) }
+    }
+    var hue by remember { mutableFloatStateOf(hsv[0]) }
+    var saturation by remember { mutableFloatStateOf(hsv[1]) }
+    var brightness by remember { mutableFloatStateOf(hsv[2]) }
+    val color = AndroidColor.HSVToColor(floatArrayOf(hue, saturation, brightness))
+        .or(0xFF000000.toInt())
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("Lyric color", "歌词颜色")) },
+        text = {
+            Column {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(color)),
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(t("Hue", "色相"), style = MaterialTheme.typography.bodyMedium)
+                Slider(value = hue, onValueChange = { hue = it }, valueRange = 0f..360f)
+                Text(t("Saturation", "饱和度"), style = MaterialTheme.typography.bodyMedium)
+                Slider(
+                    value = saturation,
+                    onValueChange = { saturation = it },
+                    valueRange = 0f..1f,
+                )
+                Text(t("Brightness", "亮度"), style = MaterialTheme.typography.bodyMedium)
+                Slider(
+                    value = brightness,
+                    onValueChange = { brightness = it },
+                    valueRange = 0f..1f,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(color) }) {
+                Text(t("Use color", "使用此颜色"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(t("Cancel", "取消")) }
+        },
+    )
 }

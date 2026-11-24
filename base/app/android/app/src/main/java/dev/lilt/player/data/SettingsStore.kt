@@ -47,6 +47,10 @@ class SettingsStore(context: Context) {
         MutableStateFlow(prefs.getBoolean("floating_lyrics_locked", false))
     val floatingFontSize: StateFlow<Float> =
         MutableStateFlow(clampFloatingFontSize(prefs.getFloat("floating_font_size", 26f)))
+    val floatingPlayedColor: StateFlow<Int?> =
+        MutableStateFlow(readOptionalColor("floating_played_color"))
+    val floatingUnplayedColor: StateFlow<Int?> =
+        MutableStateFlow(readOptionalColor("floating_unplayed_color"))
     val onlineLyrics: StateFlow<Boolean> =
         MutableStateFlow(prefs.getBoolean("online_lyrics", true))
     val aiProvider: StateFlow<String> =
@@ -76,6 +80,12 @@ class SettingsStore(context: Context) {
                 "floating_font_size" ->
                     (floatingFontSize as MutableStateFlow).value =
                         clampFloatingFontSize(prefs.getFloat(key, 26f))
+                "floating_played_color" ->
+                    (floatingPlayedColor as MutableStateFlow).value =
+                        readOptionalColor(key)
+                "floating_unplayed_color" ->
+                    (floatingUnplayedColor as MutableStateFlow).value =
+                        readOptionalColor(key)
                 "lyrics_opacity" ->
                     (lyricsOpacity as MutableStateFlow).value =
                         prefs.getFloat(key, 1f)
@@ -182,6 +192,24 @@ class SettingsStore(context: Context) {
         (floatingFontSize as MutableStateFlow).value = cleaned
     }
 
+    fun setFloatingPlayedColor(value: Int?) {
+        val cleaned = value?.let(::opaqueColor)
+        prefs.edit {
+            if (cleaned == null) remove("floating_played_color")
+            else putInt("floating_played_color", cleaned)
+        }
+        (floatingPlayedColor as MutableStateFlow).value = cleaned
+    }
+
+    fun setFloatingUnplayedColor(value: Int?) {
+        val cleaned = value?.let(::opaqueColor)
+        prefs.edit {
+            if (cleaned == null) remove("floating_unplayed_color")
+            else putInt("floating_unplayed_color", cleaned)
+        }
+        (floatingUnplayedColor as MutableStateFlow).value = cleaned
+    }
+
     fun setOnlineLyrics(value: Boolean) {
         prefs.edit { putBoolean("online_lyrics", value) }
         (onlineLyrics as MutableStateFlow).value = value
@@ -259,6 +287,8 @@ class SettingsStore(context: Context) {
         floatingLyrics = floatingLyrics.value,
         floatingLyricsLocked = floatingLyricsLocked.value,
         floatingFontSize = floatingFontSize.value,
+        floatingPlayedColor = floatingPlayedColor.value,
+        floatingUnplayedColor = floatingUnplayedColor.value,
         onlineLyrics = onlineLyrics.value,
         aiProvider = aiProvider.value,
         aiBaseUrl = aiBaseUrl.value,
@@ -290,6 +320,8 @@ class SettingsStore(context: Context) {
         setFloatingLyrics(backup.floatingLyrics)
         setFloatingLyricsLocked(backup.floatingLyricsLocked)
         setFloatingFontSize(backup.floatingFontSize)
+        setFloatingPlayedColor(backup.floatingPlayedColor)
+        setFloatingUnplayedColor(backup.floatingUnplayedColor)
         setOnlineLyrics(backup.onlineLyrics)
         setAiProvider(backup.aiProvider)
         setAiBaseUrl(backup.aiBaseUrl)
@@ -319,4 +351,9 @@ class SettingsStore(context: Context) {
         (sleepWaitTillEnd as MutableStateFlow).value = waitTillEnd
         (sleepFade as MutableStateFlow).value = fade
     }
+
+    private fun readOptionalColor(key: String): Int? =
+        if (prefs.contains(key)) opaqueColor(prefs.getInt(key, 0)) else null
+
+    private fun opaqueColor(value: Int): Int = value or 0xFF000000.toInt()
 }

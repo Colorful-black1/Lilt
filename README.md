@@ -9,7 +9,7 @@ Lilt 是一个本地优先的音乐播放器，对目标应用 Musicolet 6.14.1 
 - **桌面版**：Rust + egui/eframe + Rodio，源码在 `base/app`
 - **Android 版**：Kotlin + Jetpack Compose + Media3 + Room，源码在 `base/app/android`
 
-两个版本都可选地联网获取歌词：自动查询 LRCLIB，找不到时可在歌词面板手动请求 AI 并预览后保存。只发送歌名、艺术家、专辑和时长，不上传音频、路径或收听历史；设置中可关闭。不包含广告、统计或崩溃上报 SDK。Android 为歌词获取申请 `INTERNET` / `ACCESS_NETWORK_STATE` 权限。
+两个版本都可选地联网获取歌词：自动查询 LRCLIB，找不到时可在歌词面板手动请求 AI 并预览后保存。只发送歌名、艺术家、专辑和时长，不上传音频、路径或收听历史；设置中可关闭。不包含广告、统计或崩溃上报 SDK。Android 为歌词获取申请 `INTERNET` / `ACCESS_NETWORK_STATE` 权限。桌面歌词与 Android 悬浮歌词支持按 LRC 进度双色填充，可在设置中自定义已播放/未播放颜色。
 
 ## 目录结构
 
@@ -159,7 +159,7 @@ Pop-Location
 
 ## 验收证据
 
-- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`round-8-a-online-lyrics-pc/`、`round-8-b-online-lyrics-android/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`、`android-floating-lyrics-compact/`、`player-bar-alignment/`：桌面版与 Android 版各轮截图、UI dump、测试说明
+- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`round-8-a-online-lyrics-pc/`、`round-8-b-online-lyrics-android/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`、`android-floating-lyrics-compact/`、`player-bar-alignment/`、`lyrics-progress-colors/`：桌面版与 Android 版各轮截图、UI dump、测试说明
 - `base/app/shots/`：布局检查截图
 - `base/checks/`：工作区级检查截图
 - `docs/online-lyrics.md`：在线歌词来源、隐私、限速、AI 供应商与密钥说明

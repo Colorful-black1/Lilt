@@ -89,13 +89,15 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   lyric font size (12–24 sp) and opacity (35–100%) sliders with a live preview.
 - **Floating lyrics.** A compact always-on-top lyric outside the app. It shows only the
   current LRC line with the same per-song offset and opacity, plus a separate 18–44 sp
-  maximum size; the line auto-shrinks so it fits on one row. It needs the optional
+  maximum size; the line auto-shrinks so it fits on one row. The line is filled from left
+  to right as it is sung; the played and unplayed colours can be customised in
+  **Settings → Floating lyrics** and previewed there. It needs the optional
   **display over other apps** permission; Settings opens the system screen when it is
   missing. Unlocked mode is a small semi-transparent card with a drag grip, lock and close
   buttons. Locked mode removes the card and buttons completely, leaves only the outlined
   lyric and makes the window click-through (`FLAG_NOT_TOUCHABLE`); unlock it in Settings.
   The now-playing page has a **词** quick button that only shows or hides the overlay, while
-  size, lock state and accent stay in Settings, where the floating size slider also has
+  size, lock state and lyric colours stay in Settings, where the floating size slider also has
   explicit **缩小 / 放大** buttons. The overlay runs inside the existing playback service,
   not a second foreground service, so it always uses the same MediaSession as the
   notification.
@@ -200,7 +202,7 @@ Android Keystore AES key and is excluded from backups. Media3 also declares
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 56 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 57 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
   index, LRC parsing, lyric offsets, floating lyric line windows and font clamping, widget
   progress/time formatting, backup JSON round trips, platform/format rejection, song

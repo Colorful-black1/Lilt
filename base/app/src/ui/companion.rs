@@ -43,6 +43,8 @@ pub struct CompanionSnapshot {
     pub lyrics_offset_ms: i64,
     pub lyrics_opacity: u8,
     pub desktop_lyrics_font_size: f32,
+    pub desktop_lyrics_played_color: Color32,
+    pub desktop_lyrics_unplayed_color: Color32,
     pub lyrics_locked: bool,
     pub cover: Option<egui::TextureHandle>,
 }
@@ -458,6 +460,8 @@ fn paint_outlined_line(
     position: egui::Pos2,
     color: Color32,
     outline: Color32,
+    progress: f32,
+    played_color: Color32,
 ) {
     if outline.a() > 0 {
         let stroke_galley =
@@ -479,6 +483,29 @@ fn paint_outlined_line(
         }
     }
     ui.painter().galley(position, galley.clone(), color);
+    let progress = progress.clamp(0.0, 1.0);
+    if progress <= 0.0 || played_color == color {
+        return;
+    }
+    let played_galley =
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), display_font(size), played_color);
+    if progress >= 1.0 {
+        ui.painter()
+            .galley_with_override_text_color(position, played_galley, played_color);
+        return;
+    }
+    let clip = Rect::from_min_max(
+        position,
+        egui::pos2(
+            position.x + played_galley.size().x * progress,
+            position.y + played_galley.size().y,
+        ),
+    )
+    .intersect(ui.clip_rect());
+    ui.painter()
+        .with_clip_rect(clip)
+        .galley_with_override_text_color(position, played_galley.clone(), played_color);
 }
 
 fn lyric_pair(
@@ -504,6 +531,38 @@ fn lyric_pair(
             .map(|(index, _)| index)
     });
     (current, next)
+}
+
+/// How much of one lyric line has already been sung, from 0 to 1.
+///
+/// LRC only carries line timestamps, so the fill is a continuous wipe between
+/// this line and the next non-empty one. Very long instrumental gaps are capped
+/// at eight seconds so the line does not crawl for half a minute.
+fn lyric_line_progress(
+    lyrics: &[(f64, String)],
+    index: usize,
+    position: f64,
+    offset_ms: i64,
+) -> f32 {
+    let Some((start, line)) = lyrics.get(index) else {
+        return 0.0;
+    };
+    if line.trim().is_empty() {
+        return 0.0;
+    }
+    let timed = lyrics.iter().any(|(time, _)| *time > 0.0);
+    if !timed {
+        return 1.0;
+    }
+    let adjusted = library::lyrics_position(position, offset_ms);
+    let next = lyrics
+        .iter()
+        .skip(index + 1)
+        .find(|(_, line)| !line.trim().is_empty())
+        .map(|(time, _)| *time);
+    let span = next.unwrap_or(*start + 6.0);
+    let span = (span - start).clamp(0.5, 8.0);
+    ((adjusted - start) / span).clamp(0.0, 1.0) as f32
 }
 
 fn lyrics_toolbar(
@@ -739,7 +798,7 @@ fn render_lyrics(
                 .lyrics
                 .iter()
                 .any(|(_, line)| !line.trim().is_empty());
-            let (main_line, sub_line) = if has_lyrics {
+            let (main_line, sub_line, main_progress) = if has_lyrics {
                 let (current, next) = lyric_pair(
                     &snapshot.lyrics,
                     snapshot.position,
@@ -753,13 +812,24 @@ fn render_lyrics(
                     .and_then(|index| snapshot.lyrics.get(index))
                     .map(|(_, line)| line.clone())
                     .unwrap_or_default();
-                (main, sub)
+                let progress = current
+                    .map(|index| {
+                        lyric_line_progress(
+                            &snapshot.lyrics,
+                            index,
+                            snapshot.position,
+                            snapshot.lyrics_offset_ms,
+                        )
+                    })
+                    .unwrap_or(0.0);
+                (main, sub, progress)
             } else {
                 (
                     snapshot.title.clone(),
                     snapshot
                         .t("No lyrics for this track", "这首歌没有歌词")
                         .to_owned(),
+                    0.0,
                 )
             };
 
@@ -767,15 +837,18 @@ fn render_lyrics(
                 return;
             }
 
-            let main_color = if has_lyrics {
-                with_alpha(palette.accent, alpha(255))
+            let (main_color, played_color, sub_color) = if has_lyrics {
+                (
+                    with_alpha(snapshot.desktop_lyrics_unplayed_color, alpha(235)),
+                    with_alpha(snapshot.desktop_lyrics_played_color, alpha(255)),
+                    with_alpha(snapshot.desktop_lyrics_unplayed_color, alpha(150)),
+                )
             } else {
-                with_alpha(ink, alpha(235))
-            };
-            let sub_color = if has_lyrics {
-                with_alpha(palette.accent, alpha(205))
-            } else {
-                with_alpha(ink, alpha(150))
+                (
+                    with_alpha(ink, alpha(235)),
+                    with_alpha(ink, alpha(235)),
+                    with_alpha(ink, alpha(150)),
+                )
             };
 
             let gap = 4.0;
@@ -861,6 +934,8 @@ fn render_lyrics(
                 main_position,
                 main_color,
                 outline,
+                main_progress,
+                played_color,
             );
             if let Some((sub_size, sub_galley)) = &sub {
                 let position = egui::pos2(
@@ -868,7 +943,8 @@ fn render_lyrics(
                     body.bottom() - sub_galley.size().y,
                 );
                 paint_outlined_line(
-                    ui, &sub_line, *sub_size, sub_galley, position, sub_color, outline,
+                    ui, &sub_line, *sub_size, sub_galley, position, sub_color, outline, 0.0,
+                    sub_color,
                 );
             }
         });
@@ -1232,6 +1308,30 @@ mod tests {
     fn lyric_pair_uses_the_first_line_before_its_timestamp() {
         let lyrics = vec![(2.0, "later".to_owned()), (4.0, "next".to_owned())];
         assert_eq!(lyric_pair(&lyrics, 0.5, 0), (Some(0), Some(1)));
+    }
+
+    #[test]
+    fn lyric_progress_wipes_between_line_timestamps() {
+        let lyrics = vec![
+            (10.0, "first".to_owned()),
+            (12.0, String::new()),
+            (14.0, "second".to_owned()),
+        ];
+        assert!((lyric_line_progress(&lyrics, 0, 10.0, 0) - 0.0).abs() < 0.001);
+        assert!((lyric_line_progress(&lyrics, 0, 12.0, 0) - 0.5).abs() < 0.001);
+        assert!((lyric_line_progress(&lyrics, 0, 13.0, 1000) - 0.5).abs() < 0.001);
+        assert!((lyric_line_progress(&lyrics, 0, 17.0, 0) - 1.0).abs() < 0.001);
+        assert!((lyric_line_progress(&lyrics, 2, 16.0, 0) - (2.0 / 6.0)).abs() < 0.001);
+    }
+
+    #[test]
+    fn lyric_progress_is_full_for_plain_lyrics_and_caps_long_gaps() {
+        let plain = vec![(0.0, "one".to_owned()), (0.0, "two".to_owned())];
+        assert!((lyric_line_progress(&plain, 0, 99.0, 0) - 1.0).abs() < 0.001);
+
+        let long_gap = vec![(0.0, "one".to_owned()), (30.0, "two".to_owned())];
+        assert!((lyric_line_progress(&long_gap, 0, 8.0, 0) - 1.0).abs() < 0.001);
+        assert!((lyric_line_progress(&long_gap, 0, 4.0, 0) - 0.5).abs() < 0.001);
     }
 
     #[test]

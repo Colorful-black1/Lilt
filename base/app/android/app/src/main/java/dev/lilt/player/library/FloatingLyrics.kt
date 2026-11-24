@@ -47,6 +47,30 @@ fun floatingLyricLines(
 fun clampFloatingFontSize(value: Float): Float =
     ((value.coerceIn(18f, 44f) * 2f).roundToInt() / 2f)
 
+/**
+ * Fraction of the active timed lyric line that has already been sung, 0..1.
+ * LRC only has line timestamps, so this is a continuous wipe until the next
+ * non-empty line. Long instrumental gaps are capped at eight seconds.
+ */
+fun floatingLyricProgress(
+    document: LrcDocument?,
+    positionMs: Long,
+    offsetMs: Int,
+): Float {
+    if (document == null || document.lines.isEmpty()) return 0f
+    if (!document.timed) return 1f
+    val index = activeLrcLine(document, positionMs, offsetMs)
+    if (index < 0) return 0f
+    val start = document.lines[index].timeMs
+    val next = document.lines
+        .drop(index + 1)
+        .firstOrNull { it.text.isNotBlank() }
+        ?.timeMs
+    val span = ((next ?: (start + 6_000L)) - start).coerceIn(500L, 8_000L)
+    val adjusted = lyricsPositionMs(positionMs, offsetMs)
+    return ((adjusted - start).toFloat() / span).coerceIn(0f, 1f)
+}
+
 /** The five named accents, as opaque ARGB values for native overlay views. */
 fun accentArgb(id: String): Int = when (id) {
     "sage" -> 0xFF9BC49A.toInt()
