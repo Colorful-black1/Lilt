@@ -20,6 +20,12 @@ pub const LYRICS_VIEWPORT: &str = "lilt_desktop_lyrics";
 pub const LYRICS_UNLOCK_VIEWPORT: &str = "lilt_desktop_lyrics_unlock";
 pub const MINI_VIEWPORT: &str = "lilt_mini_player";
 
+/// The locked-desktop-lyrics unlock control is deliberately a labelled pill
+/// rather than a tiny lock glyph: at 30 px it read as a stray dot on dark
+/// wallpapers.
+const UNLOCK_PUCK_WIDTH: f32 = 96.0;
+const UNLOCK_PUCK_HEIGHT: f32 = 38.0;
+
 const LYRICS_TITLE: &str = "Lilt Lyrics";
 const LYRICS_UNLOCK_TITLE: &str = "Lilt Lyrics Unlock";
 const MINI_TITLE: &str = "Lilt Mini Player";
@@ -201,9 +207,10 @@ impl CompanionWindows {
             ctx.request_repaint_of(viewport_id);
 
             if unlock_puck_visible(lyrics_visible, locked) {
-                let puck_size = 30.0;
-                let puck_position =
-                    egui::pos2(position.x + (size.x - puck_size) * 0.5, position.y + 4.0);
+                let puck_position = egui::pos2(
+                    position.x + (size.x - UNLOCK_PUCK_WIDTH) * 0.5,
+                    position.y + 4.0,
+                );
                 let builder = egui::ViewportBuilder::default()
                     .with_title(LYRICS_UNLOCK_TITLE)
                     .with_decorations(false)
@@ -214,7 +221,7 @@ impl CompanionWindows {
                     .with_minimize_button(false)
                     .with_maximize_button(false)
                     .with_position(puck_position)
-                    .with_inner_size([puck_size, puck_size]);
+                    .with_inner_size([UNLOCK_PUCK_WIDTH, UNLOCK_PUCK_HEIGHT]);
                 let snapshot = self.snapshot.clone();
                 let actions = self.actions.clone();
                 let main_window = self.main_window.clone();
@@ -779,7 +786,7 @@ fn render_lyrics(
             } else {
                 // The separate unlock puck sits in this strip; keep the lyric
                 // lines below it.
-                body.min.y = inner.top() + 30.0;
+                body.min.y = inner.top() + 38.0;
             }
             body.max.y = inner.bottom() - 2.0;
 
@@ -968,26 +975,55 @@ fn render_lyrics_unlock(
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
         .show(ctx, |ui| {
-            let rect = ui.max_rect().shrink(2.0);
-            let response = ui.allocate_rect(rect, Sense::click());
+            let rect = ui.max_rect().shrink(1.0);
+            let response = ui
+                .allocate_rect(rect, Sense::click())
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
             let background = if response.hovered() {
-                Color32::from_rgba_unmultiplied(24, 21, 18, 238)
+                Color32::from_rgba_unmultiplied(28, 24, 20, 245)
             } else {
-                Color32::from_rgba_unmultiplied(10, 9, 8, 210)
+                Color32::from_rgba_unmultiplied(12, 10, 9, 222)
             };
-            ui.painter().rect_filled(rect, 9.0, background);
+            ui.painter()
+                .rect_filled(rect, UNLOCK_PUCK_HEIGHT * 0.5, background);
             ui.painter().rect_stroke(
                 rect,
-                9.0,
-                Stroke::new(1.0, with_alpha(Color32::WHITE, 30)),
+                UNLOCK_PUCK_HEIGHT * 0.5,
+                Stroke::new(
+                    1.0,
+                    with_alpha(
+                        snapshot.palette.accent,
+                        if response.hovered() { 170 } else { 100 },
+                    ),
+                ),
                 StrokeKind::Inside,
             );
+            let label = snapshot.t("Unlock", "解锁");
+            let color = with_alpha(Color32::WHITE, 232);
+            let galley =
+                ui.painter()
+                    .layout_no_wrap(label.to_owned(), FontId::proportional(12.5), color);
+            let icon_size = 18.0;
+            let gap = 7.0;
+            let total = icon_size + gap + galley.size().x;
+            let left = rect.center().x - total * 0.5;
             icons::paint(
                 ui.painter(),
-                Rect::from_center_size(rect.center(), Vec2::splat(13.0)),
-                Icon::Lock,
-                with_alpha(Color32::WHITE, 225),
-                1.5,
+                Rect::from_min_size(
+                    egui::pos2(left, rect.center().y - icon_size * 0.5),
+                    Vec2::splat(icon_size),
+                ),
+                Icon::Unlock,
+                color,
+                1.6,
+            );
+            ui.painter().galley(
+                egui::pos2(
+                    left + icon_size + gap,
+                    rect.center().y - galley.size().y * 0.5,
+                ),
+                galley,
+                color,
             );
             if response.clicked() {
                 push_action(actions, main_window, CompanionAction::ToggleLyricsLock);

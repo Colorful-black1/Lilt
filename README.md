@@ -159,7 +159,7 @@ Pop-Location
 
 ## 验收证据
 
-- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`round-8-a-online-lyrics-pc/`、`round-8-b-online-lyrics-android/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`、`android-floating-lyrics-compact/`、`player-bar-alignment/`、`lyrics-progress-colors/`：桌面版与 Android 版各轮截图、UI dump、测试说明
+- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`round-8-a-online-lyrics-pc/`、`round-8-b-online-lyrics-android/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`、`android-floating-lyrics-compact/`、`player-bar-alignment/`、`lyrics-progress-colors/`、`desktop-lyrics-unlock-button/`：桌面版与 Android 版各轮截图、UI dump、测试说明
 - `base/app/shots/`：布局检查截图
 - `base/checks/`：工作区级检查截图
 - `docs/online-lyrics.md`：在线歌词来源、隐私、限速、AI 供应商与密钥说明

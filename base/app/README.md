@@ -165,7 +165,7 @@ Set `LILT_DATA_DIR` to use a different data folder.
   (favourite, previous, play/pause, next, open player, lock and close); the whole lyric area
   can be dragged and double-click opens Now Playing. Locking removes the card and toolbar,
   makes the window fully transparent and click-through, and leaves only the outlined lyrics
-  plus a small lock button above them; click it, use the tray menu or use Settings to
+  plus an **Unlock** pill above them; click it, use the tray menu or use Settings to
   unlock. Settings has A−/A+ buttons beside the desktop lyric size slider, and Now Playing
   has a `词` quick button that only shows or hides the overlay. The default size is 900×190
   (minimum 460×160). `Ctrl+Alt+L` toggles the window.
