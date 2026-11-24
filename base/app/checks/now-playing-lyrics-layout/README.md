@@ -19,6 +19,9 @@ right, and one transport bar along the bottom.
   windows use full labels; medium windows switch to short labels (A-B, 本曲后停止, 均衡,
   定时, 桌面, 标签, 1.00×); only the narrowest windows use icon buttons. No label is clipped
   at the tested 1045/900/720 px widths.
+- Large and maximized windows expand the content width up to 2200 px instead of staying in
+  a 1180 px column. The cover grows, the left group is vertically balanced, and the lyrics
+  and controls fill the window while the transport stays at its centre.
 - Lyric lines are centred horizontally. The active line is centred vertically in the pane
   with `scroll_to_rect(..., Align::Center)` whenever the highlighted line changes, so the
   sheet follows playback.
@@ -44,6 +47,7 @@ right, and one transport bar along the bottom.
 | `04-after-720x540.png` | Minimum window keeps the transport centred and all controls unclipped |
 | `05-details-tab.png` | Details tab with Up next and the file card |
 | `06-compact-1045x650.png` | Medium window uses short but complete labels; transport stays centred and nothing is cut off |
+| `07-maximized-1900x1000.png` | Maximized layout expands, balances the left group, and keeps the fully visible transport centred |
 
 The `02` capture uses `LILT_START_PAGE=now`, `LILT_LYRICS=1`, `LILT_AUTOPLAY=1` and
 `LILT_SEEK=80` against a copied test state, then PrintWindow at 1180×780.
@@ -60,6 +64,6 @@ in `base/app/src/ui/now_playing.rs`; `dialogs.rs` delegates to it so the existin
 and action plumbing stays unchanged.
 
 ```text
-dist/Lilt-0.1.0-win64/Lilt.exe        11,961,856 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,496,032 bytes
+dist/Lilt-0.1.0-win64/Lilt.exe        11,960,320 bytes  (PE subsystem 2)
+dist/Lilt-0.1.0-win64-portable.zip    18,495,991 bytes
 ```

@@ -12,11 +12,11 @@ use crate::model::{format_duration, LyricsSource, Page, RepeatMode, Song};
 use crate::theme::{cover_palette, display_font, mix, with_alpha, Palette};
 use crate::widgets;
 use eframe::egui::{
-    self, Align, Color32, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, Ui,
-    UiBuilder, Vec2,
+    self, Align, Align2, Color32, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke,
+    Ui, UiBuilder, Vec2,
 };
 
-const MAX_CONTENT_WIDTH: f32 = 1180.0;
+const MAX_CONTENT_WIDTH: f32 = 2200.0;
 const OUTER_MARGIN: f32 = 24.0;
 const LEFT_GAP: f32 = 20.0;
 
@@ -163,7 +163,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
             let content_width = (screen.width() - OUTER_MARGIN * 2.0)
                 .min(MAX_CONTENT_WIDTH)
                 .max(560.0);
-            let bottom_h = 104.0;
+            let bottom_h = 112.0;
 
             ui.allocate_ui_with_layout(
                 Vec2::new(screen.width(), screen.height()),
@@ -201,9 +201,9 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                     ui.add_space(8.0);
 
                     let body_h = (screen.bottom() - 14.0 - bottom_h - ui.cursor().top()).max(250.0);
-                    let left_w = (content_width * 0.35)
-                        .clamp(232.0, 400.0)
-                        .min(content_width - 292.0);
+                    let left_w = (content_width * 0.32)
+                        .clamp(250.0, 560.0)
+                        .min(content_width - 300.0);
                     let right_w = content_width - left_w - LEFT_GAP;
 
                     let (body_rect, _) =
@@ -398,7 +398,9 @@ fn left_column(
     locate_current: &mut bool,
     toggle_desktop: &mut bool,
 ) {
-    let cover = (body_h - 118.0).max(120.0).min(body_h * 0.62).min(left_w);
+    let cover = (body_h - 160.0).max(100.0).min(body_h * 0.58).min(left_w);
+    let offset = ((body_h - (cover + 175.0)) * 0.5).clamp(0.0, 100.0);
+    ui.add_space(offset);
     let (cover_rect, _) = ui.allocate_exact_size(Vec2::splat(cover), Sense::hover());
     ui.painter()
         .rect_filled(cover_rect.expand(6.0), 18.0, with_alpha(Color32::BLACK, 90));
@@ -1076,7 +1078,7 @@ fn transport_bar(
     if let Some(value) = divider_seek(ui, fraction, &app.palette, ink, screen_width) {
         *seek = Some(value);
     }
-    ui.add_space(2.0);
+    ui.add_space(4.0);
 
     let outer_pad = ((screen_width - width) / 2.0).max(16.0);
     let content_rect = Rect::from_min_max(
@@ -1088,21 +1090,23 @@ fn transport_bar(
     );
     child_ui(ui, content_rect, Layout::top_down(Align::Min), |ui| {
         ui.spacing_mut().item_spacing.y = 0.0;
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(format_duration(position))
-                    .font(FontId::monospace(10.0))
-                    .color(ink_muted),
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(
-                    RichText::new(format_duration(duration))
-                        .font(FontId::monospace(10.0))
-                        .color(ink_muted),
-                );
-            });
-        });
-        ui.add_space(3.0);
+        let content_left = ui.cursor().left();
+        let (time_rect, _) = ui.allocate_exact_size(Vec2::new(width, 14.0), Sense::hover());
+        ui.painter().text(
+            Pos2::new(content_left, time_rect.top()),
+            Align2::LEFT_TOP,
+            format_duration(position),
+            FontId::monospace(10.0),
+            ink_muted,
+        );
+        ui.painter().text(
+            Pos2::new(content_left + width, time_rect.top()),
+            Align2::RIGHT_TOP,
+            format_duration(duration),
+            FontId::monospace(10.0),
+            ink_muted,
+        );
+        ui.add_space(4.0);
 
         let play_size = 54.0;
         let skip_size = 38.0;
@@ -1158,8 +1162,10 @@ fn transport_bar(
         };
         let compact_speed = format!("{:.2}×", app.state.settings.playback_speed);
 
+        let row_top = ui.cursor().top()
+            + ((content_rect.bottom() - ui.cursor().top() - row_h) * 0.5).max(0.0);
         let row_rect = Rect::from_min_size(
-            Pos2::new(ui.cursor().left(), ui.cursor().top()),
+            Pos2::new(ui.cursor().left(), row_top),
             Vec2::new(width, row_h),
         );
         child_ui(ui, row_rect, Layout::left_to_right(Align::Center), |ui| {
