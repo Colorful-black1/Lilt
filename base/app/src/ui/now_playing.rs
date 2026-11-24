@@ -1111,7 +1111,8 @@ fn transport_bar(
         let spacing = ui.spacing().item_spacing.x;
         let transport_w = edge_size * 2.0 + skip_size * 2.0 + play_size + spacing * 4.0;
         let side_w = ((width - transport_w) / 2.0).max(0.0);
-        let wide = side_w >= 420.0;
+        let full = side_w >= 420.0;
+        let compact = !full && side_w >= 340.0;
 
         let ab_label = match app.ab_loop {
             Some(AbLoop { a, b: Some(b) }) => {
@@ -1140,6 +1141,22 @@ fn transport_bar(
             app.t("Speed", "速度"),
             app.state.settings.playback_speed
         );
+        let compact_ab = if app.ab_loop.is_some() {
+            "A-B ✓".to_owned()
+        } else {
+            "A-B".to_owned()
+        };
+        let compact_stop = if app.stop_after_current {
+            format!("{} ✓", app.t("Stop after", "本曲后停止"))
+        } else {
+            app.t("Stop after", "本曲后停止").to_owned()
+        };
+        let compact_desktop = if app.state.settings.desktop_lyrics {
+            format!("{} ✓", app.t("Desktop", "桌面"))
+        } else {
+            app.t("Desktop", "桌面").to_owned()
+        };
+        let compact_speed = format!("{:.2}×", app.state.settings.playback_speed);
 
         let row_rect = Rect::from_min_size(
             Pos2::new(ui.cursor().left(), ui.cursor().top()),
@@ -1154,7 +1171,7 @@ fn transport_bar(
                     |ui| {
                         ui.set_min_size(Vec2::new(side_w, row_h));
                         ui.spacing_mut().item_spacing.x = 4.0;
-                        if wide {
+                        if full {
                             if widgets::ghost_button(ui, &ab_label, Some(Icon::Repeat), op)
                                 .on_hover_text(app.t(
                                     "Tap once for A, again for B, once more to clear.",
@@ -1179,6 +1196,30 @@ fn transport_bar(
                                 Some(Icon::Gauge),
                                 op,
                             )
+                            .clicked()
+                            {
+                                *open_eq = true;
+                            }
+                        } else if compact {
+                            if widgets::ghost_button(ui, &compact_ab, Some(Icon::Repeat), op)
+                                .on_hover_text(ab_label.as_str())
+                                .clicked()
+                            {
+                                *toggle_ab = true;
+                            }
+                            if widgets::ghost_button(ui, &compact_stop, Some(Icon::Pause), op)
+                                .on_hover_text(stop_label.as_str())
+                                .clicked()
+                            {
+                                *toggle_stop_after = true;
+                            }
+                            if widgets::ghost_button(
+                                ui,
+                                app.t("EQ", "均衡"),
+                                Some(Icon::Gauge),
+                                op,
+                            )
+                            .on_hover_text(app.t("Equalizer", "均衡器"))
                             .clicked()
                             {
                                 *open_eq = true;
@@ -1311,7 +1352,7 @@ fn transport_bar(
                     |ui| {
                         ui.set_min_size(Vec2::new(side_w, row_h));
                         ui.spacing_mut().item_spacing.x = 4.0;
-                        if wide {
+                        if full {
                             if widgets::ghost_button(ui, &speed_label, Some(Icon::Gauge), op)
                                 .clicked()
                             {
@@ -1347,6 +1388,40 @@ fn transport_bar(
                                 Some(Icon::Clock),
                                 op,
                             )
+                            .clicked()
+                            {
+                                *open_sleep = true;
+                            }
+                        } else if compact {
+                            if widgets::ghost_button(ui, &compact_speed, Some(Icon::Gauge), op)
+                                .on_hover_text(speed_label.as_str())
+                                .clicked()
+                            {
+                                *open_speed = true;
+                            }
+                            if widgets::ghost_button(ui, app.t("Tags", "标签"), Some(Icon::Tag), op)
+                                .clicked()
+                            {
+                                *open_tags = true;
+                            }
+                            if widgets::ghost_button(
+                                ui,
+                                &compact_desktop,
+                                Some(Icon::DesktopLyrics),
+                                op,
+                            )
+                            .on_hover_text(desktop_label)
+                            .clicked()
+                            {
+                                *toggle_desktop = true;
+                            }
+                            if widgets::ghost_button(
+                                ui,
+                                app.t("Sleep", "定时"),
+                                Some(Icon::Clock),
+                                op,
+                            )
+                            .on_hover_text(app.t("Sleep timer", "睡眠定时"))
                             .clicked()
                             {
                                 *open_sleep = true;
