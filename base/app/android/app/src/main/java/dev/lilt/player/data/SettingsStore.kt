@@ -3,7 +3,10 @@ package dev.lilt.player.data
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import dev.lilt.player.library.AiConfig
+import dev.lilt.player.library.findAiProvider
 import dev.lilt.player.library.clampFloatingFontSize
+import dev.lilt.player.library.normalizeBaseUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
@@ -44,6 +47,17 @@ class SettingsStore(context: Context) {
         MutableStateFlow(prefs.getBoolean("floating_lyrics_locked", false))
     val floatingFontSize: StateFlow<Float> =
         MutableStateFlow(clampFloatingFontSize(prefs.getFloat("floating_font_size", 26f)))
+    val onlineLyrics: StateFlow<Boolean> =
+        MutableStateFlow(prefs.getBoolean("online_lyrics", true))
+    val aiProvider: StateFlow<String> =
+        MutableStateFlow(prefs.getString("ai_provider", "deepseek") ?: "deepseek")
+    val aiBaseUrl: StateFlow<String> =
+        MutableStateFlow(prefs.getString("ai_base_url", "https://api.deepseek.com/v1") ?: "")
+    val aiModel: StateFlow<String> =
+        MutableStateFlow(prefs.getString("ai_model", "deepseek-v4-pro") ?: "")
+    private val secrets = SecretStore(context)
+    private val aiKeyState = MutableStateFlow(secrets.hasApiKey())
+    val aiKeySaved: StateFlow<Boolean> = aiKeyState
 
     /**
      * The overlay service and the app share one preferences file. The service
@@ -168,6 +182,61 @@ class SettingsStore(context: Context) {
         (floatingFontSize as MutableStateFlow).value = cleaned
     }
 
+    fun setOnlineLyrics(value: Boolean) {
+        prefs.edit { putBoolean("online_lyrics", value) }
+        (onlineLyrics as MutableStateFlow).value = value
+    }
+
+    fun setAiProvider(id: String) {
+        val preset = findAiProvider(id)
+        prefs.edit {
+            putString("ai_provider", preset.id)
+            putString("ai_base_url", preset.baseUrl)
+            putString("ai_model", preset.models.firstOrNull() ?: "")
+        }
+        (aiProvider as MutableStateFlow).value = preset.id
+        (aiBaseUrl as MutableStateFlow).value = preset.baseUrl
+        (aiModel as MutableStateFlow).value = preset.models.firstOrNull() ?: ""
+    }
+
+    fun setAiBaseUrl(value: String) {
+        val cleaned = value.trim()
+        prefs.edit { putString("ai_base_url", cleaned) }
+        (aiBaseUrl as MutableStateFlow).value = cleaned
+    }
+
+    fun setAiModel(value: String) {
+        val cleaned = value.trim()
+        prefs.edit { putString("ai_model", cleaned) }
+        (aiModel as MutableStateFlow).value = cleaned
+    }
+
+    fun saveAiKey(value: String): Boolean {
+        val ok = secrets.saveApiKey(value)
+        if (ok) aiKeyState.value = true
+        return ok
+    }
+
+    fun clearAiKey() {
+        secrets.clearApiKey()
+        aiKeyState.value = false
+    }
+
+    fun hasAiKey(): Boolean = secrets.hasApiKey()
+
+    fun aiConfig(): AiConfig? {
+        val key = secrets.loadApiKey() ?: return null
+        val base = normalizeBaseUrl(aiBaseUrl.value) ?: return null
+        val model = aiModel.value.trim()
+        if (model.isEmpty()) return null
+        return AiConfig(
+            provider = aiProvider.value,
+            baseUrl = base,
+            model = model,
+            apiKey = key,
+        )
+    }
+
     fun snapshotForBackup(): BackupSettings = BackupSettings(
         language = language.value,
         theme = theme.value,
@@ -190,6 +259,10 @@ class SettingsStore(context: Context) {
         floatingLyrics = floatingLyrics.value,
         floatingLyricsLocked = floatingLyricsLocked.value,
         floatingFontSize = floatingFontSize.value,
+        onlineLyrics = onlineLyrics.value,
+        aiProvider = aiProvider.value,
+        aiBaseUrl = aiBaseUrl.value,
+        aiModel = aiModel.value,
     )
 
     /** Applies typed, range-checked values from a backup through the normal setters. */
@@ -217,6 +290,10 @@ class SettingsStore(context: Context) {
         setFloatingLyrics(backup.floatingLyrics)
         setFloatingLyricsLocked(backup.floatingLyricsLocked)
         setFloatingFontSize(backup.floatingFontSize)
+        setOnlineLyrics(backup.onlineLyrics)
+        setAiProvider(backup.aiProvider)
+        setAiBaseUrl(backup.aiBaseUrl)
+        setAiModel(backup.aiModel)
     }
 
     fun setSleepDefaults(

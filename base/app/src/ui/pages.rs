@@ -1696,6 +1696,253 @@ fn equalizer_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
     }
 }
 
+fn online_lyrics_card(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
+    card_frame(palette).show(ui, |ui| {
+        common::section_title(
+            ui,
+            palette,
+            app.t("Online lyrics", "在线歌词"),
+            app.t(
+                "When a song starts without lyrics, LRCLIB is queried in the background. The AI fallback only runs from the button in the lyrics panel.",
+                "歌曲开始播放且没有歌词时，后台查询 LRCLIB。AI 兜底只在歌词面板点击按钮时请求。",
+            ),
+        );
+        ui.add_space(6.0);
+        let mut online = app.state.settings.online_lyrics;
+        setting_row(
+            ui,
+            palette,
+            app.t("Fetch lyrics while playing", "播放时获取歌词"),
+            app.t(
+                "Only the title, artist, album and duration are sent. Audio files and paths stay on this device.",
+                "只发送歌名、艺术家、专辑和时长；音频文件和路径不会上传。",
+            ),
+            |ui| {
+                if widgets::toggle_switch(ui, &mut online, palette).clicked() {
+                    app.state.settings.online_lyrics = online;
+                    app.mark_dirty();
+                }
+            },
+        );
+        ui.add_space(8.0);
+        widgets::divider(ui, palette);
+        ui.add_space(8.0);
+        ui.label(
+            RichText::new(app.t("AI fallback (manual)", "AI 兜底（手动）"))
+                .size(11.0)
+                .color(palette.text)
+                .strong(),
+        );
+        ui.label(
+            RichText::new(app.t(
+                "OpenAI-compatible providers. The provider only sees the track metadata and the prompt; results are previewed before saving.",
+                "OpenAI 兼容供应商，只发送歌曲元数据和提示词；结果先预览，确认后保存。",
+            ))
+            .size(10.0)
+            .color(palette.muted),
+        );
+        ui.add_space(8.0);
+        let provider = app.state.settings.ai_provider.clone();
+        let preset = crate::lyrics_fetch::find_ai_provider(&provider);
+        let mut chosen_provider: Option<String> = None;
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(app.t("Provider", "供应商"))
+                    .size(10.5)
+                    .color(palette.muted),
+            );
+            egui::ComboBox::from_id_salt("ai_provider")
+                .selected_text(preset.name)
+                .width(240.0)
+                .show_ui(ui, |ui| {
+                    for option in crate::lyrics_fetch::AI_PROVIDERS {
+                        if ui
+                            .selectable_label(option.id == provider, option.name)
+                            .clicked()
+                        {
+                            chosen_provider = Some(option.id.to_owned());
+                        }
+                    }
+                });
+        });
+        if let Some(id) = chosen_provider {
+            app.choose_ai_provider(&id);
+        }
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(app.t("Base URL", "接口地址"))
+                .size(10.5)
+                .color(palette.muted),
+        );
+        let base_response = ui.add(
+            egui::TextEdit::singleline(&mut app.state.settings.ai_base_url)
+                .desired_width(f32::INFINITY)
+                .hint_text("https://api.deepseek.com/v1")
+                .text_color(palette.text),
+        );
+        if base_response.changed() {
+            app.mark_dirty();
+        }
+        ui.label(
+            RichText::new(app.t(
+                "The app adds /v1 when the path has no version segment. Remote HTTP is rejected.",
+                "路径缺少版本号时会自动补 /v1；远程 HTTP 地址会被拒绝。",
+            ))
+            .size(9.5)
+            .color(palette.faint),
+        );
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(app.t("Model", "模型"))
+                    .size(10.5)
+                    .color(palette.muted),
+            );
+            let model_response = ui.add(
+                egui::TextEdit::singleline(&mut app.state.settings.ai_model)
+                    .desired_width(260.0)
+                    .hint_text("deepseek-v4-pro")
+                    .text_color(palette.text),
+            );
+            if model_response.changed() {
+                app.mark_dirty();
+            }
+            if widgets::ghost_button(
+                ui,
+                app.t("Fetch models", "获取模型"),
+                Some(Icon::Refresh),
+                palette,
+            )
+            .clicked()
+            {
+                app.fetch_ai_models();
+            }
+            if app.ai_models_loading {
+                ui.add(egui::Spinner::new().size(12.0));
+            }
+        });
+        if !app.ai_models.is_empty() {
+            let mut chosen_model: Option<String> = None;
+            egui::ComboBox::from_id_salt("ai_model_choices")
+                .selected_text(app.state.settings.ai_model.clone())
+                .width(320.0)
+                .show_ui(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(220.0)
+                        .show(ui, |ui| {
+                            for model in &app.ai_models {
+                                if ui
+                                    .selectable_label(
+                                        app.state.settings.ai_model == *model,
+                                        model,
+                                    )
+                                    .clicked()
+                                {
+                                    chosen_model = Some(model.clone());
+                                }
+                            }
+                        });
+                });
+            if let Some(model) = chosen_model {
+                app.state.settings.ai_model = model;
+                app.mark_dirty();
+            }
+        }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(app.t("API Key", "API Key"))
+                    .size(10.5)
+                    .color(palette.muted),
+            );
+            let hint = if app.ai_key_saved {
+                app.t("Saved; leave empty to keep it", "已加密保存；留空表示不修改")
+            } else {
+                app.t("Paste the provider key", "粘贴供应商的 API Key")
+            };
+            ui.add(
+                egui::TextEdit::singleline(&mut app.ai_key_input)
+                    .password(true)
+                    .desired_width(220.0)
+                    .hint_text(hint)
+                    .text_color(palette.text),
+            );
+            if widgets::ghost_button(ui, app.t("Save key", "保存 Key"), Some(Icon::Check), palette)
+                .clicked()
+            {
+                app.save_ai_key();
+            }
+            if app.ai_key_saved
+                && widgets::ghost_button(
+                    ui,
+                    app.t("Remove", "移除"),
+                    Some(Icon::Trash),
+                    palette,
+                )
+                .clicked()
+            {
+                app.clear_ai_key();
+            }
+        });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if widgets::ghost_button(
+                ui,
+                app.t("Test connection", "测试连接"),
+                Some(Icon::Sparkle),
+                palette,
+            )
+            .clicked()
+            {
+                app.test_ai_connection();
+            }
+            if app.ai_testing {
+                ui.add(egui::Spinner::new().size(12.0));
+            }
+            if let Some((ok, message)) = &app.ai_status {
+                ui.label(
+                    RichText::new(message)
+                        .size(10.0)
+                        .color(if *ok { palette.accent } else { palette.warn }),
+                );
+            }
+        });
+        ui.add_space(8.0);
+        widgets::divider(ui, palette);
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(format!(
+                    "{} {}",
+                    app.lyrics_fetch_cache.len(),
+                    app.t("cached lookup(s)", "条获取缓存")
+                ))
+                .size(10.0)
+                .color(palette.muted),
+            );
+            if widgets::ghost_button(
+                ui,
+                app.t("Clear cache", "清理缓存"),
+                Some(Icon::Trash),
+                palette,
+            )
+            .clicked()
+            {
+                app.clear_lyrics_fetch_cache();
+            }
+        });
+        ui.add_space(4.0);
+        ui.label(
+            RichText::new(app.t(
+                "The AI provider may charge for requests. If the model cannot search the web, results may be incomplete or wrong; use the preview before saving.",
+                "AI 请求可能产生费用。模型不支持联网搜索时，结果可能不完整或有误，请先预览再保存。",
+            ))
+            .size(9.5)
+            .color(palette.faint),
+        );
+    });
+}
+
 fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: bool) {
     page_header(
         app,
@@ -2350,6 +2597,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                 );
             });
             ui.add_space(12.0);
+            online_lyrics_card(app, ui, palette);
+            ui.add_space(12.0);
             card_frame(palette).show(ui, |ui| {
                 common::section_title(ui, palette, app.t("Audio", "音频"), "");
                 ui.add_space(6.0);
@@ -2708,8 +2957,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                 );
                 ui.label(
                     RichText::new(app.t(
-                        "A local music player. No account, no network, no tracking.",
-                        "纯本地音乐播放器。不需要账号，不联网，不追踪。",
+                        "A local music player. Audio stays on this device; online lyrics are optional and can be turned off.",
+                        "本地音乐播放器。音频只保存在本机；在线歌词可选，可随时关闭。",
                     ))
                     .size(11.0)
                     .color(palette.muted),

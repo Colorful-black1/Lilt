@@ -1,7 +1,8 @@
-use crate::app::{AbLoop, ConfirmAction, LiltApp, Modal, TagEditorState};
+use crate::app::{AbLoop, ConfirmAction, LiltApp, LyricsStatus, Modal, TagEditorState};
 use crate::duplicates;
 use crate::icons::{self, Icon};
 use crate::library;
+use crate::lyrics_fetch;
 use crate::model::*;
 use crate::theme::{cover_palette, display_font, mix, with_alpha, Palette};
 use crate::widgets;
@@ -68,6 +69,14 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     let lyrics = app.lyrics.clone().unwrap_or_default();
     let lyrics_open = app.lyrics_open;
     let lyrics_song_key = current.as_ref().map(|song| song.key.clone());
+    let lyrics_status = lyrics_song_key
+        .as_deref()
+        .map(|key| app.lyrics_status_for(key))
+        .unwrap_or(LyricsStatus::Idle);
+    let lyrics_source = lyrics_song_key
+        .as_deref()
+        .map(|key| app.lyrics_source_for(key))
+        .unwrap_or(LyricsSource::Local);
     let mut lyrics_offset_ms = lyrics_song_key
         .as_deref()
         .map(|key| app.lyrics_offset_for(key))
@@ -91,6 +100,9 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     let mut open_tags = false;
     let mut open_speed = false;
     let mut open_lyrics_editor = false;
+    let mut start_ai = false;
+    let mut retry_lyrics = false;
+    let mut open_candidates = false;
     let mut locate_current = false;
     let mut toggle_ab = false;
     let mut clear_ab = false;
@@ -550,6 +562,16 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                             .font(display_font(17.0))
                                                             .color(ink),
                                                     );
+                                                    if !lyrics.is_empty() {
+                                                        ui.label(
+                                                            RichText::new(app.t(
+                                                                lyrics_source.label_en(),
+                                                                lyrics_source.label_zh(),
+                                                            ))
+                                                            .size(9.5)
+                                                            .color(with_alpha(ink, 120)),
+                                                        );
+                                                    }
                                                     ui.with_layout(
                                                         Layout::right_to_left(Align::Center),
                                                         |ui| {
@@ -620,14 +642,247 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                                                     ui.add_space(4.0);
                                                 }
                                                 if lyrics.is_empty() {
-                                                    ui.label(
-                                                        RichText::new(app.t(
-                                                            "No lyrics found for this track. Add a .lrc file or write them here.",
-                                                            "这首歌没有歌词。可以添加 .lrc 文件或直接编辑。",
-                                                        ))
-                                                        .size(11.0)
-                                                        .color(ink_muted),
-                                                    );
+                                                    match &lyrics_status {
+                                                        LyricsStatus::Fetching => {
+                                                            ui.horizontal(|ui| {
+                                                                ui.add(egui::Spinner::new().size(12.0));
+                                                                ui.label(
+                                                                    RichText::new(app.t(
+                                                                        "Looking up lyrics on LRCLIB…",
+                                                                        "正在从 LRCLIB 获取歌词…",
+                                                                    ))
+                                                                    .size(11.0)
+                                                                    .color(ink_muted),
+                                                                );
+                                                            });
+                                                        }
+                                                        LyricsStatus::AiFetching => {
+                                                            ui.horizontal(|ui| {
+                                                                ui.add(egui::Spinner::new().size(12.0));
+                                                                ui.label(
+                                                                    RichText::new(app.t(
+                                                                        "Asking the AI provider…",
+                                                                        "正在请求 AI…",
+                                                                    ))
+                                                                    .size(11.0)
+                                                                    .color(ink_muted),
+                                                                );
+                                                            });
+                                                        }
+                                                        LyricsStatus::NotFound => {
+                                                            ui.label(
+                                                                RichText::new(app.t(
+                                                                    "LRCLIB did not find a verified match for this track.",
+                                                                    "LRCLIB 没有找到可靠的匹配。",
+                                                                ))
+                                                                .size(11.0)
+                                                                .color(ink_muted),
+                                                            );
+                                                            if app.state.settings.online_lyrics {
+                                                                ui.horizontal_wrapped(|ui| {
+                                                                    if widgets::ghost_button(
+                                                                        ui,
+                                                                        app.t("AI lyrics", "AI 获取"),
+                                                                        Some(Icon::Sparkle),
+                                                                        &op,
+                                                                    )
+                                                                    .clicked()
+                                                                    {
+                                                                        start_ai = true;
+                                                                    }
+                                                                    if widgets::ghost_button(
+                                                                        ui,
+                                                                        app.t("Search again", "重新搜索"),
+                                                                        Some(Icon::Refresh),
+                                                                        &op,
+                                                                    )
+                                                                    .clicked()
+                                                                    {
+                                                                        retry_lyrics = true;
+                                                                    }
+                                                                });
+                                                            }
+                                                        }
+                                                        LyricsStatus::Instrumental => {
+                                                            ui.label(
+                                                                RichText::new(app.t(
+                                                                    "LRCLIB lists this track as instrumental.",
+                                                                    "LRCLIB 将这首歌标记为纯音乐。",
+                                                                ))
+                                                                .size(11.0)
+                                                                .color(ink_muted),
+                                                            );
+                                                            ui.horizontal_wrapped(|ui| {
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("AI lyrics", "AI 获取"),
+                                                                    Some(Icon::Sparkle),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    start_ai = true;
+                                                                }
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("Search again", "重新搜索"),
+                                                                    Some(Icon::Refresh),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    retry_lyrics = true;
+                                                                }
+                                                            });
+                                                        }
+                                                        LyricsStatus::Ambiguous(count) => {
+                                                            ui.label(
+                                                                RichText::new(format!(
+                                                                    "{} {}",
+                                                                    app.t(
+                                                                        "LRCLIB found several matching versions:",
+                                                                        "LRCLIB 找到多个匹配版本："
+                                                                    ),
+                                                                    count
+                                                                ))
+                                                                .size(11.0)
+                                                                .color(ink_muted),
+                                                            );
+                                                            ui.horizontal_wrapped(|ui| {
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("Choose version", "选择版本"),
+                                                                    Some(Icon::List),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    open_candidates = true;
+                                                                }
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("AI lyrics", "AI 获取"),
+                                                                    Some(Icon::Sparkle),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    start_ai = true;
+                                                                }
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("Search again", "重新搜索"),
+                                                                    Some(Icon::Refresh),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    retry_lyrics = true;
+                                                                }
+                                                            });
+                                                        }
+                                                        LyricsStatus::Error(message) => {
+                                                            ui.label(
+                                                                RichText::new(format!(
+                                                                    "{} {}",
+                                                                    app.t(
+                                                                        "Could not fetch lyrics:",
+                                                                        "获取歌词失败："
+                                                                    ),
+                                                                    message
+                                                                ))
+                                                                .size(10.5)
+                                                                .color(with_alpha(
+                                                                    Color32::from_rgb(
+                                                                        0xF2, 0xB8, 0x6B,
+                                                                    ),
+                                                                    220,
+                                                                )),
+                                                            );
+                                                            ui.horizontal_wrapped(|ui| {
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("Retry", "重试"),
+                                                                    Some(Icon::Refresh),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    retry_lyrics = true;
+                                                                }
+                                                                if widgets::ghost_button(
+                                                                    ui,
+                                                                    app.t("AI lyrics", "AI 获取"),
+                                                                    Some(Icon::Sparkle),
+                                                                    &op,
+                                                                )
+                                                                .clicked()
+                                                                {
+                                                                    start_ai = true;
+                                                                }
+                                                            });
+                                                        }
+                                                        LyricsStatus::Idle => {
+                                                            ui.label(
+                                                                RichText::new(app.t(
+                                                                    "No lyrics found for this track. Add a .lrc file or write them here.",
+                                                                    "这首歌没有歌词。可以添加 .lrc 文件或直接编辑。",
+                                                                ))
+                                                                .size(11.0)
+                                                                .color(ink_muted),
+                                                            );
+                                                            if app.state.settings.online_lyrics {
+                                                                ui.horizontal_wrapped(|ui| {
+                                                                    if widgets::ghost_button(
+                                                                        ui,
+                                                                        app.t("Get lyrics", "获取歌词"),
+                                                                        Some(Icon::Sparkle),
+                                                                        &op,
+                                                                    )
+                                                                    .clicked()
+                                                                    {
+                                                                        retry_lyrics = true;
+                                                                    }
+                                                                    if app.ai_key_saved
+                                                                        && widgets::ghost_button(
+                                                                            ui,
+                                                                            app.t("AI lyrics", "AI 获取"),
+                                                                            Some(Icon::Sparkle),
+                                                                            &op,
+                                                                        )
+                                                                        .clicked()
+                                                                    {
+                                                                        start_ai = true;
+                                                                    }
+                                                                });
+                                                            }
+                                                        }
+                                                    }
+                                                    if !app.state.settings.online_lyrics {
+                                                        ui.label(
+                                                            RichText::new(app.t(
+                                                                "Online lyrics are off. Enable them in Settings.",
+                                                                "在线歌词已关闭，可在设置中开启。",
+                                                            ))
+                                                            .size(10.0)
+                                                            .color(ink_muted),
+                                                        );
+                                                    } else if !app.ai_key_saved
+                                                        && !matches!(
+                                                            lyrics_status,
+                                                            LyricsStatus::Fetching
+                                                                | LyricsStatus::AiFetching
+                                                        )
+                                                    {
+                                                        ui.label(
+                                                            RichText::new(app.t(
+                                                                "AI fallback needs an API key in Settings.",
+                                                                "AI 兜底需要先在设置中填写 API Key。",
+                                                            ))
+                                                            .size(10.0)
+                                                            .color(ink_muted),
+                                                        );
+                                                    }
                                                 } else {
                                                     let lyric_position =
                                                         library::lyrics_position(
@@ -904,6 +1159,17 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
     if open_lyrics_editor {
         app.open_lyrics_editor();
     }
+    if let Some(key) = &lyrics_song_key {
+        if start_ai {
+            app.start_ai_lyrics(key);
+        }
+        if retry_lyrics {
+            app.retry_lyrics_for(key);
+        }
+        if open_candidates {
+            app.open_lyrics_candidates(key);
+        }
+    }
     if locate_current {
         app.locate_current_song();
     }
@@ -950,6 +1216,8 @@ enum ModalAction {
     Bookmark(String, String),
     Tags(TagEditorState),
     Lyrics(String, String),
+    SaveAiLyrics(String, String),
+    UseLyricsCandidate(String, String),
     Sleep {
         hours: u32,
         minutes: u32,
@@ -1371,6 +1639,215 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                                     close = true;
                                 }
                                 if widgets::ghost_button(ui, app.t("Cancel", "取消"), None, &palette).clicked() {
+                                    close = true;
+                                }
+                            });
+                        }
+                        Modal::AiLyricsPreview {
+                            key,
+                            title,
+                            provider,
+                            text,
+                        } => {
+                            modal_header(ui, &palette, app.t("AI lyrics", "AI 歌词"), &mut close);
+                            ui.add_space(2.0);
+                            ui.label(
+                                RichText::new(format!("{} · {}", title, provider))
+                                    .size(11.0)
+                                    .color(palette.text),
+                            );
+                            ui.label(
+                                RichText::new(app.t(
+                                    "AI results can be incomplete or inaccurate. Check the text before saving. Only verified LRC should keep sync.",
+                                    "AI 结果可能不完整或不准确，请检查后再保存。只有带时间轴的 LRC 才能同步高亮。",
+                                ))
+                                .size(10.0)
+                                .color(palette.warn),
+                            );
+                            ui.add_space(6.0);
+                            let duration = app
+                                .song_by_key(key)
+                                .map(|song| song.duration)
+                                .unwrap_or(0.0);
+                            let check = lyrics_fetch::inspect_lyrics(text, duration);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} {} · {}",
+                                        check.lines,
+                                        app.t("line(s)", "行"),
+                                        if check.timed {
+                                            app.t("timed LRC", "带时间轴")
+                                        } else {
+                                            app.t("plain text", "纯文本")
+                                        }
+                                    ))
+                                    .size(10.5)
+                                    .color(if check.timed {
+                                        palette.accent
+                                    } else {
+                                        palette.muted
+                                    }),
+                                );
+                                for warning in &check.warnings {
+                                    ui.label(
+                                        RichText::new(warning)
+                                            .size(10.0)
+                                            .color(palette.warn),
+                                    );
+                                }
+                            });
+                            ui.add_space(6.0);
+                            egui::ScrollArea::vertical()
+                                .id_salt("ai_lyrics_preview_scroll")
+                                .max_height(260.0)
+                                .show(ui, |ui| {
+                                    ui.add(
+                                        egui::TextEdit::multiline(text)
+                                            .desired_rows(14)
+                                            .desired_width(f32::INFINITY)
+                                            .font(FontId::monospace(11.0))
+                                            .text_color(palette.text),
+                                    );
+                                });
+                            ui.add_space(10.0);
+                            ui.horizontal(|ui| {
+                                ui.add_enabled_ui(!text.trim().is_empty(), |ui| {
+                                    if widgets::primary_button(
+                                        ui,
+                                        app.t("Save AI lyrics", "保存 AI 歌词"),
+                                        Some(Icon::Check),
+                                        &palette,
+                                    )
+                                    .clicked()
+                                    {
+                                        action = Some(ModalAction::SaveAiLyrics(
+                                            key.clone(),
+                                            text.trim().to_owned(),
+                                        ));
+                                        close = true;
+                                    }
+                                });
+                                if widgets::ghost_button(
+                                    ui,
+                                    app.t("Cancel", "取消"),
+                                    None,
+                                    &palette,
+                                )
+                                .clicked()
+                                {
+                                    close = true;
+                                }
+                            });
+                        }
+                        Modal::LyricsCandidates {
+                            key,
+                            title,
+                            candidates,
+                            selected,
+                        } => {
+                            modal_header(
+                                ui,
+                                &palette,
+                                app.t("Choose a lyrics version", "选择歌词版本"),
+                                &mut close,
+                            );
+                            ui.add_space(2.0);
+                            ui.label(
+                                RichText::new(title.as_str())
+                                    .size(11.0)
+                                    .color(palette.text),
+                            );
+                            ui.label(
+                                RichText::new(app.t(
+                                    "LRCLIB returned several close matches. Pick the version that matches this recording.",
+                                    "LRCLIB 返回了多个相近版本，请选择与当前录音匹配的一版。",
+                                ))
+                                .size(10.0)
+                                .color(palette.muted),
+                            );
+                            ui.add_space(6.0);
+                            egui::ScrollArea::vertical()
+                                .id_salt("lyrics_candidates_scroll")
+                                .max_height(170.0)
+                                .show(ui, |ui| {
+                                    for (index, candidate) in candidates.iter().enumerate() {
+                                        let synced = if candidate.record.is_synced() {
+                                            app.t("LRC", "LRC")
+                                        } else {
+                                            app.t("Text", "文本")
+                                        };
+                                        let label = format!(
+                                            "{} — {} · {} · {} · {}",
+                                            candidate.record.track_name,
+                                            candidate.record.artist_name,
+                                            candidate.record.album_name,
+                                            format_duration(candidate.record.duration),
+                                            synced
+                                        );
+                                        if ui
+                                            .selectable_label(*selected == index, label)
+                                            .clicked()
+                                        {
+                                            *selected = index;
+                                        }
+                                    }
+                                });
+                            ui.add_space(6.0);
+                            let preview = candidates
+                                .get(*selected)
+                                .and_then(|candidate| candidate.record.text())
+                                .unwrap_or("")
+                                .to_owned();
+                            egui::Frame::NONE
+                                .fill(palette.surface_hi)
+                                .corner_radius(8.0)
+                                .inner_margin(Margin::symmetric(10, 8))
+                                .show(ui, |ui| {
+                                    egui::ScrollArea::vertical()
+                                        .id_salt("lyrics_candidate_preview")
+                                        .max_height(150.0)
+                                        .show(ui, |ui| {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(if preview.is_empty() {
+                                                        app.t("No text for this version.", "该版本没有歌词文本。")
+                                                    } else {
+                                                        preview.as_str()
+                                                    })
+                                                    .font(FontId::monospace(10.5))
+                                                    .color(palette.text),
+                                                )
+                                                .wrap(),
+                                            );
+                                        });
+                                });
+                            ui.add_space(10.0);
+                            ui.horizontal(|ui| {
+                                ui.add_enabled_ui(!preview.is_empty(), |ui| {
+                                    if widgets::primary_button(
+                                        ui,
+                                        app.t("Use this version", "使用这个版本"),
+                                        Some(Icon::Check),
+                                        &palette,
+                                    )
+                                    .clicked()
+                                    {
+                                        action = Some(ModalAction::UseLyricsCandidate(
+                                            key.clone(),
+                                            preview.clone(),
+                                        ));
+                                        close = true;
+                                    }
+                                });
+                                if widgets::ghost_button(
+                                    ui,
+                                    app.t("Cancel", "取消"),
+                                    None,
+                                    &palette,
+                                )
+                                .clicked()
+                                {
                                     close = true;
                                 }
                             });
@@ -2152,6 +2629,14 @@ fn apply_modal_action(app: &mut LiltApp, action: ModalAction) {
         ModalAction::Bookmark(key, note) => app.set_bookmark(&key, note),
         ModalAction::Tags(state) => app.set_tags(state.keys.clone(), state),
         ModalAction::Lyrics(key, text) => app.save_lyrics_for(&key, text),
+        ModalAction::SaveAiLyrics(key, text) => {
+            app.save_fetched_lyrics(&key, &text, LyricsSource::Ai, true);
+            app.notify(app.t("AI lyrics saved", "AI 歌词已保存").to_owned());
+        }
+        ModalAction::UseLyricsCandidate(key, text) => {
+            app.save_fetched_lyrics(&key, &text, LyricsSource::Lrclib, true);
+            app.notify(app.t("Lyrics saved", "歌词已保存").to_owned());
+        }
         ModalAction::Sleep {
             hours,
             minutes,

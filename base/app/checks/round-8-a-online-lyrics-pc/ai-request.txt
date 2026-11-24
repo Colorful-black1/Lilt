@@ -1,0 +1,35 @@
+AI fallback request observed by the local OpenAI-compatible stub
+
+POST /v1/chat/completions
+Authorization: Bearer sk-test
+Content-Type: application/json
+
+{
+  "model": "stub-model",
+  "stream": false,
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a lyrics lookup tool. Find the lyrics for the requested recording. Use web search when the provider supports it. Return ONLY the lyrics as LRC with [mm:ss.xx] timestamps on every line. If you cannot verify the lyrics, return exactly NOT_FOUND. Never invent, translate or explain."
+    },
+    {
+      "role": "user",
+      "content": "Title: Lilt AI Test 9f3c\nArtist: No Such Artist 9f3c\nAlbum: Test Album\nDuration: 1:00\n\nReturn verified LRC lyrics, or NOT_FOUND."
+    }
+  ]
+}
+
+Response:
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "[00:01.00] AI test line one\n[00:05.00] AI test line two\n[00:09.00] AI test line three\n[00:13.00] AI test line four"
+      }
+    }
+  ]
+}
+
+The provider label in the desktop preview was "自定义（OpenAI 兼容）"; the saved source was
+"ai". No real paid API was called.

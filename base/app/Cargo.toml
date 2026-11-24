@@ -19,12 +19,20 @@ rodio = { version = "0.20.1", default-features = false, features = ["symphonia-a
 symphonia = { version = "0.5.5", features = ["aac", "isomp4", "mp3"] }
 cpal = "0.15.3"
 rfd = "0.17.2"
+ureq = { version = "2.12.1", default-features = false, features = ["native-tls", "gzip"] }
+url = "2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 tray-icon = { version = "0.26.1", default-features = false }
 global-hotkey = "0.10.0"
 raw-window-handle = "0.6.2"
-windows = { version = "0.62.2", features = ["Foundation", "Media", "Win32_Foundation", "Win32_System_WinRT"] }
+windows = { version = "0.62.2", features = [
+    "Foundation",
+    "Media",
+    "Win32_Foundation",
+    "Win32_Security_Cryptography",
+    "Win32_System_WinRT",
+] }
 
 [profile.dev]
 opt-level = 1

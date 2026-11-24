@@ -1,6 +1,7 @@
 package dev.lilt.player.data
 
 import dev.lilt.player.library.EQ_BANDS
+import dev.lilt.player.library.findAiProvider
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -106,6 +107,8 @@ data class LiltBackup(
                 put("text", lyric.text)
                 put("offsetMs", lyric.offsetMs)
                 put("updatedAt", lyric.updatedAt)
+                put("source", lyric.source)
+                put("fetchedAt", lyric.fetchedAt)
             }
         })
         root.put("tags", tags.toJsonArray { tag ->
@@ -237,6 +240,10 @@ data class LiltBackup(
                         text = text,
                         offsetMs = item.intOr("offsetMs", 0, -60_000, 60_000),
                         updatedAt = item.longOr("updatedAt", 0L),
+                        source = item.stringOr("source", "local").let { value ->
+                            if (value in setOf("local", "lrclib", "ai", "user")) value else "local"
+                        },
+                        fetchedAt = item.longOr("fetchedAt", 0L).coerceAtLeast(0L),
                     )
                 },
                 tags = root.optJSONArray("tags").objects().mapNotNull { item ->
@@ -319,6 +326,8 @@ data class BackupLyrics(
     val text: String,
     val offsetMs: Int,
     val updatedAt: Long,
+    val source: String = "local",
+    val fetchedAt: Long = 0L,
 )
 
 data class BackupTag(
@@ -357,6 +366,10 @@ data class BackupSettings(
     val floatingLyrics: Boolean = false,
     val floatingLyricsLocked: Boolean = false,
     val floatingFontSize: Float = 26f,
+    val onlineLyrics: Boolean = true,
+    val aiProvider: String = "deepseek",
+    val aiBaseUrl: String = "https://api.deepseek.com/v1",
+    val aiModel: String = "deepseek-v4-pro",
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("language", language)
@@ -380,6 +393,10 @@ data class BackupSettings(
         put("floatingLyrics", floatingLyrics)
         put("floatingLyricsLocked", floatingLyricsLocked)
         put("floatingFontSize", floatingFontSize)
+        put("onlineLyrics", onlineLyrics)
+        put("aiProvider", aiProvider)
+        put("aiBaseUrl", aiBaseUrl)
+        put("aiModel", aiModel)
     }
 
     companion object {
@@ -425,6 +442,10 @@ data class BackupSettings(
             floatingLyrics = json.booleanOr("floatingLyrics", false),
             floatingLyricsLocked = json.booleanOr("floatingLyricsLocked", false),
             floatingFontSize = json.floatOr("floatingFontSize", 26f, 18f, 44f),
+            onlineLyrics = json.booleanOr("onlineLyrics", true),
+            aiProvider = findAiProvider(json.stringOr("aiProvider", "deepseek")).id,
+            aiBaseUrl = json.stringOr("aiBaseUrl", "https://api.deepseek.com/v1"),
+            aiModel = json.stringOr("aiModel", "deepseek-v4-pro"),
         )
     }
 }

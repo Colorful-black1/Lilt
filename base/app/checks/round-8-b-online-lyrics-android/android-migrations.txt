@@ -1,0 +1,11 @@
+Room migration tests (Android 15 emulator, lilt35)
+
+Starting 8 tests on lilt35(AVD) - 15
+Finished 8 tests on lilt35(AVD) - 15
+BUILD SUCCESSFUL
+
+The new 8→9 case checks:
+- existing lyrics text and offset survive;
+- source defaults to 'local' and fetchedAt to 0;
+- source/fetchedAt can be updated;
+- lyrics_fetch_state exists and stores status/candidateCount.

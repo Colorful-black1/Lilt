@@ -1,9 +1,9 @@
 ﻿# Lilt for Android
 
 This is the installable Android version of Lilt, rebuilt from the requested feature
-set: a purely offline local music player with the same core route as the reference app
-(scan → folder → play → queue → notification). It uses its own name, icon, colours and
-copy.
+set: a local-first music player with the same core route as the reference app
+(scan → folder → play → queue → notification), plus optional online lyrics. It uses its own
+name, icon, colours and copy.
 
 ## Build
 
@@ -73,6 +73,16 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   matching text, and keeps the last 12 queries for one-tap reuse.
 - **Lyrics** are stored per song in Room, support LRC timestamps with the current line
   highlighted in the player, plain text, and import from a local `.lrc`/`.txt` document.
+- **Online lyrics (optional).** When a track starts without lyrics, the playback service
+  queries LRCLIB in the background and writes a high-confidence match into Room. Close
+  matches open a version picker instead of silently replacing the studio version with a
+  live/remastered one. When LRCLIB has nothing, the lyrics panel offers a manual **AI
+  lyrics** button. AI output is previewed and validated before saving. Settings has a
+  master switch, OpenAI-compatible provider/model fields, model fetching, an encrypted API
+  key (Android Keystore) and a cache clear button. Room v9 adds `lyrics.source`,
+  `lyrics.fetchedAt` and `lyrics_fetch_state` for negative/ambiguous results and for
+  remembering that the user cleared a song's lyrics. Only title, artist, album and
+  duration are sent; audio files and paths never leave the device.
 - **Lyric timing and display** are adjustable. Each song keeps its own offset (`-500`,
   `-100`, `+100`, `+500` ms and reset, limited to ±60 s); positive values delay the lyrics.
   The editor shows the adjusted timestamps and saves the offset with the text. Settings has
@@ -178,25 +188,31 @@ implemented.
 ## Privacy and permissions
 
 The manifest requests media reading, notifications, the media-playback foreground service,
-wake lock and `SYSTEM_ALERT_WINDOW` for floating lyrics. The overlay permission is optional,
-is only requested when the user turns the feature on, and is never needed for playback. The
-manifest requests **no INTERNET permission** and contains no network, advertising, analytics
-or crash-reporting SDK. Media3 declares `ACCESS_NETWORK_STATE` in its library manifest; Lilt
-removes it with a manifest merge rule.
+wake lock, `SYSTEM_ALERT_WINDOW` for floating lyrics, and `INTERNET` plus
+`ACCESS_NETWORK_STATE` for the optional online lyrics feature. The overlay permission is
+optional, is only requested when the user turns the feature on, and is never needed for
+playback. Online lyrics are optional and can be turned off in Settings; the app sends only
+the track title, artist, album and duration to LRCLIB or the configured AI endpoint. It
+contains no advertising, analytics or crash-reporting SDK. The AI key is encrypted with an
+Android Keystore AES key and is excluded from backups. Media3 also declares
+`ACCESS_NETWORK_STATE`; Lilt now keeps it for the online lyrics feature.
 
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 47 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 56 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
   index, LRC parsing, lyric offsets, floating lyric line windows and font clamping, widget
   progress/time formatting, backup JSON round trips, platform/format rejection, song
   reference resolution, A-B loop bounds, stop-after bounds, duplicate grouping,
-  missing-reference grouping, EQ curves/profiles, queue resume positions, list reordering
-  and virtual tag merging.
-- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6, 6→7 and
-  7→8 migration tests on an Android 15 emulator.
+  missing-reference grouping, EQ curves/profiles, queue resume positions, list reordering,
+  virtual tag merging, online lyric matching/cleanup, base URL normalization and the
+  OpenAI-compatible HTTP client.
+- `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6, 6→7,
+  7→8 and 8→9 migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
+  `../checks/round-8-b-online-lyrics-android/README.md` for automatic LRCLIB lookup,
+  candidate selection, AI preview/save and the manifest permission dump,
   `../checks/round-7-d/README.md` for stop-after and duplicate-song evidence,
   `../checks/round-7-c/README.md` for A-B loop and missing-file re-link evidence,
   `../checks/round-7-b/README.md` for backup export, restore confirmation and restored

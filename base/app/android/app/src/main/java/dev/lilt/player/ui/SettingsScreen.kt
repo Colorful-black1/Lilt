@@ -36,8 +36,12 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
@@ -59,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -68,7 +73,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.ScanState
+import dev.lilt.player.library.AI_PROVIDERS
 import dev.lilt.player.library.DuplicateCandidate
+import dev.lilt.player.library.findAiProvider
 import dev.lilt.player.library.findDuplicateGroups
 import dev.lilt.player.widget.LiltWidgetProvider
 import kotlinx.coroutines.Dispatchers
@@ -102,6 +109,14 @@ fun SettingsScreen(
     val floatingLyrics by vm.floatingLyrics.collectAsStateWithLifecycle()
     val floatingLocked by vm.floatingLyricsLocked.collectAsStateWithLifecycle()
     val floatingFontSize by vm.floatingFontSize.collectAsStateWithLifecycle()
+    val onlineLyrics by vm.onlineLyrics.collectAsStateWithLifecycle()
+    val aiProvider by vm.aiProvider.collectAsStateWithLifecycle()
+    val aiBaseUrl by vm.aiBaseUrl.collectAsStateWithLifecycle()
+    val aiModel by vm.aiModel.collectAsStateWithLifecycle()
+    val aiKeySaved by vm.aiKeySaved.collectAsStateWithLifecycle()
+    val aiModels by vm.aiModels.collectAsStateWithLifecycle()
+    val aiSettingsBusy by vm.aiSettingsBusy.collectAsStateWithLifecycle()
+    val aiSettingsStatus by vm.aiSettingsStatus.collectAsStateWithLifecycle()
     val scan by vm.scanState.collectAsStateWithLifecycle()
     val songs by vm.songs.collectAsStateWithLifecycle()
     val allSongs by vm.allSongs.collectAsStateWithLifecycle()
@@ -402,11 +417,219 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(12.dp))
+            SettingCard(t("Online lyrics", "在线歌词")) {
+                Text(
+                    t(
+                        "When a song starts without lyrics, Lilt queries LRCLIB in the background. Only title, artist, album and duration are sent. The AI fallback is manual and its result is previewed before saving.",
+                        "歌曲开始播放且没有歌词时，Lilt 会在后台查询 LRCLIB。只发送歌名、艺术家、专辑和时长。AI 兜底只在点击按钮时请求，结果先预览再保存。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingSwitch(
+                    title = t("Fetch lyrics while playing", "播放时获取歌词"),
+                    body = t(
+                        "Audio files, paths and listening history never leave this device.",
+                        "音频文件、路径和收听记录不会离开本机。",
+                    ),
+                    checked = onlineLyrics,
+                ) { vm.setOnlineLyrics(it) }
+
+                var providerMenu by remember { mutableStateOf(false) }
+                var modelMenu by remember { mutableStateOf(false) }
+                var keyInput by remember { mutableStateOf("") }
+
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    t("AI fallback (manual)", "AI 兜底（手动）"),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    t(
+                        "OpenAI-compatible providers. The model may or may not be able to search the web; the preview marks AI output as potentially inaccurate.",
+                        "OpenAI 兼容供应商。模型是否支持联网搜索取决于供应商；预览会提示 AI 结果可能不准确。",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        t("Provider", "供应商"),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Box {
+                        TextButton(onClick = { providerMenu = true }) {
+                            Text(findAiProvider(aiProvider).name)
+                        }
+                        DropdownMenu(
+                            expanded = providerMenu,
+                            onDismissRequest = { providerMenu = false },
+                        ) {
+                            AI_PROVIDERS.forEach { preset ->
+                                DropdownMenuItem(
+                                    text = { Text(preset.name) },
+                                    onClick = {
+                                        vm.setAiProvider(preset.id)
+                                        providerMenu = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = aiBaseUrl,
+                    onValueChange = { vm.setAiBaseUrl(it) },
+                    label = { Text(t("Base URL", "接口地址")) },
+                    supportingText = {
+                        Text(
+                            t(
+                                "Adds /v1 when the path has no version segment; remote HTTP is rejected.",
+                                "路径缺少版本号时会自动补 /v1；远程 HTTP 地址会被拒绝。",
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = aiModel,
+                        onValueChange = { vm.setAiModel(it) },
+                        label = { Text(t("Model", "模型")) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(
+                        onClick = { vm.fetchAiModels() },
+                        enabled = !aiSettingsBusy,
+                    ) {
+                        Text(t("Fetch models", "获取模型"))
+                    }
+                    if (aiSettingsBusy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                }
+                if (aiModels.isNotEmpty()) {
+                    Box {
+                        TextButton(onClick = { modelMenu = true }) {
+                            Text(
+                                t(
+                                    "Choose a fetched model (${aiModels.size})",
+                                    "选择已获取的模型（${aiModels.size}）",
+                                ),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = modelMenu,
+                            onDismissRequest = { modelMenu = false },
+                        ) {
+                            aiModels.forEach { model ->
+                                DropdownMenuItem(
+                                    text = { Text(model) },
+                                    onClick = {
+                                        vm.setAiModel(model)
+                                        modelMenu = false
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        label = {
+                            Text(
+                                if (aiKeySaved) {
+                                    t("API Key (saved)", "API Key（已保存）")
+                                } else {
+                                    t("API Key", "API Key")
+                                },
+                            )
+                        },
+                        placeholder = {
+                            Text(
+                                if (aiKeySaved) {
+                                    t("Leave empty to keep it", "留空表示不修改")
+                                } else {
+                                    t("Paste the provider key", "粘贴供应商的 API Key")
+                                },
+                            )
+                        },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    TextButton(
+                        onClick = {
+                            vm.saveAiKey(keyInput)
+                            keyInput = ""
+                        },
+                        enabled = keyInput.isNotBlank(),
+                    ) {
+                        Text(t("Save", "保存"))
+                    }
+                    if (aiKeySaved) {
+                        TextButton(onClick = { vm.clearAiKey() }) {
+                            Text(t("Remove", "移除"))
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { vm.testAiConnection() },
+                        enabled = !aiSettingsBusy,
+                    ) {
+                        Text(t("Test connection", "测试连接"))
+                    }
+                    TextButton(onClick = { vm.clearLyricsFetchCache() }) {
+                        Text(t("Clear cache", "清理缓存"))
+                    }
+                }
+                if (aiSettingsStatus.isNotBlank()) {
+                    Text(
+                        aiSettingsStatus,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    t(
+                        "The AI provider may charge for requests. If you clear a song's lyrics, Lilt will not fetch them again automatically.",
+                        "AI 请求可能产生费用。手动清空某首歌的歌词后，Lilt 不会再次自动获取。",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
             SettingCard(t("Floating lyrics", "悬浮歌词")) {
                 Text(
                     t(
-                        "A draggable single-line lyric that stays above other apps. Locked mode leaves only the lyric text with no card or buttons. It only reads local lyrics and never uses the network.",
-                        "悬浮在其他应用上方的单行歌词。锁定后只保留歌词文字，没有背景卡片和按钮。只读取本地歌词，不联网。",
+                        "A draggable single-line lyric that stays above other apps. Locked mode leaves only the lyric text with no card or buttons. It reads lyrics already stored on this device.",
+                        "悬浮在其他应用上方的单行歌词。锁定后只保留歌词文字，没有背景卡片和按钮。只读取本机已保存的歌词。",
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -820,15 +1043,15 @@ fun AboutScreen(onBack: () -> Unit) {
         ) {
             Text("Lilt", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
             Text(
-                t("Offline music, close at hand.", "离线音乐，触手可及。"),
+                t("Local music, close at hand.", "本地音乐，触手可及。"),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(22.dp))
             Text(
                 t(
-                    "This Android build scans the audio already on the phone through MediaStore. It keeps the library, playlists and queues in a local Room database. Playback runs in a foreground media session, so the notification, lock screen and headset buttons keep working while the screen is off. It requests no internet permission and includes no network, advertising or analytics code.",
-                    "这个 Android 版本通过 MediaStore 扫描手机中已有的音频，并把曲库、播放列表和队列保存在本地 Room 数据库。播放由前台媒体会话负责，所以息屏后通知栏、锁屏和耳机按键仍可控制。应用不申请网络权限，也不包含任何联网、广告或统计代码。",
+                    "This Android build scans the audio already on the phone through MediaStore. It keeps the library, playlists and queues in a local Room database. Playback runs in a foreground media session, so the notification, lock screen and headset buttons keep working while the screen is off. Audio and user data stay on the device. Online lyrics are optional: only the track title, artist, album and duration are sent to LRCLIB or the AI endpoint configured in Settings, and the feature can be turned off there. The app includes no advertising, analytics or crash-reporting code.",
+                    "这个 Android 版本通过 MediaStore 扫描手机中已有的音频，并把曲库、播放列表和队列保存在本地 Room 数据库。播放由前台媒体会话负责，所以息屏后通知栏、锁屏和耳机按键仍可控制。音频与用户数据都保存在本机。在线歌词是可选功能：只把歌名、艺术家、专辑和时长发送给 LRCLIB 或设置中配置的 AI 接口，可随时关闭。应用不包含广告、统计或崩溃上报代码。",
                 ),
                 style = MaterialTheme.typography.bodyLarge,
             )
@@ -843,6 +1066,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 t("Sorting, multi-select and A-Z index", "排序、多选与字母索引"),
                 t("Grouped search with query history", "分组搜索与搜索历史"),
                 t("Local lyrics with LRC timing and import", "本地歌词、LRC 时间轴与导入"),
+                t("Optional online lyrics from LRCLIB, plus a manual AI fallback", "可选的 LRCLIB 在线歌词与手动 AI 兜底"),
                 t("Per-song lyric offset, font size and opacity", "每首歌歌词偏移、字号与透明度"),
                 t("Virtual single-song tag editing", "单曲虚拟标签编辑"),
                 t("Foreground service, notification and lock-screen controls", "前台服务、通知栏与锁屏控制"),
@@ -863,8 +1087,8 @@ fun AboutScreen(onBack: () -> Unit) {
             Text(t("Not in this build", "本版本未包含"), style = MaterialTheme.typography.titleLarge)
             Text(
                 t(
-                    "Batch tag editing, cover replacement, embedded ReplayGain writing, home-screen widgets, Android Auto and cast are not part of this build. They stay on the later list instead of being replaced with fake data.",
-                    "批量标签编辑、封面替换、ReplayGain 写入、桌面小部件、Android Auto 与投屏尚未包含。它们保留在后续清单中，而不是用假数据代替。",
+                    "Batch tag editing, cover replacement, embedded ReplayGain writing, Android Auto and cast are not part of this build. They stay on the later list instead of being replaced with fake data.",
+                    "批量标签编辑、封面替换、ReplayGain 写入、Android Auto 与投屏尚未包含。它们保留在后续清单中，而不是用假数据代替。",
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -1,0 +1,12 @@
+Android unit tests (final round)
+
+./gradlew :app:testDebugUnitTest
+BUILD SUCCESSFUL
+
+56 tests passed. The new online-lyrics coverage includes:
+- title/artist normalization and automatic/ambiguous/instrumental decisions;
+- AI text cleanup and LRC inspection;
+- base URL normalization;
+- candidate JSON round-trips;
+- an OpenAI-compatible HTTP client test against a local ServerSocket
+  (models + chat completions, Authorization and request body).

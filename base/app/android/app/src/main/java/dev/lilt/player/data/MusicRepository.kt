@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.room.withTransaction
+import dev.lilt.player.library.LyricsSource
 import dev.lilt.player.library.clampLyricsOffset
 import dev.lilt.player.library.movedItem
 import dev.lilt.player.library.withTagOverride
@@ -35,6 +36,7 @@ class MusicRepository(
     private val bookmarks = db.bookmarkDao()
     private val searches = db.searchHistoryDao()
     private val lyrics = db.lyricsDao()
+    private val lyricsFetch = db.lyricsFetchDao()
     private val playlists = db.playlistDao()
     private val queues = db.queueDao()
 
@@ -78,6 +80,8 @@ class MusicRepository(
         bookmarks.observeForSong(mediaId)
     fun observeSearchHistory(): Flow<List<SearchHistoryEntity>> = searches.observe()
     fun observeLyrics(mediaId: Long): Flow<LyricsEntity?> = lyrics.observe(mediaId)
+    fun observeLyricsFetch(mediaId: Long): Flow<LyricsFetchEntity?> =
+        lyricsFetch.observe(mediaId)
 
     suspend fun song(id: Long): SongEntity? = music.song(id)
 
@@ -143,6 +147,8 @@ class MusicRepository(
             songStates.deleteReferences(oldId)
             lyrics.remap(oldId, newId)
             lyrics.deleteReferences(oldId)
+            lyricsFetch.remap(oldId, newId)
+            lyricsFetch.deleteReferences(oldId)
             tagOverrides.remap(oldId, newId)
             tagOverrides.deleteReferences(oldId)
             bookmarks.remap(oldId, newId)
@@ -495,16 +501,55 @@ class MusicRepository(
         if (mediaId <= 0) return@withContext
         if (text.isBlank()) {
             lyrics.delete(mediaId)
+            val state = lyricsFetch.get(mediaId)
+            lyricsFetch.put(
+                (state ?: LyricsFetchEntity(
+                    mediaId = mediaId,
+                    status = LyricsFetchStatus.IDLE,
+                    lastAttemptAt = 0L,
+                    nextRetryAt = 0L,
+                )).copy(
+                    status = LyricsFetchStatus.IDLE,
+                    nextRetryAt = 0L,
+                    error = "",
+                    autoDisabled = true,
+                ),
+            )
         } else {
             lyrics.put(
                 LyricsEntity(
                     mediaId = mediaId,
                     text = text.trim(),
                     offsetMs = clampLyricsOffset(offsetMs),
+                    source = LyricsSource.USER.wire,
+                    fetchedAt = 0L,
                     updatedAt = System.currentTimeMillis(),
                 ),
             )
+            lyricsFetch.delete(mediaId)
         }
+    }
+
+    suspend fun saveFetchedLyrics(
+        mediaId: Long,
+        text: String,
+        source: LyricsSource,
+        offsetMs: Int = 0,
+    ) = withContext(Dispatchers.IO) {
+        if (mediaId <= 0 || text.isBlank()) return@withContext
+        val now = System.currentTimeMillis()
+        val existing = lyrics.get(mediaId)
+        lyrics.put(
+            LyricsEntity(
+                mediaId = mediaId,
+                text = text.trim(),
+                offsetMs = clampLyricsOffset(existing?.offsetMs ?: offsetMs),
+                source = source.wire,
+                fetchedAt = now,
+                updatedAt = now,
+            ),
+        )
+        lyricsFetch.delete(mediaId)
     }
 
     suspend fun setLyricsOffset(mediaId: Long, offsetMs: Int) = withContext(Dispatchers.IO) {
@@ -518,10 +563,53 @@ class MusicRepository(
 
     suspend fun deleteLyrics(mediaId: Long) = withContext(Dispatchers.IO) {
         lyrics.delete(mediaId)
+        val state = lyricsFetch.get(mediaId)
+        lyricsFetch.put(
+            (state ?: LyricsFetchEntity(
+                mediaId = mediaId,
+                status = LyricsFetchStatus.IDLE,
+                lastAttemptAt = 0L,
+                nextRetryAt = 0L,
+            )).copy(
+                status = LyricsFetchStatus.IDLE,
+                nextRetryAt = 0L,
+                error = "",
+                autoDisabled = true,
+            ),
+        )
     }
 
     suspend fun lyrics(mediaId: Long): LyricsEntity? = withContext(Dispatchers.IO) {
         lyrics.get(mediaId)
+    }
+
+    suspend fun lyricsFetchState(mediaId: Long): LyricsFetchEntity? =
+        withContext(Dispatchers.IO) { lyricsFetch.get(mediaId) }
+
+    suspend fun clearLyricsFetchState(mediaId: Long) = withContext(Dispatchers.IO) {
+        lyricsFetch.delete(mediaId)
+    }
+
+    suspend fun setLyricsAutoFetch(mediaId: Long, enabled: Boolean) = withContext(Dispatchers.IO) {
+        val state = lyricsFetch.get(mediaId)
+        if (state != null) {
+            lyricsFetch.put(
+                state.copy(
+                    autoDisabled = !enabled,
+                    nextRetryAt = 0L,
+                ),
+            )
+        } else if (!enabled) {
+            lyricsFetch.put(
+                LyricsFetchEntity(
+                    mediaId = mediaId,
+                    status = LyricsFetchStatus.IDLE,
+                    lastAttemptAt = 0L,
+                    nextRetryAt = 0L,
+                    autoDisabled = true,
+                ),
+            )
+        }
     }
 
     suspend fun resolveTargets(targets: List<String>): List<SongEntity> = withContext(Dispatchers.IO) {

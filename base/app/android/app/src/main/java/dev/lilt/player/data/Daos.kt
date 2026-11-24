@@ -224,6 +224,39 @@ interface LyricsDao {
 }
 
 @Dao
+interface LyricsFetchDao {
+    @Query("SELECT * FROM lyrics_fetch_state WHERE mediaId = :mediaId")
+    fun observe(mediaId: Long): Flow<LyricsFetchEntity?>
+
+    @Query("SELECT * FROM lyrics_fetch_state WHERE mediaId = :mediaId")
+    suspend fun get(mediaId: Long): LyricsFetchEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(entry: LyricsFetchEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putAll(entries: List<LyricsFetchEntity>)
+
+    @Query("SELECT * FROM lyrics_fetch_state")
+    suspend fun all(): List<LyricsFetchEntity>
+
+    @Query("UPDATE lyrics_fetch_state SET autoDisabled = :disabled WHERE mediaId = :mediaId")
+    suspend fun setAutoDisabled(mediaId: Long, disabled: Boolean)
+
+    @Query("DELETE FROM lyrics_fetch_state WHERE mediaId = :mediaId")
+    suspend fun delete(mediaId: Long)
+
+    @Query("DELETE FROM lyrics_fetch_state")
+    suspend fun clear()
+
+    @Query("UPDATE OR IGNORE lyrics_fetch_state SET mediaId = :newId WHERE mediaId = :oldId")
+    suspend fun remap(oldId: Long, newId: Long)
+
+    @Query("DELETE FROM lyrics_fetch_state WHERE mediaId = :oldId")
+    suspend fun deleteReferences(oldId: Long)
+}
+
+@Dao
 interface PlaylistDao {
     @Query(
         """

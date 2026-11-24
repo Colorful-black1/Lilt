@@ -1,8 +1,12 @@
 # Lilt
 
-Lilt is a local, offline music player built with Rust, egui/eframe and Rodio. It is the
-desktop reconstruction of the Musicolet feature set requested for this workspace; it does
-not use the target's code, name, icon, fonts, audio, screenshots or text.
+Lilt is a local-first music player built with Rust, egui/eframe and Rodio. Audio playback,
+scanning and user data always stay on this device. Online lyrics are optional: they send
+only the track title, artist, album and duration to LRCLIB or the AI provider configured in
+Settings, and can be turned off there. The player never uploads audio files, paths or
+listening history. It is a desktop reconstruction of the Musicolet feature set requested
+for this workspace; it does not use the target's code, name, icon, fonts, audio,
+screenshots or text.
 
 ## Run
 
@@ -102,6 +106,15 @@ Set `LILT_DATA_DIR` to use a different data folder.
   and history views, bookmarks/notes, tag editing (including batch), lyrics from
   embedded tags / `.lrc` / editor, and live search across songs, albums, artists, folders
   and playlists.
+- **Online lyrics (optional).** When a track starts without lyrics, Lilt queries LRCLIB in
+  the background. High-confidence matches are written as a `.lrc` sidecar; close matches
+  open a version picker so a live/remastered take cannot silently replace the studio one.
+  When LRCLIB has nothing, the lyrics panel offers a manual **AI lyrics** button. AI output
+  is previewed before saving. The AI panel supports OpenAI-compatible providers (DeepSeek,
+  GLM, MiMo, OpenAI, OpenCode Go/Zen, Kimi, Qwen, SiliconFlow and custom endpoints) with
+  model listing and encrypted API-key storage. Only title, artist, album and duration are
+  sent; audio files, paths and listening history stay local. Settings has a master switch
+  and a cache clear button.
 - **Locate current song** from the top bar, the Songs header or the now-playing overlay.
   It opens the complete song list and scrolls the playing row into view; the one-shot
   scroll does not fight later manual scrolling.
@@ -205,7 +218,12 @@ Because the desktop program is a native Rust window, it cannot be "packaged" int
 APK by changing a file extension; the Android path is a real second build with the
 requested Media3 foreground service, Room library and Compose screens.
 
-No network permission or network SDK is present. Everything runs from local files.
+Online lyrics are optional and off-switchable in Settings. The desktop build sends only
+title, artist, album and duration to LRCLIB and to the AI endpoint chosen by the user. It
+contains no advertising, analytics or crash-reporting SDK, and the AI key is stored with
+the operating system's user-bound protection (DPAPI on Windows). Audio files, paths and
+listening history are never uploaded. The Android manifest and permissions are documented
+separately in `android/README.md`.
 The tray icon, global hotkeys, companion windows and SMTC use `tray-icon`,
 `global-hotkey`, egui viewports and the Windows `windows` crate. The SMTC integration is
 built for Windows; the rest of the desktop program still builds on other platforms.

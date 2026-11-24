@@ -20,10 +20,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         BookmarkEntity::class,
         SearchHistoryEntity::class,
         LyricsEntity::class,
+        LyricsFetchEntity::class,
         FolderRuleEntity::class,
         TagOverrideEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 abstract class LiltDatabase : RoomDatabase() {
@@ -33,6 +34,7 @@ abstract class LiltDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun searchHistoryDao(): SearchHistoryDao
     abstract fun lyricsDao(): LyricsDao
+    abstract fun lyricsFetchDao(): LyricsFetchDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun queueDao(): QueueDao
 
@@ -155,6 +157,32 @@ abstract class LiltDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE lyrics ADD COLUMN source TEXT NOT NULL DEFAULT 'local'",
+                )
+                db.execSQL(
+                    "ALTER TABLE lyrics ADD COLUMN fetchedAt INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `lyrics_fetch_state` (
+                        `mediaId` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `lastAttemptAt` INTEGER NOT NULL,
+                        `nextRetryAt` INTEGER NOT NULL,
+                        `candidateCount` INTEGER NOT NULL DEFAULT 0,
+                        `candidates` TEXT NOT NULL DEFAULT '',
+                        `error` TEXT NOT NULL DEFAULT '',
+                        `autoDisabled` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`mediaId`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: LiltDatabase? = null
 
@@ -172,6 +200,7 @@ abstract class LiltDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 )
                     .build()
                     .also { instance = it }

@@ -140,7 +140,7 @@ fn top_bar(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: bool) {
                 );
                 if !compact {
                     ui.label(
-                        RichText::new(app.t("OFFLINE MUSIC", "离线音乐"))
+                        RichText::new(app.t("LOCAL MUSIC", "本地音乐"))
                             .font(FontId::proportional(8.0))
                             .color(palette.faint)
                             .strong(),
@@ -282,7 +282,7 @@ fn top_bar(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: bool) {
                                 );
                                 ui.add_space(10.0);
                                 ui.label(
-                                    RichText::new(app.t("OFFLINE", "离线"))
+                                    RichText::new(app.t("LOCAL", "本地"))
                                         .size(8.5)
                                         .color(palette.good)
                                         .strong(),

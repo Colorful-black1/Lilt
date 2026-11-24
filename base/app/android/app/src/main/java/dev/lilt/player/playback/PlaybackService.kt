@@ -28,6 +28,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dev.lilt.player.MainActivity
 import dev.lilt.player.data.LiltDatabase
+import dev.lilt.player.data.OnlineLyricsEngine
 import dev.lilt.player.library.EQ_BANDS
 import dev.lilt.player.library.EQ_FREQUENCIES
 import dev.lilt.player.library.EqProfile
@@ -97,6 +98,7 @@ class PlaybackService : MediaSessionService() {
     private var overlayLyricsMediaId = -1L
     private var overlayLyricsOffset = 0
     private var overlayLyricsJob: Job? = null
+    private var lyricsFetchJob: Job? = null
     private val overlayActions = object : FloatingLyricsActions {
         override fun togglePlay() {
             val exo = player ?: return
@@ -228,6 +230,7 @@ class PlaybackService : MediaSessionService() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 loadOverlayLyrics(mediaItem?.mediaId?.toLongOrNull() ?: -1L)
+                maybeFetchOnlineLyrics(mediaItem)
                 clearAbLoop()
                 if (stopAfterCurrent) {
                     if (
@@ -262,6 +265,7 @@ class PlaybackService : MediaSessionService() {
                     startSleepTicker()
                     startWidgetTicker()
                     if (stopAfterCurrent) startStopAfterTicker()
+                    maybeFetchOnlineLyrics(exo.currentMediaItem)
                 } else {
                     stopSleepTicker()
                     stopWidgetTicker()
@@ -479,6 +483,32 @@ class PlaybackService : MediaSessionService() {
                 overlayLyricsOffset = entry?.offsetMs ?: 0
                 overlay?.applyState(overlayState())
             }
+        }
+    }
+
+    private fun maybeFetchOnlineLyrics(mediaItem: MediaItem?) {
+        val item = mediaItem ?: return
+        val mediaId = item.mediaId.toLongOrNull() ?: return
+        if (mediaId <= 0L) return
+        if (player?.isPlaying != true) return
+        if (!settingsPrefs.getBoolean("online_lyrics", true)) return
+        val title = item.mediaMetadata.title?.toString().orEmpty()
+        if (title.isBlank()) return
+        val artist = item.mediaMetadata.artist?.toString().orEmpty()
+        val album = item.mediaMetadata.albumTitle?.toString().orEmpty()
+        val duration = item.mediaMetadata.durationMs
+            ?: player?.duration?.takeIf { it > 0L }
+            ?: 0L
+        lyricsFetchJob?.cancel()
+        lyricsFetchJob = overlayScope.launch {
+            OnlineLyricsEngine.fetchLrclib(
+                context = this@PlaybackService,
+                mediaId = mediaId,
+                title = title,
+                artist = artist,
+                album = album,
+                durationMs = duration,
+            )
         }
     }
 

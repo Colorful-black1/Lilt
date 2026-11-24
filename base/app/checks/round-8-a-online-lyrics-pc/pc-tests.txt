@@ -1,0 +1,14 @@
+PC cargo test (final round)
+
+running 62 tests
+test result: ok. 61 passed; 0 failed; 1 ignored
+
+The ignored test is the live LRCLIB smoke test:
+
+cargo test live_lrclib_smoke -- --ignored
+running 1 test
+test lyrics_fetch::tests::live_lrclib_smoke ... ok
+test result: ok. 1 passed
+
+The AI client was exercised with a local OpenAI-compatible stub, so no paid API was
+called during verification.

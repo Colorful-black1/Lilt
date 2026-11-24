@@ -43,7 +43,16 @@ class MissingFilesTest {
                 SongStateEntity(10, favorite = true, playCount = 3, lastPlayedAt = 4),
                 SongStateEntity(20, favorite = false, playCount = 7, lastPlayedAt = 5),
             ),
-            lyrics = listOf(LyricsEntity(10, "[00:01.00]First light", 250, 6)),
+            lyrics = listOf(
+                LyricsEntity(
+                    mediaId = 10,
+                    text = "[00:01.00]First light",
+                    offsetMs = 250,
+                    source = "lrclib",
+                    fetchedAt = 5,
+                    updatedAt = 6,
+                ),
+            ),
             bookmarks = listOf(
                 BookmarkEntity(1, 20, 8_000, "Chorus", 7),
                 BookmarkEntity(2, 20, 12_000, "Bridge", 8),

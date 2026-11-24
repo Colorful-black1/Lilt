@@ -303,6 +303,57 @@ class LiltDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate8To9AddsLyricsSourceAndFetchState() {
+        val name = "lilt-migration-8-9.db"
+        helper.createDatabase(name, 8).use { db ->
+            db.execSQL(
+                "INSERT INTO lyrics (mediaId, text, offsetMs, updatedAt) " +
+                    "VALUES (42, '[00:01.00]Hello', 250, 789)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(
+            name,
+            9,
+            true,
+            LiltDatabase.MIGRATION_8_9,
+        ).use { db ->
+            db.query(
+                "SELECT text, offsetMs, source, fetchedAt FROM lyrics WHERE mediaId = 42",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("[00:01.00]Hello", cursor.getString(0))
+                assertEquals(250, cursor.getInt(1))
+                assertEquals("local", cursor.getString(2))
+                assertEquals(0L, cursor.getLong(3))
+            }
+            db.execSQL(
+                "UPDATE lyrics SET source = 'lrclib', fetchedAt = 1234 WHERE mediaId = 42",
+            )
+            db.query(
+                "SELECT source, fetchedAt FROM lyrics WHERE mediaId = 42",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("lrclib", cursor.getString(0))
+                assertEquals(1234L, cursor.getLong(1))
+            }
+            db.execSQL(
+                "INSERT INTO lyrics_fetch_state " +
+                    "(mediaId, status, lastAttemptAt, nextRetryAt, candidateCount, " +
+                    "candidates, error, autoDisabled) " +
+                    "VALUES (42, 'ambiguous', 100, 200, 2, '[]', '', 0)",
+            )
+            db.query(
+                "SELECT status, candidateCount FROM lyrics_fetch_state WHERE mediaId = 42",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("ambiguous", cursor.getString(0))
+                assertEquals(2, cursor.getInt(1))
+            }
+        }
+    }
+
+    @Test
     fun migrate1To2KeepsLibraryAndAddsSongState() {
         helper.createDatabase(databaseName, 1).use { db ->
             db.execSQL(

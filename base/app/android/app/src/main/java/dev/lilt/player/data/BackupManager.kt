@@ -90,6 +90,8 @@ class BackupManager(private val context: Context) {
                     text = lyric.text,
                     offsetMs = lyric.offsetMs,
                     updatedAt = lyric.updatedAt,
+                    source = lyric.source,
+                    fetchedAt = lyric.fetchedAt,
                 )
             },
             tags = db.tagOverrideDao().all().map { tag ->
@@ -215,12 +217,15 @@ class BackupManager(private val context: Context) {
                 if (bookmarks.isNotEmpty()) db.bookmarkDao().insertAll(bookmarks)
 
                 db.lyricsDao().clear()
+                db.lyricsFetchDao().clear()
                 val lyrics = backup.lyrics.mapNotNull { lyric ->
                     resolved[lyric.mediaId]?.let { mediaId ->
                         LyricsEntity(
                             mediaId = mediaId,
                             text = lyric.text,
                             offsetMs = lyric.offsetMs,
+                            source = lyric.source,
+                            fetchedAt = lyric.fetchedAt,
                             updatedAt = lyric.updatedAt,
                         )
                     }

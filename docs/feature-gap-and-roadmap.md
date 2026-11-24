@@ -4,7 +4,7 @@
 - 日期：2026-11-22
 - 基线提交：`3bba1d4 feat: keep console hidden unless developer mode is enabled`
 - 仓库：`E:\Codeing\ai-workspace\musicolet_craft`
-- 范围：纯本地音乐播放器，不引入在线曲库、推荐、账号、云同步或统计 SDK
+- 范围：本地优先音乐播放器，不引入在线曲库、推荐、账号、云同步或统计 SDK；歌词获取是可选联网能力，可关闭
 
 ---
 
@@ -15,7 +15,7 @@
 1. 让 Android 版在曲库、播放设置、内容管理上接近 PC 版。
 2. 以酷狗的**本地音乐能力**为参照，补齐真正影响日常使用的功能。
 3. 保持两端一致的交互语言、设置项命名和验收方式。
-4. 所有新增功能必须离线可用，不依赖网络。
+4. 本地播放、扫描和管理始终离线可用；在线歌词是可选的联网增强，不得阻塞播放。
 
 ### 1.2 明确不做
 
@@ -23,14 +23,17 @@
 
 - 在线搜索、在线试听、下载
 - 每日推荐、私人 FM、排行榜、歌单广场
-- 在线歌词匹配、在线封面匹配
+- 在线封面匹配
 - 账号登录、云盘、云同步、跨设备同步
 - 评论、分享、K 歌、直播、MV
 - 听歌识曲
 - 广告、统计、崩溃上报
-- 任何需要 INTERNET 权限的能力
+- 除可选歌词获取以外的联网能力
 
 本地歌词、本地封面、本地 CSV、本地备份不在排除范围内。
+
+在线歌词（LRCLIB/手动 AI）是 2026-11-24 明确加入的可选能力：默认开启但可在设置关闭，
+只发送歌名、艺术家、专辑和时长，不发送音频或路径；细节见 `docs/online-lyrics.md`。
 
 ---
 
@@ -52,6 +55,7 @@
 - 10 段均衡器、22 预设、前级、低音增强、虚拟环绕、平衡、余量建议、按设备保存。
 - ReplayGain 读取与应用。
 - 内嵌歌词、`.lrc`、歌词编辑、同步高亮。
+- 可选在线歌词：首次播放自动查询 LRCLIB，相近版本可选择；找不到时手动 AI 预览/保存；供应商与 Tool_box 星轨链路一致；只发送歌名/艺术家/专辑/时长。
 - 标签编辑（含批量）、封面读取与自定义。
 - 收藏、书签/笔记。
 - 最多播放、最近添加、播放历史、CSV 导出。
@@ -91,8 +95,9 @@
 - 20 个命名队列、同名替换/合并、M3U 导入导出。
 - 播放列表增删改、M3U 导入导出。
 - 本地歌词：Room 存储、LRC 时间轴高亮、纯文本、从本地 `.lrc`/`.txt` 导入。
+- 在线歌词：首次播放无歌词时后台查询 LRCLIB；高置信匹配自动写入，相近版本在播放页选择；LRCLIB 找不到时由用户手动点击 AI，预览后保存。Room v9 增加来源/获取时间与获取状态表；AI Key 使用 Android Keystore 加密，只发送歌名/艺术家/专辑/时长，设置中可关闭。
 - 歌词偏移与显示：每首歌独立保存偏移（±100/±500 ms、重置，范围 ±60 秒），播放页与编辑页可调，编辑页显示调整后时间；字号与透明度存本机设置并带预览。
-- 浮动歌词：现有播放服务内的置顶卡片，显示上一/当前/下一行、偏移、透明度与 18–44 sp 字号；可拖动、记忆位置、锁定后隐藏控件并鼠标/触摸穿透，设置中解锁。可选 `SYSTEM_ALERT_WINDOW` 权限，不联网。
+- 浮动歌词：现有播放服务内的置顶卡片，显示上一/当前/下一行、偏移、透明度与 18–44 sp 字号；可拖动、记忆位置、锁定后隐藏控件并鼠标/触摸穿透，设置中解锁。可选 `SYSTEM_ALERT_WINDOW` 权限；只读取本机已保存的歌词。
 - 主屏小部件：RemoteViews 卡片，封面、标题/艺术家、时间、进度与上一首/播放/下一首；播放服务每秒推送进度，控制按钮使用短时 MediaController。设置中可请求固定到主屏。
 - 单曲虚拟标签编辑：Room v6 保存标题、艺术家、专辑、年份、音轨号；扫描数据只读，支持恢复扫描标签，播放页和 MediaSession metadata 同步更新。
 - 完整睡眠定时：自定义时分、按曲目数、等当前曲结束、淡出、倒计时、取消；定时器在播放服务中运行。
@@ -141,7 +146,8 @@
 | 睡眠定时 | ✅ | ✅ | 自定义时分、曲目数、当前曲结束、淡出、服务内计时 |
 | 均衡器/音效 | ✅ | ✅ | 22 预设、前级、低音、环绕、平衡、按设备保存 |
 | ReplayGain | ✅ | ❌ | Android 缺读取与应用 |
-| 歌词 | ✅ | △ | 本地 Room + LRC + 导入 + 每首偏移 + 字号/透明度；缺内置/同目录自动读取 |
+| 歌词 | ✅ | ✅ | PC 本地/内嵌 `.lrc` + 编辑 + 偏移；Android Room + LRC + 导入 + 偏移 + 字号/透明度；两端新增可选 LRCLIB/AI 在线获取 |
+| 在线歌词 | ✅ | ✅ | PC 首次播放自动 LRCLIB、候选选择、手动 AI 预览；Android 服务内自动 LRCLIB、候选选择、AI 预览、Room v9 缓存 |
 | 标签/封面编辑 | ✅ | △ | Android 已支持单曲虚拟标签编辑；缺批量与封面编辑 |
 | 书签/笔记 | ✅ | ✅ | 位置 + 备注，播放页快捷跳转 |
 | 播放统计 | ✅ | △ | Android 有历史/最多播放/计数，缺 CSV 导出 |
@@ -320,6 +326,8 @@
 |---|---|---|---|
 | 本地 `.lrc` + 内嵌歌词 | 高 | 低 | P0 |
 | 歌词同步高亮 | 高 | 中 | P0 |
+| 在线歌词（LRCLIB） | 高 | 中 | P1 |
+| AI 兜底（手动预览） | 中 | 中 | P2 |
 | 歌词偏移调整 | 高 | 低 | P1 |
 | 字体大小/颜色/透明度 | 中 | 低 | P1 |
 | 双语/翻译行 | 中 | 中 | P2 |
@@ -327,7 +335,7 @@
 | Android 悬浮歌词 | 高 | 中 | P2 |
 | Android 锁屏歌词 | 中 | 高 | P2 |
 
-状态（2026-11-23）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，并在后续修复中改为酷狗式左右双行、解锁半透明卡片、锁定全透明、文字描边、长歌词自动缩放完整显示，带可点击小锁浮钮、收藏/上一首/下一首控制及播放页“词”快捷开关；Android 悬浮歌词已在 Round 7-A 完成，后续改为紧凑单行、锁定时无卡片、设置页字号缩放与播放页“词”开关。颜色自定义、双语/翻译行和 Android 锁屏歌词仍未做。
+状态（2026-11-24）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，并在后续修复中改为酷狗式左右双行、解锁半透明卡片、锁定全透明、文字描边、长歌词自动缩放完整显示，带可点击小锁浮钮、收藏/上一首/下一首控制及播放页“词”快捷开关；Android 悬浮歌词已在 Round 7-A 完成，后续改为紧凑单行、锁定时无卡片、设置页字号缩放与播放页“词”开关。在线歌词已在 Round 8-A/8-B 完成：LRCLIB 自动获取、候选选择、手动 AI 预览、缓存与 Key 加密；颜色自定义、双语/翻译行和 Android 锁屏歌词仍未做。
 
 技术说明：
 
@@ -748,7 +756,43 @@
 
 未纳入本轮：其他页面布局调整。
 
-### 第 8 轮：Android 系统集成
+### 第 8-A 轮：PC 在线歌词（已完成）
+
+交付：
+
+- 首次播放无歌词时后台查询 LRCLIB；高置信匹配写 `.lrc` 与 `SongExtra`，相近版本进入候选选择，纯音乐/未找到/错误写入缓存。
+- 新设置项：在线歌词总开关、AI 供应商（DeepSeek/GLM/MiMo/OpenAI/OpenCode Go/Zen/Kimi/Qwen/SiliconFlow/自定义）、接口地址、模型、获取模型、测试连接、清理缓存；API Key 使用 Windows DPAPI 加密，不进入状态文件与备份。
+- 正在播放页显示来源（LRCLIB/AI/本地/已编辑）与获取状态；AI 只能手动触发，结果先预览并校验时间轴后保存；编辑或清空歌词后不会自动回填。
+- LRCLIB 请求带 User-Agent、350 ms 间隔、`Retry-After` 处理和有界响应；地址自动补 `/v1`，远程 HTTP 拒绝，OpenCode Go 发送会话头。
+
+验收：
+
+- PC 62 项测试（61 通过，1 个 live LRCLIB 测试默认忽略）；`cargo test live_lrclib_smoke -- --ignored` 通过。
+- 实测 `晴天/周杰伦` 自动写入 `.lrc`；285 秒版本进入 18 个候选；本地 OpenAI 兼容 stub 的 AI 预览/保存通过。
+- 证据见 `base/app/checks/round-8-a-online-lyrics-pc/`。
+
+未纳入本轮：在线封面、逐字歌词、AI 自动触发、批量预取全库。
+
+### 第 8-B 轮：Android 在线歌词（已完成）
+
+交付：
+
+- Manifest 增加 `INTERNET` / `ACCESS_NETWORK_STATE`；回环 HTTP 仅用于本机 AI 服务。
+- Room v9：`lyrics.source`、`lyrics.fetchedAt`、`lyrics_fetch_state`（状态、重试时间、候选 JSON、错误、用户禁用自动获取）。
+- 播放服务在曲目切换时自动查询 LRCLIB；高置信匹配写 Room，相近版本缓存候选，播放页可选择；LRCLIB 找不到时显示手动 AI 按钮，AI 结果在编辑预览中确认后保存。
+- 设置页：在线歌词开关、供应商/地址/模型、获取模型、API Key（Keystore 加密）、测试连接、清理缓存。
+- 编辑/清空歌词会把来源标为 `user` 或记录 `autoDisabled`；丢失文件重连同步迁移歌词与获取状态；备份包含歌词来源/时间但不包含 Key。
+
+验收：
+
+- Android 56 项单元测试通过；Room 1→9 迁移测试 8 项通过。
+- Android 15 模拟器实测自动 LRCLIB、AI 预览/保存、候选选择；数据库来源分别为 `lrclib`、`ai`、`lrclib`。
+- APK 权限仅新增 `INTERNET` 与 `ACCESS_NETWORK_STATE`，无广告/统计/崩溃上报 SDK。
+- 证据见 `base/app/checks/round-8-b-online-lyrics-android/`。
+
+未纳入本轮：AI 自动触发、后台全库预取、跨平台歌词同步、在线封面。
+
+### 第 9 轮：Android 系统集成
 
 交付：
 
@@ -761,7 +805,7 @@
 
 - 磁贴与 Auto 真实控制播放；小部件已在 Round 7-A 验证。
 - Android Auto 可浏览并播放本地曲库。
-- 无 INTERNET 权限，断网可用。
+- 断网时本地播放可用；在线歌词请求失败不得阻塞播放。
 
 ---
 
@@ -773,7 +817,7 @@
 2. 单元测试通过：M3U 往返、筛选、排序、歌词解析、播放计数、备份恢复。
 3. 运行验证：冷启动 → 扫描 → 播放 → 切歌 → 队列 → 通知栏/播放条。
 4. 布局检查：720×1280、1080×1920 无重叠、文字不截断、播放条不遮挡列表。
-5. 断网可用，Android 无 INTERNET 权限。
+5. 断网时本地播放可用；Android 仅申请歌词获取所需的 `INTERNET` / `ACCESS_NETWORK_STATE`。
 6. 截图和说明写入 `base/app/checks/round-N/`。
 7. 设置修改重启后保留。
 8. 不复制目标 APK 的代码、图片、字体、音频、名称或文案。
@@ -782,6 +826,8 @@
 
 - 收藏/统计：重启后数据一致。
 - 歌词：同步位置误差可接受，无歌词时有明确空状态。
+- 在线歌词：LRCLIB 请求带标识与限速；模糊版本不自动覆盖；AI 结果必须预览；
+  只发送歌名/艺术家/专辑/时长，API Key 加密且不进入备份；关闭开关后不发起请求。
 - 标签：保存后列表、播放页、通知栏同步更新。
 - 小部件/Auto：控制真实生效，不是模拟界面。
 - 备份：同版本往返恢复一致。
@@ -845,6 +891,15 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/src/app.rs`：PC 播放心跳、A-B 循环、单曲停止、失效文件检测与重连
 - `base/app/src/duplicates.rs`：PC 重复歌曲分组、副本排序与大小格式
 - `base/app/src/backup.rs`：PC 版本化备份、校验、ID 归一化与恢复
+- `base/app/src/lyrics_fetch.rs`：PC LRCLIB 匹配、缓存、OpenAI 兼容 AI、限速与候选
+- `base/app/src/secret.rs`：PC Windows DPAPI API Key 加密
+- `base/app/android/app/src/main/java/dev/lilt/player/library/OnlineLyrics.kt`：Android 歌词匹配、AI 清理、供应商预设与 URL 规范化
+- `base/app/android/app/src/main/java/dev/lilt/player/data/OnlineLyricsClient.kt`：Android LRCLIB/AI HTTP 客户端
+- `base/app/android/app/src/main/java/dev/lilt/player/data/OnlineLyricsEngine.kt`：Android 自动获取与 Room 写入
+- `base/app/android/app/src/main/java/dev/lilt/player/data/SecretStore.kt`：Android Keystore API Key 加密
+- `docs/online-lyrics.md`：在线歌词来源、隐私、限速、供应商与 Key 说明
+- `base/app/checks/round-8-a-online-lyrics-pc/README.md`：PC 自动 LRCLIB、候选、AI 预览与设置验证
+- `base/app/checks/round-8-b-online-lyrics-android/README.md`：Android 自动 LRCLIB、候选、AI 预览、Room v9 与权限验证
 - `base/app/android/app/src/main/java/dev/lilt/player/data/Backup.kt`：Android 备份 JSON、平台校验与曲目引用解析
 - `base/app/android/app/src/main/java/dev/lilt/player/data/BackupManager.kt`：Android Room 备份收集与事务恢复
 - `base/app/checks/round-7-b/README.md`：PC/Android 备份恢复验证
@@ -918,3 +973,5 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.12.4 | 2026-11-23 | 桌面/悬浮歌词精简：PC 解锁半透明卡片、Android 单行无卡片锁定态、A−/A+ 与播放页“词”开关 |
 | v0.12.5 | 2026-11-23 | 桌面歌词工具栏放大：44 px 按钮（窄窗口 38 px），图标同步放大 |
 | v0.12.6 | 2026-11-24 | 底部播放条对齐：固定三栏布局、播放按钮居中、上一首/下一首垂直对齐 |
+| v0.13.0 | 2026-11-24 | Round 8-A：PC 自动 LRCLIB、候选版本、缓存、手动 AI 预览、星轨链路供应商、DPAPI Key |
+| v0.13.1 | 2026-11-24 | Round 8-B：Android 自动 LRCLIB、候选选择、AI 预览、Room v9、Keystore Key、INTERNET 权限 |

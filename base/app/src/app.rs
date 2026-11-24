@@ -4,7 +4,11 @@ use crate::desktop::{self, DesktopAction, DesktopIntegration, MediaInfo};
 use crate::duplicates;
 use crate::i18n::tr;
 use crate::library;
+use crate::lyrics_fetch::{
+    self, FetchCache, FetchCommand, FetchEvent, LyricsCandidate, LyricsFetcher,
+};
 use crate::model::*;
+use crate::secret;
 use crate::theme::{self, Palette};
 use crate::ui::companion::{CompanionAction, CompanionSnapshot, CompanionWindows};
 use eframe::egui;
@@ -51,6 +55,19 @@ pub enum SleepMode {
     AfterSongs,
 }
 
+/// Per-song state of the online lyric lookup. Only the current song's entry is
+/// shown; keeping the map lets a lookup finish after the user has moved on.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LyricsStatus {
+    Idle,
+    Fetching,
+    AiFetching,
+    NotFound,
+    Instrumental,
+    Ambiguous(usize),
+    Error(String),
+}
+
 #[derive(Clone, Debug)]
 pub enum Modal {
     NewPlaylist {
@@ -93,6 +110,18 @@ pub enum Modal {
     LyricsEditor {
         key: String,
         text: String,
+    },
+    AiLyricsPreview {
+        key: String,
+        title: String,
+        provider: String,
+        text: String,
+    },
+    LyricsCandidates {
+        key: String,
+        title: String,
+        candidates: Vec<LyricsCandidate>,
+        selected: usize,
     },
     SleepTimer {
         hours: u32,
@@ -213,6 +242,18 @@ pub struct LiltApp {
     pub stop_after_current: bool,
     pub lyrics: Option<Vec<(f64, String)>>,
     pub lyrics_for: Option<String>,
+    pub lyrics_fetcher: LyricsFetcher,
+    pub lyrics_fetch_cache: FetchCache,
+    pub lyrics_status: HashMap<String, LyricsStatus>,
+    pub lyrics_candidates: HashMap<String, Vec<LyricsCandidate>>,
+    pub lyrics_candidate_request: Option<String>,
+    pub lyrics_inflight: HashSet<String>,
+    pub ai_key_saved: bool,
+    pub ai_key_input: String,
+    pub ai_models: Vec<String>,
+    pub ai_models_loading: bool,
+    pub ai_testing: bool,
+    pub ai_status: Option<(bool, String)>,
 
     pub audio: Option<AudioEngine>,
     pub output_devices: Vec<String>,
@@ -343,6 +384,18 @@ impl LiltApp {
             stop_after_current: false,
             lyrics: None,
             lyrics_for: None,
+            lyrics_fetcher: LyricsFetcher::new(cc.egui_ctx.clone()),
+            lyrics_fetch_cache: FetchCache::load(),
+            lyrics_status: HashMap::new(),
+            lyrics_candidates: HashMap::new(),
+            lyrics_candidate_request: None,
+            lyrics_inflight: HashSet::new(),
+            ai_key_saved: secret::has_api_key(),
+            ai_key_input: String::new(),
+            ai_models: Vec::new(),
+            ai_models_loading: false,
+            ai_testing: false,
+            ai_status: None,
             audio: None,
             output_devices: AudioEngine::output_devices(),
             eq_shared,
@@ -2408,19 +2461,553 @@ impl LiltApp {
     }
 
     pub fn save_lyrics_for(&mut self, key: &str, text: String) {
+        let auto = !text.trim().is_empty();
         if let Some(song) = self.song_by_key(key).cloned() {
-            let _ = library::save_lyrics(&song, &text);
+            if auto {
+                let _ = library::save_lyrics(&song, &text);
+            } else {
+                let _ = library::remove_lyrics(&song);
+            }
         }
         let extra = self.state.extra_mut(key);
         extra.lyrics = Some(text.clone());
+        extra.lyrics_source = LyricsSource::User;
+        extra.lyrics_fetched_at = 0;
+        extra.lyrics_autofetch = auto;
         if let Some(song) = self.songs.iter_mut().find(|s| s.key == key) {
-            song.lyrics_override = Some(text);
+            song.lyrics_override = Some(text.clone());
+            song.lyrics_source = LyricsSource::User;
+            song.lyrics_autofetch = auto;
         }
+        self.lyrics_status.remove(key);
+        self.lyrics_candidates.remove(key);
+        self.lyrics_inflight.remove(key);
+        self.lyrics_fetch_cache.remove(key);
         self.lyrics = None;
         self.lyrics_for = None;
         self.dirty = true;
         self.save_now();
         self.notify(self.t("Lyrics saved", "歌词已保存").to_owned());
+    }
+
+    pub fn save_fetched_lyrics(
+        &mut self,
+        key: &str,
+        text: &str,
+        source: LyricsSource,
+        persist_now: bool,
+    ) {
+        let text = text.trim().to_owned();
+        if text.is_empty() {
+            return;
+        }
+        if let Some(song) = self.song_by_key(key).cloned() {
+            let _ = library::save_lyrics(&song, &text);
+        }
+        let extra = self.state.extra_mut(key);
+        extra.lyrics = Some(text.clone());
+        extra.lyrics_source = source;
+        extra.lyrics_fetched_at = now_secs();
+        extra.lyrics_autofetch = true;
+        if let Some(song) = self.songs.iter_mut().find(|s| s.key == key) {
+            song.lyrics_override = Some(text.clone());
+            song.lyrics_source = source;
+            song.lyrics_autofetch = true;
+        }
+        self.lyrics_fetch_cache.remove(key);
+        self.lyrics_candidates.remove(key);
+        if self.lyrics_candidate_request.as_deref() == Some(key) {
+            self.lyrics_candidate_request = None;
+        }
+        self.lyrics_inflight.remove(key);
+        self.lyrics_status.remove(key);
+        if self.current_key.as_deref() == Some(key) {
+            self.lyrics = Some(library::parse_lrc(&text));
+            self.lyrics_for = Some(key.to_owned());
+        }
+        self.dirty = true;
+        if persist_now {
+            self.save_now();
+        }
+    }
+
+    pub fn lyrics_status_for(&self, key: &str) -> LyricsStatus {
+        self.lyrics_status
+            .get(key)
+            .cloned()
+            .unwrap_or(LyricsStatus::Idle)
+    }
+
+    pub fn lyrics_source_for(&self, key: &str) -> LyricsSource {
+        self.state
+            .songs
+            .get(key)
+            .map(|extra| extra.lyrics_source)
+            .unwrap_or(LyricsSource::Local)
+    }
+
+    fn set_lyrics_status(&mut self, key: &str, status: LyricsStatus) {
+        if status == LyricsStatus::Idle {
+            self.lyrics_status.remove(key);
+        } else {
+            self.lyrics_status.insert(key.to_owned(), status);
+        }
+    }
+
+    fn cached_lyrics_status(&self, key: &str) -> Option<LyricsStatus> {
+        let entry = self.lyrics_fetch_cache.fresh(key, now_secs())?;
+        Some(match entry.status {
+            lyrics_fetch::CachedStatus::NotFound => LyricsStatus::NotFound,
+            lyrics_fetch::CachedStatus::Instrumental => LyricsStatus::Instrumental,
+            lyrics_fetch::CachedStatus::Ambiguous => LyricsStatus::Ambiguous(entry.candidates),
+            lyrics_fetch::CachedStatus::Error => LyricsStatus::Error(
+                entry
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "fetch failed".to_owned()),
+            ),
+        })
+    }
+
+    fn start_lrclib_fetch(&mut self, song: &Song) {
+        if self.lyrics_inflight.contains(&song.key) {
+            return;
+        }
+        self.lyrics_inflight.insert(song.key.clone());
+        self.set_lyrics_status(&song.key, LyricsStatus::Fetching);
+        self.lyrics_fetcher.send(FetchCommand::Lrclib {
+            key: song.key.clone(),
+            title: song.display_title().to_owned(),
+            artist: song.display_artist().to_owned(),
+            album: song.album.clone(),
+            duration: song.duration,
+        });
+    }
+
+    fn maybe_auto_fetch_lyrics(&mut self, song: &Song) {
+        if !self.state.settings.online_lyrics {
+            return;
+        }
+        if !self
+            .state
+            .songs
+            .get(&song.key)
+            .map(|extra| extra.lyrics_autofetch)
+            .unwrap_or(true)
+        {
+            self.set_lyrics_status(&song.key, LyricsStatus::Idle);
+            return;
+        }
+        if let Some(status) = self.cached_lyrics_status(&song.key) {
+            self.set_lyrics_status(&song.key, status);
+            return;
+        }
+        self.start_lrclib_fetch(song);
+    }
+
+    pub fn retry_lyrics_for(&mut self, key: &str) {
+        let Some(song) = self.song_by_key(key).cloned() else {
+            return;
+        };
+        if !self.state.settings.online_lyrics {
+            self.notify(
+                self.t(
+                    "Enable online lyrics in Settings",
+                    "请先在设置中开启在线歌词",
+                )
+                .to_owned(),
+            );
+            return;
+        }
+        self.state.extra_mut(key).lyrics_autofetch = true;
+        if let Some(song) = self.songs.iter_mut().find(|song| song.key == key) {
+            song.lyrics_autofetch = true;
+        }
+        self.lyrics_fetch_cache.remove(key);
+        self.lyrics_candidates.remove(key);
+        self.lyrics_candidate_request = None;
+        self.set_lyrics_status(key, LyricsStatus::Idle);
+        self.start_lrclib_fetch(&song);
+    }
+
+    pub fn open_lyrics_candidates(&mut self, key: &str) {
+        let Some(song) = self.song_by_key(key).cloned() else {
+            return;
+        };
+        if let Some(candidates) = self.lyrics_candidates.get(key).cloned() {
+            if !candidates.is_empty() {
+                self.lyrics_candidate_request = None;
+                self.modal = Some(Modal::LyricsCandidates {
+                    key: key.to_owned(),
+                    title: song.display_title().to_owned(),
+                    candidates,
+                    selected: 0,
+                });
+                return;
+            }
+        }
+        self.lyrics_candidate_request = Some(key.to_owned());
+        self.notify(
+            self.t("Searching LRCLIB again…", "正在重新搜索 LRCLIB…")
+                .to_owned(),
+        );
+        self.start_lrclib_fetch(&song);
+    }
+
+    pub fn start_ai_lyrics(&mut self, key: &str) {
+        let Some(song) = self.song_by_key(key).cloned() else {
+            return;
+        };
+        if self.lyrics_inflight.contains(key) {
+            return;
+        }
+        let Some(api_key) = secret::load_api_key() else {
+            self.notify(
+                self.t(
+                    "Configure an AI provider and API key in Settings first.",
+                    "请先在设置中配置 AI 供应商和 API Key。",
+                )
+                .to_owned(),
+            );
+            return;
+        };
+        let base_url = self.state.settings.ai_base_url.trim();
+        let model = self.state.settings.ai_model.trim();
+        if base_url.is_empty() || model.is_empty() {
+            self.notify(
+                self.t(
+                    "Choose an AI provider and model in Settings first.",
+                    "请先在设置中选择 AI 供应商和模型。",
+                )
+                .to_owned(),
+            );
+            return;
+        }
+        let Ok(base_url) = lyrics_fetch::normalize_base_url(base_url) else {
+            self.notify(
+                self.t("The AI base URL is invalid.", "AI 接口地址无效。")
+                    .to_owned(),
+            );
+            return;
+        };
+        let config = lyrics_fetch::AiConfig {
+            provider: self.state.settings.ai_provider.clone(),
+            base_url,
+            model: model.to_owned(),
+            api_key,
+        };
+        self.lyrics_inflight.insert(key.to_owned());
+        self.set_lyrics_status(key, LyricsStatus::AiFetching);
+        self.lyrics_fetcher.send(FetchCommand::Ai {
+            key: key.to_owned(),
+            config,
+            title: song.display_title().to_owned(),
+            artist: song.display_artist().to_owned(),
+            album: song.album.clone(),
+            duration: song.duration,
+        });
+    }
+
+    pub fn ai_config_from_settings(&self) -> Result<lyrics_fetch::AiConfig, String> {
+        let key = secret::load_api_key().ok_or_else(|| "请先保存 API Key".to_owned())?;
+        let base_url = self.state.settings.ai_base_url.trim();
+        if base_url.is_empty() {
+            return Err("请填写接口地址".to_owned());
+        }
+        if self.state.settings.ai_model.trim().is_empty() {
+            return Err("请选择或填写模型".to_owned());
+        }
+        Ok(lyrics_fetch::AiConfig {
+            provider: self.state.settings.ai_provider.clone(),
+            base_url: lyrics_fetch::normalize_base_url(base_url)?,
+            model: self.state.settings.ai_model.trim().to_owned(),
+            api_key: key,
+        })
+    }
+
+    pub fn choose_ai_provider(&mut self, id: &str) {
+        let preset = lyrics_fetch::find_ai_provider(id);
+        self.state.settings.ai_provider = preset.id.to_owned();
+        self.state.settings.ai_base_url = preset.base_url.to_owned();
+        self.state.settings.ai_model = preset
+            .models
+            .first()
+            .map(|model| (*model).to_owned())
+            .unwrap_or_default();
+        self.ai_models.clear();
+        self.ai_status = None;
+        self.mark_dirty();
+    }
+
+    pub fn save_ai_key(&mut self) {
+        if self.ai_key_input.trim().is_empty() {
+            return;
+        }
+        match secret::save_api_key(&self.ai_key_input) {
+            Ok(()) => {
+                self.ai_key_input.clear();
+                self.ai_key_saved = true;
+                self.ai_status = Some((true, self.t("API Key saved", "API Key 已保存").to_owned()));
+            }
+            Err(error) => {
+                self.ai_status = Some((false, error));
+            }
+        }
+    }
+
+    pub fn clear_ai_key(&mut self) {
+        secret::clear_api_key();
+        self.ai_key_saved = false;
+        self.ai_key_input.clear();
+        self.ai_status = Some((true, self.t("API Key removed", "API Key 已移除").to_owned()));
+    }
+
+    pub fn fetch_ai_models(&mut self) {
+        if self.ai_models_loading {
+            return;
+        }
+        match self.ai_config_from_settings() {
+            Ok(config) => {
+                self.ai_models_loading = true;
+                self.ai_status = None;
+                self.lyrics_fetcher.send(FetchCommand::AiModels { config });
+            }
+            Err(error) => {
+                self.ai_status = Some((false, error));
+            }
+        }
+    }
+
+    pub fn test_ai_connection(&mut self) {
+        if self.ai_testing {
+            return;
+        }
+        match self.ai_config_from_settings() {
+            Ok(config) => {
+                self.ai_testing = true;
+                self.ai_status = None;
+                self.lyrics_fetcher.send(FetchCommand::AiTest { config });
+            }
+            Err(error) => {
+                self.ai_status = Some((false, error));
+            }
+        }
+    }
+
+    pub fn clear_lyrics_fetch_cache(&mut self) {
+        self.lyrics_fetch_cache.clear();
+        self.lyrics_candidates.clear();
+        self.lyrics_status.clear();
+        if let Some(key) = self.current_key.clone() {
+            if self.lyrics.is_none() {
+                if let Some(song) = self.song_by_key(&key).cloned() {
+                    self.maybe_auto_fetch_lyrics(&song);
+                }
+            }
+        }
+        self.notify(
+            self.t("Lyrics fetch cache cleared", "歌词获取缓存已清理")
+                .to_owned(),
+        );
+    }
+
+    fn handle_lrclib_result(
+        &mut self,
+        key: &str,
+        result: Result<Vec<lyrics_fetch::LrclibRecord>, String>,
+    ) {
+        self.lyrics_inflight.remove(key);
+        let Some(song) = self.song_by_key(key).cloned() else {
+            return;
+        };
+        match result {
+            Ok(records) => {
+                let ranked = lyrics_fetch::rank_candidates(
+                    records,
+                    song.display_title(),
+                    song.display_artist(),
+                    song.duration,
+                );
+                match lyrics_fetch::choose_match(ranked) {
+                    lyrics_fetch::MatchOutcome::Best(candidate) => {
+                        if let Some(text) = candidate.record.text() {
+                            let text = text.to_owned();
+                            self.save_fetched_lyrics(key, &text, LyricsSource::Lrclib, false);
+                        } else {
+                            self.lyrics_fetch_cache.record(
+                                key,
+                                lyrics_fetch::CachedStatus::NotFound,
+                                0,
+                                None,
+                            );
+                            self.set_lyrics_status(key, LyricsStatus::NotFound);
+                        }
+                    }
+                    lyrics_fetch::MatchOutcome::Ambiguous(candidates) => {
+                        let count = candidates.len();
+                        let open_picker = self.lyrics_candidate_request.as_deref() == Some(key);
+                        let modal_candidates = if open_picker {
+                            Some(candidates.clone())
+                        } else {
+                            None
+                        };
+                        self.lyrics_candidates.insert(key.to_owned(), candidates);
+                        self.lyrics_fetch_cache.record(
+                            key,
+                            lyrics_fetch::CachedStatus::Ambiguous,
+                            count,
+                            None,
+                        );
+                        self.set_lyrics_status(key, LyricsStatus::Ambiguous(count));
+                        if let Some(candidates) = modal_candidates {
+                            self.lyrics_candidate_request = None;
+                            self.modal = Some(Modal::LyricsCandidates {
+                                key: key.to_owned(),
+                                title: song.display_title().to_owned(),
+                                candidates,
+                                selected: 0,
+                            });
+                        }
+                    }
+                    lyrics_fetch::MatchOutcome::Instrumental => {
+                        if self.lyrics_candidate_request.as_deref() == Some(key) {
+                            self.lyrics_candidate_request = None;
+                            self.notify(
+                                self.t(
+                                    "This track is marked as instrumental; there are no versions to choose.",
+                                    "这首歌被标记为纯音乐，没有可选择的版本。",
+                                )
+                                .to_owned(),
+                            );
+                        }
+                        self.lyrics_fetch_cache.record(
+                            key,
+                            lyrics_fetch::CachedStatus::Instrumental,
+                            0,
+                            None,
+                        );
+                        self.set_lyrics_status(key, LyricsStatus::Instrumental);
+                    }
+                    lyrics_fetch::MatchOutcome::None => {
+                        self.lyrics_fetch_cache.record(
+                            key,
+                            lyrics_fetch::CachedStatus::NotFound,
+                            0,
+                            None,
+                        );
+                        self.set_lyrics_status(key, LyricsStatus::NotFound);
+                        if self.lyrics_candidate_request.as_deref() == Some(key) {
+                            self.lyrics_candidate_request = None;
+                            self.notify(
+                                self.t(
+                                    "No close lyrics versions were found.",
+                                    "没有找到相近的歌词版本。",
+                                )
+                                .to_owned(),
+                            );
+                        }
+                    }
+                }
+            }
+            Err(error) => {
+                if self.lyrics_candidate_request.as_deref() == Some(key) {
+                    self.lyrics_candidate_request = None;
+                }
+                crate::console::log(format!("LRCLIB lookup failed for {key}: {error}"));
+                self.lyrics_fetch_cache.record(
+                    key,
+                    lyrics_fetch::CachedStatus::Error,
+                    0,
+                    Some(error.clone()),
+                );
+                self.set_lyrics_status(key, LyricsStatus::Error(error));
+            }
+        }
+    }
+
+    fn handle_fetch_event(&mut self, event: FetchEvent) {
+        match event {
+            FetchEvent::Lrclib { key, result } => {
+                self.handle_lrclib_result(&key, result);
+            }
+            FetchEvent::AiLyrics { key, result } => {
+                self.lyrics_inflight.remove(&key);
+                match result {
+                    Ok(Some(text)) => {
+                        let Some(song) = self.song_by_key(&key).cloned() else {
+                            return;
+                        };
+                        let provider =
+                            lyrics_fetch::find_ai_provider(&self.state.settings.ai_provider)
+                                .name
+                                .to_owned();
+                        self.lyrics_status.remove(&key);
+                        self.modal = Some(Modal::AiLyricsPreview {
+                            key,
+                            title: song.display_title().to_owned(),
+                            provider,
+                            text,
+                        });
+                    }
+                    Ok(None) => {
+                        self.set_lyrics_status(&key, LyricsStatus::NotFound);
+                        self.notify(
+                            self.t(
+                                "AI could not find verified lyrics for this track.",
+                                "AI 没有找到可靠的歌词。",
+                            )
+                            .to_owned(),
+                        );
+                    }
+                    Err(error) => {
+                        self.set_lyrics_status(&key, LyricsStatus::Error(error.clone()));
+                        self.notify(error);
+                    }
+                }
+            }
+            FetchEvent::AiModels { result } => {
+                self.ai_models_loading = false;
+                match result {
+                    Ok(models) => {
+                        self.ai_models = models;
+                        self.ai_status = Some((
+                            true,
+                            format!(
+                                "{} {}",
+                                self.ai_models.len(),
+                                self.t("model(s) available", "个可用模型")
+                            ),
+                        ));
+                    }
+                    Err(error) => {
+                        self.ai_status = Some((false, error));
+                    }
+                }
+            }
+            FetchEvent::AiTest { result } => {
+                self.ai_testing = false;
+                match result {
+                    Ok(message) => self.ai_status = Some((true, message)),
+                    Err(error) => self.ai_status = Some((false, error)),
+                }
+            }
+            FetchEvent::Skipped { key } => {
+                self.lyrics_inflight.remove(&key);
+                if self.lyrics_status_for(&key) == LyricsStatus::Fetching {
+                    self.set_lyrics_status(&key, LyricsStatus::Idle);
+                }
+            }
+        }
+    }
+
+    fn poll_lyrics_fetch(&mut self) {
+        let mut events = Vec::new();
+        while let Some(event) = self.lyrics_fetcher.try_recv() {
+            events.push(event);
+        }
+        for event in events {
+            self.handle_fetch_event(event);
+        }
     }
 
     pub fn set_bookmark(&mut self, key: &str, note: String) {
@@ -3660,7 +4247,13 @@ impl LiltApp {
             return;
         }
         self.lyrics_for = Some(song.key.clone());
+        self.lyrics_fetcher
+            .send(FetchCommand::Focus(song.key.clone()));
+        self.lyrics_status.remove(&song.key);
         self.lyrics = library::load_lyrics(&song).map(|text| library::parse_lrc(&text));
+        if self.lyrics.is_none() {
+            self.maybe_auto_fetch_lyrics(&song);
+        }
     }
 
     fn handle_screenshot(&mut self, ctx: &egui::Context) {
@@ -3889,6 +4482,7 @@ impl eframe::App for LiltApp {
         self.handle_companion_actions(ctx);
         self.update_theme(ctx);
         self.poll_scan();
+        self.poll_lyrics_fetch();
         self.update_sleep_timer();
         self.update_play_fade();
         self.update_playback();
@@ -3911,6 +4505,9 @@ impl eframe::App for LiltApp {
             || self.scanning
             || self.sleep_deadline.is_some()
             || self.scan_rx.is_some()
+            || !self.lyrics_inflight.is_empty()
+            || self.ai_models_loading
+            || self.ai_testing
             || (self.desktop.is_none() && self.screenshot.is_none() && self.desktop_attempts < 3)
         {
             ctx.request_repaint_after(Duration::from_millis(100));

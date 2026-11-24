@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -54,12 +55,14 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.StopCircle
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -79,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -86,12 +90,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.lilt.player.AiLyricsUiState
+import dev.lilt.player.CandidatePickerUiState
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.PlayerUiState
 import dev.lilt.player.SleepUiState
 import dev.lilt.player.data.SongEntity
 import dev.lilt.player.library.LrcDocument
 import dev.lilt.player.library.activeLrcLine
+import dev.lilt.player.library.inspectLyrics
 import dev.lilt.player.library.parseLrc
 
 @Composable
@@ -119,6 +126,12 @@ fun PlayerScreen(
     val floatingLyrics by vm.floatingLyrics.collectAsStateWithLifecycle()
     val lyrics by remember(state.mediaId) { vm.lyricsFor(state.mediaId) }
         .collectAsStateWithLifecycle(initialValue = null)
+    val lyricsFetch by remember(state.mediaId) { vm.lyricsFetchFor(state.mediaId) }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val onlineLyrics by vm.onlineLyrics.collectAsStateWithLifecycle()
+    val aiKeySaved by vm.aiKeySaved.collectAsStateWithLifecycle()
+    val aiLyrics by vm.aiLyrics.collectAsStateWithLifecycle()
+    val candidates by vm.candidates.collectAsStateWithLifecycle()
     val sleep by vm.sleep.collectAsStateWithLifecycle()
     val abLoop by vm.abLoop.collectAsStateWithLifecycle()
     val stopAfter by vm.stopAfter.collectAsStateWithLifecycle()
@@ -452,6 +465,10 @@ fun PlayerScreen(
                 Spacer(Modifier.height(14.dp))
                 LyricsPanel(
                     text = lyrics?.text,
+                    source = lyrics?.source,
+                    fetchState = lyricsFetch,
+                    onlineLyrics = onlineLyrics,
+                    aiKeySaved = aiKeySaved,
                     offsetMs = lyrics?.offsetMs ?: 0,
                     positionMs = state.positionMs,
                     fontSize = lyricsFontSize,
@@ -460,6 +477,9 @@ fun PlayerScreen(
                         if (state.mediaId > 0) vm.setLyricsOffset(state.mediaId, it)
                     },
                     onOpen = { if (state.mediaId > 0) onOpenLyrics(state.mediaId) },
+                    onRetry = { if (state.mediaId > 0) vm.retryOnlineLyrics(state.mediaId) },
+                    onAi = { if (state.mediaId > 0) vm.startAiLyrics(state.mediaId) },
+                    onCandidates = { if (state.mediaId > 0) vm.openCandidates(state.mediaId) },
                 )
                 Spacer(Modifier.height(18.dp))
             }
@@ -525,6 +545,21 @@ fun PlayerScreen(
             },
         )
     }
+    if (aiLyrics.visible) {
+        AiLyricsDialog(
+            state = aiLyrics,
+            onSave = vm::saveAiLyrics,
+            onDismiss = vm::dismissAiLyrics,
+        )
+    }
+    if (candidates.visible) {
+        CandidateDialog(
+            state = candidates,
+            onSelect = vm::selectCandidate,
+            onSave = vm::saveSelectedCandidate,
+            onDismiss = vm::dismissCandidates,
+        )
+    }
 }
 
 @Composable
@@ -575,12 +610,19 @@ private fun SleepStatus(sleep: SleepUiState) {
 @Composable
 private fun LyricsPanel(
     text: String?,
+    source: String?,
+    fetchState: dev.lilt.player.data.LyricsFetchEntity?,
+    onlineLyrics: Boolean,
+    aiKeySaved: Boolean,
     offsetMs: Int,
     positionMs: Long,
     fontSize: Float,
     opacity: Float,
     onOffsetChange: (Int) -> Unit,
     onOpen: () -> Unit,
+    onRetry: () -> Unit,
+    onAi: () -> Unit,
+    onCandidates: () -> Unit,
 ) {
     val document = remember(text) { parseLrc(text.orEmpty()) }
     val alpha = opacity.coerceIn(0.35f, 1f)
@@ -604,8 +646,16 @@ private fun LyricsPanel(
             Text(
                 t("Lyrics", "歌词"),
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
             )
+            if (!text.isNullOrBlank()) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    lyricsSourceLabel(source),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Spacer(Modifier.weight(1f))
             Text(
                 if (text.isNullOrBlank()) t("Add", "添加") else t("Edit", "编辑"),
                 style = MaterialTheme.typography.labelLarge,
@@ -618,14 +668,16 @@ private fun LyricsPanel(
             Spacer(Modifier.height(6.dp))
         }
         when {
-            text.isNullOrBlank() -> Text(
-                t(
-                    "Tap to add lyrics for this song. LRC timestamps highlight the current line.",
-                    "点击为这首歌添加歌词。LRC 时间标签会高亮当前行。",
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
-            )
+            text.isNullOrBlank() -> {
+                LyricsEmptyState(
+                    fetchState = fetchState,
+                    onlineLyrics = onlineLyrics,
+                    aiKeySaved = aiKeySaved,
+                    onRetry = onRetry,
+                    onAi = onAi,
+                    onCandidates = onCandidates,
+                )
+            }
             document.isEmpty -> Text(
                 t("The saved lyrics are empty.", "已保存的歌词为空。"),
                 style = MaterialTheme.typography.bodyMedium,
@@ -650,6 +702,188 @@ private fun LyricsPanel(
             )
         }
     }
+}
+
+@Composable
+private fun LyricsEmptyState(
+    fetchState: dev.lilt.player.data.LyricsFetchEntity?,
+    onlineLyrics: Boolean,
+    aiKeySaved: Boolean,
+    onRetry: () -> Unit,
+    onAi: () -> Unit,
+    onCandidates: () -> Unit,
+) {
+    val status = fetchState?.status ?: dev.lilt.player.data.LyricsFetchStatus.IDLE
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    when (status) {
+        dev.lilt.player.data.LyricsFetchStatus.FETCHING -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                t("Looking up lyrics on LRCLIB…", "正在从 LRCLIB 获取歌词…"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+            )
+        }
+        dev.lilt.player.data.LyricsFetchStatus.AI_FETCHING -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                t("Asking the AI provider…", "正在请求 AI…"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+            )
+        }
+        dev.lilt.player.data.LyricsFetchStatus.NOT_FOUND -> {
+            Text(
+                t(
+                    "LRCLIB did not find a verified match for this track.",
+                    "LRCLIB 没有找到可靠的匹配。",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+            )
+            LyricsOnlineActions(
+                onlineLyrics = onlineLyrics,
+                canChoose = false,
+                onRetry = onRetry,
+                onAi = onAi,
+                onCandidates = onCandidates,
+            )
+        }
+        dev.lilt.player.data.LyricsFetchStatus.INSTRUMENTAL -> {
+            Text(
+                t(
+                    "LRCLIB lists this track as instrumental.",
+                    "LRCLIB 将这首歌标记为纯音乐。",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+            )
+            LyricsOnlineActions(
+                onlineLyrics = onlineLyrics,
+                canChoose = false,
+                onRetry = onRetry,
+                onAi = onAi,
+                onCandidates = onCandidates,
+            )
+        }
+        dev.lilt.player.data.LyricsFetchStatus.AMBIGUOUS -> {
+            Text(
+                t(
+                    "LRCLIB found ${fetchState?.candidateCount ?: 0} matching versions.",
+                    "LRCLIB 找到 ${fetchState?.candidateCount ?: 0} 个匹配版本。",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+            )
+            LyricsOnlineActions(
+                onlineLyrics = onlineLyrics,
+                canChoose = true,
+                onRetry = onRetry,
+                onAi = onAi,
+                onCandidates = onCandidates,
+            )
+        }
+        dev.lilt.player.data.LyricsFetchStatus.ERROR -> {
+            Text(
+                t(
+                    "Could not fetch lyrics: ${fetchState?.error.orEmpty()}",
+                    "获取歌词失败：${fetchState?.error.orEmpty()}",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            LyricsOnlineActions(
+                onlineLyrics = onlineLyrics,
+                canChoose = false,
+                onRetry = onRetry,
+                onAi = onAi,
+                onCandidates = onCandidates,
+            )
+        }
+        else -> {
+            Text(
+                t(
+                    "Tap to add lyrics for this song. LRC timestamps highlight the current line.",
+                    "点击为这首歌添加歌词。LRC 时间标签会高亮当前行。",
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = muted,
+            )
+            LyricsOnlineActions(
+                onlineLyrics = onlineLyrics,
+                canChoose = false,
+                onRetry = onRetry,
+                onAi = onAi,
+                onCandidates = onCandidates,
+            )
+        }
+    }
+    if (!onlineLyrics) {
+        Text(
+            t(
+                "Online lyrics are off. Enable them in Settings.",
+                "在线歌词已关闭，可在设置中开启。",
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = muted,
+        )
+    } else if (!aiKeySaved) {
+        Text(
+            t(
+                "AI fallback needs an API key in Settings.",
+                "AI 兜底需要先在设置中填写 API Key。",
+            ),
+            style = MaterialTheme.typography.labelSmall,
+            color = muted,
+        )
+    }
+}
+
+@Composable
+private fun LyricsOnlineActions(
+    onlineLyrics: Boolean,
+    canChoose: Boolean,
+    onRetry: () -> Unit,
+    onAi: () -> Unit,
+    onCandidates: () -> Unit,
+) {
+    if (!onlineLyrics) return
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (canChoose) {
+            TextButton(onClick = onCandidates) {
+                Text(t("Choose version", "选择版本"))
+            }
+        }
+        TextButton(onClick = onAi) {
+            Text(t("AI lyrics", "AI 获取"))
+        }
+        TextButton(onClick = onRetry) {
+            Text(t("Search again", "重新搜索"))
+        }
+    }
+}
+
+@Composable
+private fun lyricsSourceLabel(source: String?): String = when (source) {
+    "lrclib" -> "LRCLIB"
+    "ai" -> "AI"
+    "user" -> t("Edited", "已编辑")
+    else -> t("Local", "本地")
 }
 
 @Composable
@@ -965,5 +1199,196 @@ private fun PlaylistPicker(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(t("Close", "关闭")) } },
+    )
+}
+
+@Composable
+private fun AiLyricsDialog(
+    state: AiLyricsUiState,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember(state.mediaId, state.text) { mutableStateOf(state.text) }
+    val check = remember(text) { inspectLyrics(text, 0L) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("AI lyrics", "AI 歌词")) },
+        text = {
+            Column(Modifier.heightIn(max = 480.dp)) {
+                Text(
+                    listOf(state.title, state.provider).filter { it.isNotBlank() }.joinToString(" · "),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(6.dp))
+                when {
+                    state.loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(t("Asking the AI provider…", "正在请求 AI…"))
+                    }
+                    state.error.isNotBlank() -> Text(
+                        state.error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    else -> {
+                        Text(
+                            t(
+                                "AI results can be incomplete or inaccurate. Check the text before saving. Only LRC with timestamps highlights lines.",
+                                "AI 结果可能不完整或不准确，请检查后再保存。只有带时间轴的 LRC 才能同步高亮。",
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            t(
+                                "${check.lines} line(s) · ${if (check.timed) "timed LRC" else "plain text"}",
+                                "${check.lines} 行 · ${if (check.timed) "带时间轴" else "纯文本"}",
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (check.timed) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            modifier = Modifier.fillMaxWidth().height(280.dp),
+                            textStyle = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                            ),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!state.loading && state.error.isBlank()) {
+                TextButton(
+                    onClick = { onSave(text) },
+                    enabled = text.isNotBlank(),
+                ) {
+                    Text(t("Save AI lyrics", "保存 AI 歌词"))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(t("Cancel", "取消"))
+            }
+        },
+    )
+}
+
+@Composable
+private fun CandidateDialog(
+    state: CandidatePickerUiState,
+    onSelect: (Int) -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val selected = state.candidates.getOrNull(state.selected)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(t("Choose a lyrics version", "选择歌词版本")) },
+        text = {
+            Column(Modifier.heightIn(max = 500.dp)) {
+                Text(
+                    state.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    t(
+                        "LRCLIB returned several close matches. Pick the version that matches this recording.",
+                        "LRCLIB 返回了多个相近版本，请选择与当前录音匹配的一版。",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Column(
+                    Modifier
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    state.candidates.forEachIndexed { index, candidate ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(index) }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = index == state.selected,
+                                onClick = { onSelect(index) },
+                            )
+                            Column {
+                                Text(
+                                    candidate.record.trackName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    "${candidate.record.artistName} · " +
+                                        "${candidate.record.albumName} · " +
+                                        formatDuration((candidate.record.duration * 1000).toLong()) +
+                                        if (candidate.record.isSynced()) " · LRC" else " · Text",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                val preview = selected?.record?.text()
+                if (!preview.isNullOrBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        t("Preview", "预览"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        preview,
+                        modifier = Modifier
+                            .heightIn(max = 160.dp)
+                            .verticalScroll(rememberScrollState()),
+                        style = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                        ),
+                        maxLines = 20,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onSave,
+                enabled = selected?.record?.text() != null,
+            ) {
+                Text(t("Use this version", "使用这个版本"))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(t("Cancel", "取消"))
+            }
+        },
     )
 }

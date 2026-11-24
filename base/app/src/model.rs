@@ -302,6 +302,40 @@ pub struct Bookmark {
     pub created: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum LyricsSource {
+    /// Sidecar `.lrc`, embedded tag, or a lyric typed before this feature.
+    #[default]
+    Local,
+    /// Fetched from LRCLIB and applied automatically or by picking a candidate.
+    Lrclib,
+    /// Returned by the configured AI provider and confirmed by the user.
+    Ai,
+    /// Typed or pasted by the user in the lyrics editor.
+    User,
+}
+
+impl LyricsSource {
+    pub fn label_en(self) -> &'static str {
+        match self {
+            LyricsSource::Local => "Local",
+            LyricsSource::Lrclib => "LRCLIB",
+            LyricsSource::Ai => "AI",
+            LyricsSource::User => "Edited",
+        }
+    }
+
+    pub fn label_zh(self) -> &'static str {
+        match self {
+            LyricsSource::Local => "本地",
+            LyricsSource::Lrclib => "LRCLIB",
+            LyricsSource::Ai => "AI",
+            LyricsSource::User => "已编辑",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SongExtra {
@@ -315,6 +349,12 @@ pub struct SongExtra {
     pub lyrics: Option<String>,
     /// Positive values delay the lyrics; a line at `t` is highlighted at `t + offset`.
     pub lyrics_offset_ms: i64,
+    pub lyrics_source: LyricsSource,
+    /// Unix seconds when online lyrics were applied; zero for local text.
+    pub lyrics_fetched_at: u64,
+    /// When false, the player stops asking LRCLIB for this song after the user
+    /// cleared its lyrics or opted out from the lyrics panel.
+    pub lyrics_autofetch: bool,
     pub favorite: bool,
     pub play_count: u32,
     pub last_played: Option<u64>,
@@ -335,6 +375,9 @@ impl Default for SongExtra {
             cover: None,
             lyrics: None,
             lyrics_offset_ms: 0,
+            lyrics_source: LyricsSource::Local,
+            lyrics_fetched_at: 0,
+            lyrics_autofetch: true,
             favorite: false,
             play_count: 0,
             last_played: None,
@@ -634,6 +677,15 @@ pub struct Settings {
     pub desktop_lyrics_font_size: f32,
     /// Compact always-on-top player window.
     pub mini_player: bool,
+    /// Fetches missing lyrics from LRCLIB when a song starts. The AI fallback is
+    /// always started from a button, never automatically.
+    pub online_lyrics: bool,
+    /// Provider id from `lyrics_fetch::AI_PROVIDERS`.
+    pub ai_provider: String,
+    /// OpenAI-compatible base URL, without `/chat/completions`.
+    pub ai_base_url: String,
+    /// Model id sent to the provider.
+    pub ai_model: String,
 }
 
 impl Default for Settings {
@@ -698,6 +750,10 @@ impl Default for Settings {
             desktop_lyrics_locked: false,
             desktop_lyrics_font_size: 34.0,
             mini_player: false,
+            online_lyrics: true,
+            ai_provider: "deepseek".to_owned(),
+            ai_base_url: "https://api.deepseek.com/v1".to_owned(),
+            ai_model: "deepseek-v4-pro".to_owned(),
         }
     }
 }
@@ -814,6 +870,8 @@ pub struct Song {
     pub last_played: Option<u64>,
     pub last_position: f64,
     pub lyrics_override: Option<String>,
+    pub lyrics_source: LyricsSource,
+    pub lyrics_autofetch: bool,
     pub cover_path: Option<PathBuf>,
     pub replay_gain: Option<f32>,
     pub bookmarks: Vec<Bookmark>,
@@ -1182,5 +1240,33 @@ mod tests {
         assert!(parsed.settings.desktop_lyrics_locked);
         assert_eq!(parsed.settings.desktop_lyrics_font_size, 42.0);
         assert!(parsed.settings.mini_player);
+    }
+
+    #[test]
+    fn online_lyrics_settings_default_and_load_from_old_state_files() {
+        let parsed: Persisted = serde_json::from_str("{}").unwrap();
+        assert!(parsed.settings.online_lyrics);
+        assert_eq!(parsed.settings.ai_provider, "deepseek");
+        assert_eq!(parsed.settings.ai_base_url, "https://api.deepseek.com/v1");
+        assert_eq!(parsed.settings.ai_model, "deepseek-v4-pro");
+        let parsed: Persisted = serde_json::from_str(
+            r#"{"settings":{"online_lyrics":false,"ai_provider":"kimi","ai_base_url":"https://api.moonshot.cn/v1","ai_model":"kimi-k2.5"}}"#,
+        )
+        .unwrap();
+        assert!(!parsed.settings.online_lyrics);
+        assert_eq!(parsed.settings.ai_provider, "kimi");
+        assert_eq!(parsed.settings.ai_model, "kimi-k2.5");
+
+        let extra: SongExtra = serde_json::from_str("{}").unwrap();
+        assert_eq!(extra.lyrics_source, LyricsSource::Local);
+        assert_eq!(extra.lyrics_fetched_at, 0);
+        assert!(extra.lyrics_autofetch);
+        let extra: SongExtra = serde_json::from_str(
+            r#"{"lyrics":"[00:01.00] Line","lyrics_source":"lrclib","lyrics_fetched_at":42,"lyrics_autofetch":false}"#,
+        )
+        .unwrap();
+        assert_eq!(extra.lyrics_source, LyricsSource::Lrclib);
+        assert_eq!(extra.lyrics_fetched_at, 42);
+        assert!(!extra.lyrics_autofetch);
     }
 }

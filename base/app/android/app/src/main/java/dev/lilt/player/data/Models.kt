@@ -137,8 +137,41 @@ data class LyricsEntity(
     val text: String,
     /** Positive values delay the lyrics; line `t` lights up at `t + offsetMs`. */
     val offsetMs: Int = 0,
+    /** `local`, `lrclib`, `ai` or `user`; see `LyricsSource`. */
+    @ColumnInfo(defaultValue = "'local'") val source: String = "local",
+    /** Unix ms when online lyrics were applied; zero for local text. */
+    @ColumnInfo(defaultValue = "0") val fetchedAt: Long = 0,
     val updatedAt: Long,
 )
+
+/**
+ * Cached outcome of an online lookup. Lyrics themselves live in `lyrics`; this
+ * table keeps the negative/ambiguous state so a miss is not retried on every
+ * play, and records that the user explicitly cleared this song's lyrics.
+ */
+@Entity(tableName = "lyrics_fetch_state")
+data class LyricsFetchEntity(
+    @PrimaryKey val mediaId: Long,
+    val status: String,
+    val lastAttemptAt: Long,
+    val nextRetryAt: Long,
+    val candidateCount: Int = 0,
+    /** Full candidate records as JSON, only for `ambiguous`. */
+    val candidates: String = "",
+    val error: String = "",
+    val autoDisabled: Boolean = false,
+)
+
+object LyricsFetchStatus {
+    const val IDLE = "idle"
+    const val FETCHING = "fetching"
+    const val AI_FETCHING = "ai_fetching"
+    const val NOT_FOUND = "not_found"
+    const val INSTRUMENTAL = "instrumental"
+    const val AMBIGUOUS = "ambiguous"
+    const val ERROR = "error"
+    const val READY = "ready"
+}
 
 @Entity(tableName = "folder_rules")
 data class FolderRuleEntity(

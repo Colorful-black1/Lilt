@@ -24,8 +24,11 @@ import dev.lilt.player.data.HistoryEntity
 import dev.lilt.player.data.LiltBackup
 import dev.lilt.player.data.LiltDatabase
 import dev.lilt.player.data.LyricsEntity
+import dev.lilt.player.data.LyricsFetchEntity
 import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.MissingReference
+import dev.lilt.player.data.OnlineLyricsClient
+import dev.lilt.player.data.OnlineLyricsEngine
 import dev.lilt.player.data.RestoreSummary
 import dev.lilt.player.data.ScanState
 import dev.lilt.player.data.toProfile
@@ -35,7 +38,11 @@ import dev.lilt.player.data.SongEntity
 import dev.lilt.player.data.SongStateEntity
 import dev.lilt.player.library.EQ_PRESETS
 import dev.lilt.player.library.EqProfile
+import dev.lilt.player.library.LyricsCandidate
+import dev.lilt.player.library.LyricsSource
 import dev.lilt.player.library.PreampMode
+import dev.lilt.player.library.candidatesFromJson
+import dev.lilt.player.library.findAiProvider
 import dev.lilt.player.library.presetNameFor
 import dev.lilt.player.library.queueStart
 import dev.lilt.player.playback.PlaybackService
@@ -98,6 +105,27 @@ data class AbLoopUiState(
     val active: Boolean get() = startMs != null && endMs != null
 }
 
+data class AiLyricsUiState(
+    val mediaId: Long = -1L,
+    val title: String = "",
+    val provider: String = "",
+    val loading: Boolean = false,
+    val text: String = "",
+    val error: String = "",
+) {
+    val visible: Boolean
+        get() = mediaId > 0 && (loading || text.isNotBlank() || error.isNotBlank())
+}
+
+data class CandidatePickerUiState(
+    val mediaId: Long = -1L,
+    val title: String = "",
+    val candidates: List<LyricsCandidate> = emptyList(),
+    val selected: Int = 0,
+) {
+    val visible: Boolean get() = mediaId > 0 && candidates.isNotEmpty()
+}
+
 class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val db = LiltDatabase.get(application)
@@ -149,6 +177,26 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val floatingLyrics = settings.floatingLyrics
     val floatingLyricsLocked = settings.floatingLyricsLocked
     val floatingFontSize = settings.floatingFontSize
+    val onlineLyrics = settings.onlineLyrics
+    val aiProvider = settings.aiProvider
+    val aiBaseUrl = settings.aiBaseUrl
+    val aiModel = settings.aiModel
+    val aiKeySaved = settings.aiKeySaved
+
+    private val _aiLyrics = MutableStateFlow(AiLyricsUiState())
+    val aiLyrics: StateFlow<AiLyricsUiState> = _aiLyrics.asStateFlow()
+
+    private val _candidates = MutableStateFlow(CandidatePickerUiState())
+    val candidates: StateFlow<CandidatePickerUiState> = _candidates.asStateFlow()
+
+    private val _aiModels = MutableStateFlow<List<String>>(emptyList())
+    val aiModels: StateFlow<List<String>> = _aiModels.asStateFlow()
+
+    private val _aiSettingsBusy = MutableStateFlow(false)
+    val aiSettingsBusy: StateFlow<Boolean> = _aiSettingsBusy.asStateFlow()
+
+    private val _aiSettingsStatus = MutableStateFlow("")
+    val aiSettingsStatus: StateFlow<String> = _aiSettingsStatus.asStateFlow()
 
     private val _player = MutableStateFlow(PlayerUiState())
     val player: StateFlow<PlayerUiState> = _player.asStateFlow()
@@ -1011,6 +1059,246 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.deleteLyrics(mediaId) }
     }
 
+    fun lyricsFetchFor(mediaId: Long): kotlinx.coroutines.flow.Flow<LyricsFetchEntity?> =
+        repository.observeLyricsFetch(mediaId)
+
+    fun retryOnlineLyrics(mediaId: Long) {
+        if (!settings.onlineLyrics.value) {
+            _aiSettingsStatus.value = "请先在设置中开启在线歌词"
+            return
+        }
+        viewModelScope.launch {
+            val song = repository.songWithTags(mediaId) ?: return@launch
+            repository.setLyricsAutoFetch(mediaId, true)
+            repository.clearLyricsFetchState(mediaId)
+            OnlineLyricsEngine.fetchLrclib(
+                context = app,
+                mediaId = mediaId,
+                title = song.title,
+                artist = song.artist,
+                album = song.album,
+                durationMs = song.durationMs,
+                force = true,
+            )
+        }
+    }
+
+    fun openCandidates(mediaId: Long) {
+        viewModelScope.launch {
+            val song = repository.songWithTags(mediaId) ?: return@launch
+            var list = candidatesFromJson(repository.lyricsFetchState(mediaId)?.candidates)
+            if (list.isEmpty()) {
+                if (!settings.onlineLyrics.value) {
+                    _aiSettingsStatus.value = "请先在设置中开启在线歌词"
+                    return@launch
+                }
+                repository.clearLyricsFetchState(mediaId)
+                OnlineLyricsEngine.fetchLrclib(
+                    context = app,
+                    mediaId = mediaId,
+                    title = song.title,
+                    artist = song.artist,
+                    album = song.album,
+                    durationMs = song.durationMs,
+                    force = true,
+                )
+                list = candidatesFromJson(repository.lyricsFetchState(mediaId)?.candidates)
+            }
+            if (list.isEmpty()) {
+                _aiSettingsStatus.value = "没有找到可选择的歌词版本"
+            } else {
+                _candidates.value = CandidatePickerUiState(
+                    mediaId = mediaId,
+                    title = song.title,
+                    candidates = list,
+                    selected = 0,
+                )
+            }
+        }
+    }
+
+    fun selectCandidate(index: Int) {
+        val state = _candidates.value
+        if (index in state.candidates.indices) {
+            _candidates.value = state.copy(selected = index)
+        }
+    }
+
+    fun saveSelectedCandidate() {
+        val state = _candidates.value
+        val candidate = state.candidates.getOrNull(state.selected) ?: return
+        val text = candidate.record.text() ?: return
+        viewModelScope.launch {
+            repository.saveFetchedLyrics(
+                mediaId = state.mediaId,
+                text = text,
+                source = LyricsSource.LRCLIB,
+            )
+            _candidates.value = CandidatePickerUiState()
+        }
+    }
+
+    fun dismissCandidates() {
+        _candidates.value = CandidatePickerUiState()
+    }
+
+    fun startAiLyrics(mediaId: Long) {
+        if (!settings.onlineLyrics.value) {
+            _aiLyrics.value = AiLyricsUiState(
+                mediaId = mediaId,
+                error = "请先在设置中开启在线歌词",
+            )
+            return
+        }
+        viewModelScope.launch {
+            val song = repository.songWithTags(mediaId) ?: return@launch
+            val config = settings.aiConfig()
+            if (config == null) {
+                _aiLyrics.value = AiLyricsUiState(
+                    mediaId = mediaId,
+                    title = song.title,
+                    error = "请先在设置中配置 AI 供应商、模型和 API Key",
+                )
+                return@launch
+            }
+            val provider = findAiProvider(config.provider).name
+            _aiLyrics.value = AiLyricsUiState(
+                mediaId = mediaId,
+                title = song.title,
+                provider = provider,
+                loading = true,
+            )
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    OnlineLyricsClient.fetchAiLyrics(
+                        config = config,
+                        title = song.title,
+                        artist = song.artist,
+                        album = song.album,
+                        durationMs = song.durationMs,
+                    )
+                }
+            }
+            val text = result.getOrNull()
+            _aiLyrics.value = when {
+                result.isFailure -> AiLyricsUiState(
+                    mediaId = mediaId,
+                    title = song.title,
+                    provider = provider,
+                    error = result.exceptionOrNull()?.message ?: "AI 请求失败",
+                )
+                text == null -> AiLyricsUiState(
+                    mediaId = mediaId,
+                    title = song.title,
+                    provider = provider,
+                    error = "AI 没有找到可靠的歌词",
+                )
+                else -> AiLyricsUiState(
+                    mediaId = mediaId,
+                    title = song.title,
+                    provider = provider,
+                    text = text,
+                )
+            }
+        }
+    }
+
+    fun saveAiLyrics(text: String) {
+        val state = _aiLyrics.value
+        if (state.mediaId <= 0 || text.isBlank()) return
+        viewModelScope.launch {
+            repository.saveFetchedLyrics(
+                mediaId = state.mediaId,
+                text = text,
+                source = LyricsSource.AI,
+            )
+            _aiLyrics.value = AiLyricsUiState()
+        }
+    }
+
+    fun dismissAiLyrics() {
+        _aiLyrics.value = AiLyricsUiState()
+    }
+
+    fun setOnlineLyrics(value: Boolean) {
+        settings.setOnlineLyrics(value)
+    }
+
+    fun setAiProvider(id: String) {
+        settings.setAiProvider(id)
+        _aiModels.value = emptyList()
+        _aiSettingsStatus.value = ""
+    }
+
+    fun setAiBaseUrl(value: String) {
+        settings.setAiBaseUrl(value)
+        _aiModels.value = emptyList()
+    }
+
+    fun setAiModel(value: String) {
+        settings.setAiModel(value)
+    }
+
+    fun saveAiKey(value: String) {
+        val ok = settings.saveAiKey(value)
+        _aiSettingsStatus.value = if (ok) "API Key 已保存" else "API Key 保存失败"
+    }
+
+    fun clearAiKey() {
+        settings.clearAiKey()
+        _aiSettingsStatus.value = "API Key 已移除"
+    }
+
+    fun fetchAiModels() {
+        if (_aiSettingsBusy.value) return
+        val config = settings.aiConfig()
+        if (config == null) {
+            _aiSettingsStatus.value = "请先填写接口地址、模型和 API Key"
+            return
+        }
+        viewModelScope.launch {
+            _aiSettingsBusy.value = true
+            _aiSettingsStatus.value = ""
+            val result = withContext(Dispatchers.IO) {
+                runCatching { OnlineLyricsClient.fetchModels(config) }
+            }
+            _aiSettingsBusy.value = false
+            result.onSuccess { models ->
+                _aiModels.value = models
+                _aiSettingsStatus.value = "${models.size} 个可用模型"
+            }.onFailure { error ->
+                _aiSettingsStatus.value = error.message ?: "获取模型失败"
+            }
+        }
+    }
+
+    fun testAiConnection() {
+        if (_aiSettingsBusy.value) return
+        val config = settings.aiConfig()
+        if (config == null) {
+            _aiSettingsStatus.value = "请先填写接口地址、模型和 API Key"
+            return
+        }
+        viewModelScope.launch {
+            _aiSettingsBusy.value = true
+            _aiSettingsStatus.value = ""
+            val result = withContext(Dispatchers.IO) {
+                runCatching { OnlineLyricsClient.testAi(config) }
+            }
+            _aiSettingsBusy.value = false
+            _aiSettingsStatus.value = result.getOrElse {
+                it.message ?: "连接失败"
+            }
+        }
+    }
+
+    fun clearLyricsFetchCache() {
+        viewModelScope.launch {
+            OnlineLyricsEngine.clearAll(app)
+            _aiSettingsStatus.value = "歌词获取缓存已清理"
+        }
+    }
+
     fun setFolderRule(path: String, kind: String, on: Boolean) {
         viewModelScope.launch { repository.setRule(path, kind, on) }
     }
@@ -1070,6 +1358,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                 .setTitle(song.title)
                 .setArtist(song.artist)
                 .setAlbumTitle(song.album)
+                .setDurationMs(song.durationMs)
                 .setArtworkUri(MusicRepository.albumArtUri(song.albumId))
                 .build()
         )

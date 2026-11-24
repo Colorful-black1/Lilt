@@ -1,0 +1,32 @@
+Observed Room rows (emulator, mediaId 1000000452, Hello / Adele / 25)
+
+1) Automatic LRCLIB lookup after first play
+SELECT mediaId, source, offsetMs, length(text), substr(text,1,60) FROM lyrics;
+1000000452|lrclib|0|2504|[00:05.84] Hello, it's me
+[00:11.40] I was wondering if afte
+
+SELECT mediaId, status, candidateCount, error, autoDisabled FROM lyrics_fetch_state;
+(empty)
+
+2) AI manual fallback (local OpenAI-compatible stub)
+SELECT mediaId, source, offsetMs, length(text), substr(text,1,50) FROM lyrics;
+1000000452|ai|0|114|[00:01.00] AI test line one
+[00:05.00] AI test lin
+
+SELECT mediaId, status FROM lyrics_fetch_state;
+(empty)
+
+3) Ambiguous candidates from real LRCLIB Hello/Adele records
+SELECT mediaId, status, candidateCount, length(candidates) FROM lyrics_fetch_state;
+1000000452|ambiguous|2|9721
+
+After tapping "Use this version":
+SELECT mediaId, source, offsetMs, length(text), substr(text,1,40) FROM lyrics;
+1000000452|lrclib|0|2504|[00:05.84] Hello, it's me
+[00:11.40] I w
+
+SELECT mediaId, status FROM lyrics_fetch_state;
+(empty)
+
+The AI key is in shared_prefs/lilt_secrets.xml as Keystore-encrypted ciphertext and is not
+present in lilt.db or in a backup.

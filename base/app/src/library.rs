@@ -399,6 +399,8 @@ pub fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Son
         play_count: extra.play_count,
         last_played: extra.last_played,
         last_position: extra.last_position,
+        lyrics_source: extra.lyrics_source,
+        lyrics_autofetch: extra.lyrics_autofetch,
         lyrics_override: extra.lyrics,
         cover_path: extra.cover.map(PathBuf::from),
         replay_gain,
@@ -644,6 +646,14 @@ pub fn save_lyrics(song: &Song, text: &str) -> std::io::Result<()> {
     let mut file = File::create(path)?;
     file.write_all(text.as_bytes())?;
     Ok(())
+}
+
+pub fn remove_lyrics(song: &Song) -> std::io::Result<()> {
+    match fs::remove_file(sidecar_lyrics_path(&song.path)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 pub fn parse_lrc(text: &str) -> Vec<(f64, String)> {
