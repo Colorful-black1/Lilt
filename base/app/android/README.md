@@ -77,6 +77,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   matching text, and keeps the last 12 queries for one-tap reuse.
 - **Lyrics** are stored per song in Room, support LRC timestamps with the current line
   highlighted in the player, plain text, and import from a local `.lrc`/`.txt` document.
+- **Lyrics-first player.** The now-playing page shows the current and next lyric line in
+  the middle, above the title, instead of a card at the bottom. Tapping the lyric block
+  opens an immersive full-screen sheet with centred, auto-scrolling lines, tap-to-seek,
+  source label, offset controls, seek bar and transport; the pencil opens the editor.
 - **Online lyrics (optional).** When a track starts without lyrics, the playback service
   queries LRCLIB in the background and writes a high-confidence match into Room. Close
   matches open a version picker instead of silently replacing the studio version with a

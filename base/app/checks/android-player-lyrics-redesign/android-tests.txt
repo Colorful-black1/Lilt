@@ -1,0 +1,9 @@
+BackupTest                 7 passed
+DuplicateToolsTest         5 passed
+FilenameTagsTest           2 passed
+LibraryTest               31 passed
+MissingFilesTest           2 passed
+OnlineLyricsClientTest     2 passed
+OnlineLyricsTest           8 passed
+PlaybackToolsTest          3 passed
+total                     60 passed, 0 failed

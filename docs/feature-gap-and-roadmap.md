@@ -335,7 +335,7 @@
 | Android 悬浮歌词 | 高 | 中 | P2 |
 | Android 锁屏歌词 | 中 | 高 | P2 |
 
-状态（2026-11-24）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，并在后续修复中改为酷狗式左右双行、解锁半透明卡片、锁定全透明、文字描边、长歌词自动缩放完整显示，带可点击小锁浮钮、收藏/上一首/下一首控制及播放页“词”快捷开关；解锁态已支持拖动窗口或滚轮无级缩放，歌词、工具栏按钮与图标一起放大缩小，不设固定最小/最大尺寸，并在可见卡片边缘提供标准双向缩放光标；Android 悬浮歌词已在 Round 7-A 完成，后续改为紧凑单行、锁定时无卡片、设置页字号缩放与播放页“词”开关。在线歌词已在 Round 8-A/8-B 完成：LRCLIB 自动获取、候选选择、手动 AI 预览、缓存与 Key 加密；歌词进度染色与自定义已播放/未播放颜色已在 Round 8-C 完成（PC 桌面歌词、Android 悬浮歌词）；PC 锁定态解锁按钮已放大为带文字的胶囊按钮；文件名标签兜底、AI 歌词提示词/开发者日志与 LRCLIB null 容错已在 Round 8-D 完成；双语/翻译行和 Android 锁屏歌词仍未做。
+状态（2026-11-24）：歌词偏移调整、字号与透明度已完成（PC/Android 播放页、编辑页与设置页）；PC 桌面歌词浮窗已在 Round 6-D2 完成，并在后续修复中改为酷狗式左右双行、解锁半透明卡片、锁定全透明、文字描边、长歌词自动缩放完整显示，带可点击小锁浮钮、收藏/上一首/下一首控制及播放页“词”快捷开关；解锁态已支持拖动窗口或滚轮无级缩放，歌词、工具栏按钮与图标一起放大缩小，不设固定最小/最大尺寸，并在可见卡片边缘提供标准双向缩放光标；Android 悬浮歌词已在 Round 7-A 完成，后续改为紧凑单行、锁定时无卡片、设置页字号缩放与播放页“词”开关。在线歌词已在 Round 8-A/8-B 完成：LRCLIB 自动获取、候选选择、手动 AI 预览、缓存与 Key 加密；歌词进度染色与自定义已播放/未播放颜色已在 Round 8-C 完成（PC 桌面歌词、Android 悬浮歌词）；PC 锁定态解锁按钮已放大为带文字的胶囊按钮；文件名标签兜底、AI 歌词提示词/开发者日志与 LRCLIB null 容错已在 Round 8-D 完成；PC 正在播放页已改为歌词优先的两栏布局，Android 播放页改为居中当前/下一行并可点击进入全屏歌词；双语/翻译行和 Android 锁屏歌词仍未做。
 
 技术说明：
 
@@ -902,6 +902,19 @@
 
 未纳入本轮：宽度单独拖动时改变字号、桌面歌词窗口尺寸跨重启持久化。
 
+### 第 8-D 轮后修复：歌词优先的正在播放页与 Android 全屏歌词（已完成）
+
+交付：
+
+- PC 正在播放页改为图 4 式两栏布局：左侧封面与歌曲信息，右侧大歌词面板，底部独立播放条；歌词面板占右侧全部可用高度，1180×780 时可见约 10 行，较旧的 180 px 底部面板明显增大。
+- PC 歌词水平居中；按播放进度高亮当前行，并在当前行变化时用 `scroll_to_rect(Align::Center)` 自动滚到歌词面板中间。已播放行使用设置中的已播放颜色，未播放行使用未播放颜色；点击带时间歌词行跳转。没有歌词时在面板内显示获取状态、AI/重试/候选按钮。
+- PC 右侧新增“歌词 / 详情”标签；详情保留接下来播放与文件信息。底部播放条包含进度、五键播放控制与 A-B、单曲停止、均衡器、睡眠定时、桌面歌词、标签、速度等快捷按钮；窄窗口自动换行，不再被裁切。
+- Android 播放页把歌词从底部卡片移到封面与歌曲标题之间：居中显示当前行与下一行，点击整块歌词进入全屏歌词页。全屏页提供居中自动滚动、当前行高亮与背景、点击行跳转、来源标签、偏移控件、进度条和播放控制；右上角铅笔进入原歌词编辑页，菜单同时保留“歌词/编辑歌词”入口。
+- PC 70 项单元测试通过（1 项忽略）；Android 60 项单元测试通过；Android 模拟器 1080×1920 实测播放页与全屏歌词页。
+- 证据见 `base/app/checks/now-playing-lyrics-layout/` 和 `base/app/checks/android-player-lyrics-redesign/`。
+
+未纳入本轮：逐字歌词、双语翻译行、Android 锁屏歌词。
+
 ### 第 9 轮：Android 系统集成
 
 交付：
@@ -988,10 +1001,11 @@
 | 2026-11-24 | 文件名标签与 AI 歌词修复 | 完成 | PC/Android 扫描按 `歌手 - 歌名` 兜底、AI 草稿提示词与拒绝识别、PC AI 开发者日志、LRCLIB null 容错、PC 67 项 + Android 60 项测试 |
 | 2026-11-24 | 桌面歌词无级缩放 | 完成 | 解锁态歌词、行距、工具栏按钮与图标同步缩放；取消 460×160 / 3600×760 限制、PC 70 项测试 |
 | 2026-11-24 | 桌面歌词缩放边框 | 完成 | 解锁态 8 px 可见缩放边框、标准双向/斜向光标、原生拖动缩放、PC 70 项测试 |
+| 2026-11-24 | 歌词优先播放页 | 完成 | PC 两栏歌词页、居中自动滚动、歌词/详情标签与底部播放条；Android 居中当前/下一行与全屏歌词；PC 70 项 + Android 60 项测试 |
 | 2026-11-23 | Bugfix | 完成 | PC M4A/MP4 解码崩溃修复、内容探测标签/时长、损坏文件错误提示、PC 41 项测试 |
 | 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`；酷狗式左右双行与自动缩放验证见 `base/app/checks/desktop-lyrics-kugou/`；Android 单行悬浮歌词、无卡片锁定态与“词”开关验证见 `base/app/checks/android-floating-lyrics-compact/`；文件名标签兜底验证见 `base/app/checks/filename-tag-fallback/`；AI 草稿提示词与日志验证见 `base/app/checks/ai-lyrics-prompt-fix/`；桌面歌词等比例缩放验证见 `base/app/checks/desktop-lyrics-proportional-zoom/`；桌面歌词缩放边框与光标验证见 `base/app/checks/desktop-lyrics-resize-border/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`；酷狗式左右双行与自动缩放验证见 `base/app/checks/desktop-lyrics-kugou/`；Android 单行悬浮歌词、无卡片锁定态与“词”开关验证见 `base/app/checks/android-floating-lyrics-compact/`；文件名标签兜底验证见 `base/app/checks/filename-tag-fallback/`；AI 草稿提示词与日志验证见 `base/app/checks/ai-lyrics-prompt-fix/`；桌面歌词等比例缩放验证见 `base/app/checks/desktop-lyrics-proportional-zoom/`；桌面歌词缩放边框与光标验证见 `base/app/checks/desktop-lyrics-resize-border/`；歌词优先的 PC 播放页验证见 `base/app/checks/now-playing-lyrics-layout/`；Android 居中歌词与全屏歌词页验证见 `base/app/checks/android-player-lyrics-redesign/`。
 
 ---
 
@@ -1005,6 +1019,7 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/src/library.rs`：扫描、文件名标签兜底、标签、歌词、偏移换算、M3U、CSV
 - `base/app/src/console.rs`：开发者日志追加写入与开发者控制台
 - `base/app/src/ui/dialogs.rs`：PC 正在播放浮层、歌词面板、A-B/单曲停止控件、失效文件与重复歌曲对话框
+- `base/app/src/ui/now_playing.rs`：PC 歌词优先的两栏正在播放页、自动滚动歌词、详情标签与底部播放条
 - `base/app/src/app.rs`：PC 播放心跳、A-B 循环、单曲停止、失效文件检测与重连
 - `base/app/src/duplicates.rs`：PC 重复歌曲分组、副本排序与大小格式
 - `base/app/src/backup.rs`：PC 版本化备份、校验、ID 归一化与恢复
@@ -1034,7 +1049,8 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Search.kt`：Android 分组搜索
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/LibraryScreens.kt`：Android 曲库、历史、书签与多选
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/SettingsScreen.kt`：Android 设置页
-- `base/app/android/app/src/main/java/dev/lilt/player/ui/PlayerScreen.kt`：Android 播放页、歌词面板与睡眠对话框
+- `base/app/android/app/src/main/java/dev/lilt/player/ui/PlayerScreen.kt`：Android 播放页、居中当前/下一行歌词与睡眠对话
+- `base/app/android/app/src/main/java/dev/lilt/player/ui/LyricsPlayerScreen.kt`：Android 全屏歌词、自动居中滚动、偏移与播放控制框
 - `base/app/android/app/src/main/java/dev/lilt/player/ui/LyricsScreen.kt`：Android 歌词编辑页
 - `base/app/android/app/src/main/java/dev/lilt/player/library/Lrc.kt`：LRC 解析、偏移高亮、时间格式
 - `base/app/android/app/src/main/java/dev/lilt/player/library/FloatingLyrics.kt`：悬浮歌词行窗口、字号夹取与时间格式
@@ -1107,3 +1123,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.13.6 | 2026-11-24 | 桌面歌词等比例缩放：解锁态窗口高度/滚轮同步缩放双行歌词，设置页更新说明 |
 | v0.13.7 | 2026-11-24 | 桌面歌词缩放边框：可见边缘 8 px 原生命中区，显示标准双向/斜向光标并可拖动缩放 |
 | v0.13.8 | 2026-11-24 | 桌面歌词无级缩放：取消最小/最大尺寸限制，歌词、按钮与图标一起缩放 |
+| v0.13.9 | 2026-11-24 | 歌词优先播放页：PC 两栏布局、居中自动滚动与歌词/详情标签；Android 居中当前/下一行与全屏歌词页 |

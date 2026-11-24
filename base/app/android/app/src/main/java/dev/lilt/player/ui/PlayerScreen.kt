@@ -11,11 +11,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,11 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -65,12 +59,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +71,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -95,9 +86,7 @@ import dev.lilt.player.CandidatePickerUiState
 import dev.lilt.player.LiltViewModel
 import dev.lilt.player.PlayerUiState
 import dev.lilt.player.SleepUiState
-import dev.lilt.player.data.SongEntity
-import dev.lilt.player.library.LrcDocument
-import dev.lilt.player.library.activeLrcLine
+import dev.lilt.player.library.floatingLyricLines
 import dev.lilt.player.library.inspectLyrics
 import dev.lilt.player.library.parseLrc
 
@@ -108,6 +97,7 @@ fun PlayerScreen(
     onOpenQueues: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onOpenLyrics: (Long) -> Unit,
+    onOpenLyricsView: (Long) -> Unit,
     onEditTags: (Long) -> Unit,
 ) {
     val context = LocalContext.current
@@ -128,8 +118,6 @@ fun PlayerScreen(
         .collectAsStateWithLifecycle(initialValue = null)
     val lyricsFetch by remember(state.mediaId) { vm.lyricsFetchFor(state.mediaId) }
         .collectAsStateWithLifecycle(initialValue = null)
-    val onlineLyrics by vm.onlineLyrics.collectAsStateWithLifecycle()
-    val aiKeySaved by vm.aiKeySaved.collectAsStateWithLifecycle()
     val aiLyrics by vm.aiLyrics.collectAsStateWithLifecycle()
     val candidates by vm.candidates.collectAsStateWithLifecycle()
     val sleep by vm.sleep.collectAsStateWithLifecycle()
@@ -199,6 +187,15 @@ fun PlayerScreen(
                                 enabled = current != null,
                                 onClick = {
                                     menu = false
+                                    current?.let { onOpenLyricsView(it.mediaId) }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(t("Edit lyrics", "编辑歌词")) },
+                                leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                                enabled = current != null,
+                                onClick = {
+                                    menu = false
                                     current?.let { onOpenLyrics(it.mediaId) }
                                 },
                             )
@@ -260,7 +257,17 @@ fun PlayerScreen(
                     modifier = Modifier.size(coverSize),
                     corner = 24.dp,
                 )
-                Spacer(Modifier.height(22.dp))
+                Spacer(Modifier.height(14.dp))
+                CompactLyrics(
+                    text = lyrics?.text,
+                    fetchState = lyricsFetch,
+                    positionMs = state.positionMs,
+                    offsetMs = lyrics?.offsetMs ?: 0,
+                    fontSize = lyricsFontSize,
+                    opacity = lyricsOpacity,
+                    onOpen = { if (state.mediaId > 0) onOpenLyricsView(state.mediaId) },
+                )
+                Spacer(Modifier.height(12.dp))
                 Text(
                     state.title.ifBlank { t("Nothing playing", "暂无播放") },
                     style = MaterialTheme.typography.headlineMedium,
@@ -462,25 +469,6 @@ fun PlayerScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(14.dp))
-                LyricsPanel(
-                    text = lyrics?.text,
-                    source = lyrics?.source,
-                    fetchState = lyricsFetch,
-                    onlineLyrics = onlineLyrics,
-                    aiKeySaved = aiKeySaved,
-                    offsetMs = lyrics?.offsetMs ?: 0,
-                    positionMs = state.positionMs,
-                    fontSize = lyricsFontSize,
-                    opacity = lyricsOpacity,
-                    onOffsetChange = {
-                        if (state.mediaId > 0) vm.setLyricsOffset(state.mediaId, it)
-                    },
-                    onOpen = { if (state.mediaId > 0) onOpenLyrics(state.mediaId) },
-                    onRetry = { if (state.mediaId > 0) vm.retryOnlineLyrics(state.mediaId) },
-                    onAi = { if (state.mediaId > 0) vm.startAiLyrics(state.mediaId) },
-                    onCandidates = { if (state.mediaId > 0) vm.openCandidates(state.mediaId) },
-                )
                 Spacer(Modifier.height(18.dp))
             }
         }
@@ -563,7 +551,7 @@ fun PlayerScreen(
 }
 
 @Composable
-private fun SeekBar(state: PlayerUiState, onSeek: (Long) -> Unit) {
+internal fun SeekBar(state: PlayerUiState, onSeek: (Long) -> Unit) {
     var dragging by remember(state.mediaId) { mutableStateOf<Float?>(null) }
     val position = dragging ?: state.positionMs.toFloat()
     val duration = state.durationMs.coerceAtLeast(1L)
@@ -608,104 +596,87 @@ private fun SleepStatus(sleep: SleepUiState) {
 }
 
 @Composable
-private fun LyricsPanel(
+private fun CompactLyrics(
     text: String?,
-    source: String?,
     fetchState: dev.lilt.player.data.LyricsFetchEntity?,
-    onlineLyrics: Boolean,
-    aiKeySaved: Boolean,
-    offsetMs: Int,
     positionMs: Long,
+    offsetMs: Int,
     fontSize: Float,
     opacity: Float,
-    onOffsetChange: (Int) -> Unit,
     onOpen: () -> Unit,
-    onRetry: () -> Unit,
-    onAi: () -> Unit,
-    onCandidates: () -> Unit,
 ) {
     val document = remember(text) { parseLrc(text.orEmpty()) }
+    val lines = floatingLyricLines(document, positionMs, offsetMs)
     val alpha = opacity.coerceIn(0.35f, 1f)
-    val baseSize = fontSize.coerceIn(12f, 24f)
+    val currentSize = (fontSize + 6f).coerceIn(18f, 30f)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onOpen)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Rounded.Lyrics,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                t("Lyrics", "歌词"),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            if (!text.isNullOrBlank()) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    lyricsSourceLabel(source),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+        if (document.isEmpty) {
+            if (fetchState?.status == dev.lilt.player.data.LyricsFetchStatus.FETCHING) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        t("Looking up lyrics…", "正在获取歌词…"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                    )
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Rounded.Lyrics,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        t("Tap for lyrics", "点击查看歌词"),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                    )
+                }
             }
-            Spacer(Modifier.weight(1f))
+        } else {
             Text(
-                if (text.isNullOrBlank()) t("Add", "添加") else t("Edit", "编辑"),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        if (document.timed) {
-            LyricsOffsetControls(offsetMs = offsetMs, onOffsetChange = onOffsetChange)
-            Spacer(Modifier.height(6.dp))
-        }
-        when {
-            text.isNullOrBlank() -> {
-                LyricsEmptyState(
-                    fetchState = fetchState,
-                    onlineLyrics = onlineLyrics,
-                    aiKeySaved = aiKeySaved,
-                    onRetry = onRetry,
-                    onAi = onAi,
-                    onCandidates = onCandidates,
-                )
-            }
-            document.isEmpty -> Text(
-                t("The saved lyrics are empty.", "已保存的歌词为空。"),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
-            )
-            document.timed -> SyncedLyrics(
-                document = document,
-                positionMs = positionMs,
-                offsetMs = offsetMs,
-                fontSize = baseSize,
-                opacity = alpha,
-            )
-            else -> Text(
-                document.lines.joinToString("\n") { it.text },
-                maxLines = 5,
+                lines.active,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
-                    fontSize = baseSize.sp,
-                    lineHeight = (baseSize * 1.45f).sp,
+                    fontSize = currentSize.sp,
+                    lineHeight = (currentSize * 1.35f).sp,
+                    fontWeight = FontWeight.SemiBold,
                 ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
             )
+            if (lines.after.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    lines.after,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(
+                        fontSize = (fontSize + 1f).coerceIn(13f, 20f).sp,
+                        lineHeight = ((fontSize + 1f) * 1.4f).sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha * 0.85f),
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun LyricsEmptyState(
+internal fun LyricsEmptyState(
     fetchState: dev.lilt.player.data.LyricsFetchEntity?,
     onlineLyrics: Boolean,
     aiKeySaved: Boolean,
@@ -852,7 +823,7 @@ private fun LyricsEmptyState(
 }
 
 @Composable
-private fun LyricsOnlineActions(
+internal fun LyricsOnlineActions(
     onlineLyrics: Boolean,
     canChoose: Boolean,
     onRetry: () -> Unit,
@@ -879,51 +850,11 @@ private fun LyricsOnlineActions(
 }
 
 @Composable
-private fun lyricsSourceLabel(source: String?): String = when (source) {
+internal fun lyricsSourceLabel(source: String?): String = when (source) {
     "lrclib" -> "LRCLIB"
     "ai" -> "AI"
     "user" -> t("Edited", "已编辑")
     else -> t("Local", "本地")
-}
-
-@Composable
-private fun SyncedLyrics(
-    document: LrcDocument,
-    positionMs: Long,
-    offsetMs: Int,
-    fontSize: Float,
-    opacity: Float,
-) {
-    val active = activeLrcLine(document, positionMs, offsetMs)
-    val listState = rememberLazyListState()
-    LaunchedEffect(active) {
-        if (active >= 0) listState.animateScrollToItem(active)
-    }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxWidth().height(180.dp),
-        contentPadding = PaddingValues(vertical = 40.dp),
-    ) {
-        itemsIndexed(document.lines) { index, line ->
-            Text(
-                line.text,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                textAlign = TextAlign.Center,
-                style = TextStyle(
-                    fontSize = if (index == active) (fontSize + 2f).sp else fontSize.sp,
-                    lineHeight = (fontSize * 1.45f).sp,
-                    fontWeight = if (index == active) FontWeight.SemiBold else FontWeight.Normal,
-                ),
-                color = if (index == active) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = opacity)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = opacity)
-                },
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
 }
 
 @Composable
@@ -1203,7 +1134,7 @@ private fun PlaylistPicker(
 }
 
 @Composable
-private fun AiLyricsDialog(
+internal fun AiLyricsDialog(
     state: AiLyricsUiState,
     onSave: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -1290,7 +1221,7 @@ private fun AiLyricsDialog(
 }
 
 @Composable
-private fun CandidateDialog(
+internal fun CandidateDialog(
     state: CandidatePickerUiState,
     onSelect: (Int) -> Unit,
     onSave: () -> Unit,

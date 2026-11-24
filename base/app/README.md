@@ -49,8 +49,8 @@ cargo run -- --screenshot shots/720.png --size 720x1280
 For a settings-page check, `LILT_PAGE=settings` opens Settings first, and
 `LILT_SETTINGS_SCROLL=1050` starts its scroll area at the Playback card (used by the
 screenshots in `checks/`). For lyric checks, `LILT_START_PAGE=now`, `LILT_LYRICS=1`,
-`LILT_LYRICS_OFFSET=500` and `LILT_PAUSE_AFTER_SEEK=1` open the now-playing lyric panel
-at a fixed position with an offset applied. For tray and hotkey checks,
+`LILT_LYRICS_OFFSET=500` and `LILT_PAUSE_AFTER_SEEK=1` open the now-playing page with the
+lyrics tab selected at a fixed position with an offset applied. For tray and hotkey checks,
 `LILT_DESKTOP_LOG=<file>` appends native action lines (tray click, tray menu, hotkey,
 show/hide) to that file without enabling the developer console. The desktop companion
 windows can be opened without touching saved settings with `LILT_DESKTOP_LYRICS=1`,
@@ -106,6 +106,12 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **Fixed transport bar.** The bottom bar uses a fixed three-column layout: the
   transport group stays at the window centre and previous/next align with play
   regardless of the song title length.
+- **Lyrics-first now-playing page.** The overlay uses two columns: cover and song facts on
+  the left, a large lyric sheet on the right, and one transport bar along the bottom.
+  The current line uses the played colour while the rest use the unplayed colour, follows
+  playback and is kept in the middle of the sheet; clicking any timed line seeks to it.
+  The **Details** tab keeps Up next and the file card. Lyrics scale with the page and the
+  bottom chips wrap instead of clipping in narrow windows.
 - Up to 20 named queues with unique names, no duplicates, remembered positions, loading
   from a playlist, M3U export, and the target's Replace/Merge policy for same-name
   creation (Replace is the default).
@@ -154,8 +160,9 @@ Set `LILT_DATA_DIR` to use a different data folder.
   playlists whose files are gone keep their keys so the missing-file tool can re-link them.
 - **Lyric timing and display.** Each song keeps its own offset (`-500`, `-100`, `+100`,
   `+500` ms and reset, limited to ±60 s); positive values delay the lyrics. Clicking a
-  lyric line seeks to its adjusted time. Settings has lyric font size (10–24 px) and
-  opacity (30–100%) sliders with a live preview.
+  lyric line seeks to its adjusted time. The now-playing sheet follows playback and keeps
+  the active line in the middle. Settings has lyric font size (10–24 px) and opacity
+  (30–100%) sliders with a live preview.
 - **Windows desktop integration.** A self-drawn tray icon with left-click restore and a
   right-click menu (Show Lilt, Play/Pause, Previous, Next, Desktop lyrics, Lock/Unlock
   desktop lyrics, Mini player, Quit Lilt). Closing hides to the tray by default;

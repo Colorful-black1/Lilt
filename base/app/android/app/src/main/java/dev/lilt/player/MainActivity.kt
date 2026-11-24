@@ -60,6 +60,7 @@ import dev.lilt.player.ui.DuplicatesScreen
 import dev.lilt.player.ui.HomeScreen
 import dev.lilt.player.ui.LiltTheme
 import dev.lilt.player.ui.LyricsScreen
+import dev.lilt.player.ui.LyricsPlayerScreen
 import dev.lilt.player.ui.MissingFilesScreen
 import dev.lilt.player.ui.PlayerScreen
 import dev.lilt.player.ui.PlaylistScreen
@@ -177,12 +178,22 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
                 onOpenQueues = { nav.navigate("queues") },
                 onOpenEqualizer = { nav.navigate("equalizer") },
                 onOpenLyrics = { nav.navigate("lyrics/$it") },
+                onOpenLyricsView = { nav.navigate("lyrics-view/$it") },
                 onEditTags = { nav.navigate("tags/$it") },
             )
         }
         composable("lyrics/{id}") { entry ->
             val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
             LyricsScreen(vm = vm, mediaId = id, onBack = { nav.popBackStack() })
+        }
+        composable("lyrics-view/{id}") { entry ->
+            val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+            LyricsPlayerScreen(
+                vm = vm,
+                mediaId = id,
+                onBack = { nav.popBackStack() },
+                onEdit = { editId -> nav.navigate("lyrics/$editId") },
+            )
         }
         composable("tags/{id}") { entry ->
             val id = entry.arguments?.getString("id")?.toLongOrNull() ?: return@composable

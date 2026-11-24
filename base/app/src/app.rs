@@ -402,7 +402,7 @@ impl LiltApp {
             active_eq,
             now_playing: false,
             queue_drawer: false,
-            lyrics_open: false,
+            lyrics_open: true,
             modal: None,
             toast: None,
             palette,
