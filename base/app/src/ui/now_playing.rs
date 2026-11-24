@@ -12,8 +12,8 @@ use crate::model::{format_duration, LyricsSource, Page, RepeatMode, Song};
 use crate::theme::{cover_palette, display_font, mix, with_alpha, Palette};
 use crate::widgets;
 use eframe::egui::{
-    self, Align, Color32, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke,
-    StrokeKind, Ui, UiBuilder, Vec2,
+    self, Align, Color32, FontId, Layout, Pos2, Rect, RichText, ScrollArea, Sense, Stroke, Ui,
+    UiBuilder, Vec2,
 };
 
 const MAX_CONTENT_WIDTH: f32 = 1180.0;
@@ -107,7 +107,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
         .map(|[r, g, b]| Color32::from_rgb(r, g, b))
         .unwrap_or(ink);
     let active_color = with_alpha(played_base, lyric_alpha(255));
-    let played_color = with_alpha(played_base, lyric_alpha(150));
+    let played_color = with_alpha(played_base, lyric_alpha(115));
     let unplayed_color = with_alpha(unplayed_base, lyric_alpha(185));
     let lyric_size = (lyrics_font_size * 1.55).clamp(18.0, 34.0);
 
@@ -202,8 +202,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                     );
                     ui.add_space(8.0);
 
-                    let body_h =
-                        (screen.bottom() - 14.0 - 10.0 - bottom_h - ui.cursor().top()).max(250.0);
+                    let body_h = (screen.bottom() - 14.0 - bottom_h - ui.cursor().top()).max(250.0);
                     let left_w = (content_width * 0.35)
                         .clamp(232.0, 400.0)
                         .min(content_width - 292.0);
@@ -237,13 +236,6 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
 
                         let (pane_rect, _) =
                             ui.allocate_exact_size(Vec2::new(right_w, body_h), Sense::hover());
-                        ui.painter().rect(
-                            pane_rect,
-                            16.0,
-                            with_alpha(ink, 8),
-                            Stroke::new(1.0, with_alpha(ink, 18)),
-                            StrokeKind::Inside,
-                        );
                         let inner = pane_rect.shrink2(Vec2::new(18.0, 14.0));
                         child_ui(ui, inner, Layout::top_down(Align::Min), |ui| {
                             right_pane(
@@ -273,25 +265,16 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
                             );
                         });
                     });
-                    ui.add_space(10.0);
-
                     let (bar_rect, _) =
-                        ui.allocate_exact_size(Vec2::new(content_width, bottom_h), Sense::hover());
-                    ui.painter().rect(
-                        bar_rect,
-                        16.0,
-                        with_alpha(ink, 8),
-                        Stroke::new(1.0, with_alpha(ink, 18)),
-                        StrokeKind::Inside,
-                    );
-                    let inner = bar_rect.shrink2(Vec2::new(16.0, 10.0));
-                    child_ui(ui, inner, Layout::top_down(Align::Min), |ui| {
+                        ui.allocate_exact_size(Vec2::new(screen.width(), bottom_h), Sense::hover());
+                    child_ui(ui, bar_rect, Layout::top_down(Align::Min), |ui| {
                         transport_bar(
                             ui,
                             app,
                             &op,
                             ink,
                             ink_muted,
+                            screen.width(),
                             content_width - 32.0,
                             fraction,
                             position,
@@ -714,7 +697,8 @@ fn right_pane(
     let scroll_area = ScrollArea::vertical()
         .id_salt(("now_playing_lyrics", current.map(|song| song.key.clone())))
         .max_height(list_h)
-        .auto_shrink([false, false]);
+        .auto_shrink([false, false])
+        .scroll_bar_visibility(egui::containers::scroll_area::ScrollBarVisibility::AlwaysHidden);
     scroll_area.show(ui, |ui| {
         let width = ui.available_width().max(120.0);
         let pad = (list_h * 0.36).clamp(28.0, 180.0);
@@ -763,23 +747,28 @@ fn lyric_line(
     );
     let height = (galley.size().y + size * 0.95).max(24.0);
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
-    if active {
-        ui.painter().rect_filled(
-            rect.shrink2(Vec2::new(8.0, 2.0)),
-            11.0,
-            with_alpha(Color32::WHITE, 10),
-        );
-    } else if response.hovered() {
+    if !active && response.hovered() {
         ui.painter().rect_filled(
             rect.shrink2(Vec2::new(8.0, 2.0)),
             9.0,
-            with_alpha(Color32::WHITE, 7),
+            with_alpha(Color32::WHITE, 5),
         );
     }
     let position = Pos2::new(
         rect.center().x - galley.size().x * 0.5,
         rect.center().y - galley.size().y * 0.5,
     );
+    if active {
+        let underline_y = position.y + galley.size().y + 2.0;
+        let half = (galley.size().x * 0.32).min(110.0);
+        ui.painter().line_segment(
+            [
+                Pos2::new(rect.center().x - half, underline_y),
+                Pos2::new(rect.center().x + half, underline_y),
+            ],
+            Stroke::new(2.0, color),
+        );
+    }
     ui.painter().galley(position, galley, color);
     response
 }
@@ -1027,6 +1016,43 @@ fn details_body(
     }
 }
 
+fn divider_seek(
+    ui: &mut Ui,
+    fraction: f64,
+    palette: &Palette,
+    ink: Color32,
+    width: f32,
+) -> Option<f64> {
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(width.max(10.0), 16.0), Sense::click_and_drag());
+    let y = rect.top() + 1.0;
+    let fraction = fraction.clamp(0.0, 1.0);
+    ui.painter().line_segment(
+        [Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
+        Stroke::new(2.0, with_alpha(ink, 32)),
+    );
+    let x = rect.left() + rect.width() * fraction as f32;
+    if fraction > 0.0 {
+        ui.painter().line_segment(
+            [Pos2::new(rect.left(), y), Pos2::new(x, y)],
+            Stroke::new(2.0, palette.accent),
+        );
+    }
+    if response.hovered() || response.dragged() {
+        ui.painter()
+            .circle_filled(Pos2::new(x, y), 4.0, palette.accent);
+        ui.painter()
+            .circle_filled(Pos2::new(x, y), 1.8, palette.on_accent);
+    }
+    if response.clicked() || response.dragged() {
+        response
+            .interact_pointer_pos()
+            .map(|pos| (((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0)) as f64)
+    } else {
+        None
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn transport_bar(
     ui: &mut Ui,
@@ -1034,6 +1060,7 @@ fn transport_bar(
     op: &Palette,
     ink: Color32,
     ink_muted: Color32,
+    screen_width: f32,
     width: f32,
     fraction: f64,
     position: f64,
@@ -1055,191 +1082,204 @@ fn transport_bar(
     queue_total: usize,
 ) {
     ui.spacing_mut().item_spacing.y = 0.0;
-    let seek_response = widgets::seek_bar(ui, fraction, op, 20.0);
-    if let Some(value) = seek_response.changed {
+    if let Some(value) = divider_seek(ui, fraction, &app.palette, ink, screen_width) {
         *seek = Some(value);
     }
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(format_duration(position))
-                .font(FontId::monospace(10.0))
-                .color(ink_muted),
-        );
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+    ui.add_space(2.0);
+
+    let outer_pad = ((screen_width - width) / 2.0).max(16.0);
+    let content_rect = Rect::from_min_max(
+        Pos2::new(ui.cursor().left() + outer_pad, ui.cursor().top()),
+        Pos2::new(
+            ui.cursor().left() + screen_width - outer_pad,
+            (ui.max_rect().bottom() - 10.0).max(ui.cursor().top()),
+        ),
+    );
+    child_ui(ui, content_rect, Layout::top_down(Align::Min), |ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.horizontal(|ui| {
             ui.label(
-                RichText::new(format_duration(duration))
+                RichText::new(format_duration(position))
                     .font(FontId::monospace(10.0))
                     .color(ink_muted),
             );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.label(
+                    RichText::new(format_duration(duration))
+                        .font(FontId::monospace(10.0))
+                        .color(ink_muted),
+                );
+            });
         });
-    });
-    ui.add_space(3.0);
+        ui.add_space(3.0);
 
-    let play_size = 54.0;
-    let skip_size = 38.0;
-    let edge_size = 34.0;
-    let spacing = ui.spacing().item_spacing.x;
-    let group = edge_size * 2.0 + skip_size * 2.0 + play_size + spacing * 4.0;
-    ui.allocate_ui_with_layout(
-        Vec2::new(width, play_size),
-        Layout::left_to_right(Align::Center),
-        |ui| {
-            ui.add_space(((ui.available_width() - group) / 2.0).max(0.0));
-            if icons::icon_button(
-                ui,
-                Icon::Shuffle,
-                edge_size,
-                if app.shuffle {
-                    app.palette.accent
-                } else {
-                    with_alpha(ink, 150)
-                },
-                with_alpha(ink, 18),
-                app.t("Shuffle", "随机"),
-            )
-            .clicked()
-            {
-                *toggle_shuffle = true;
-            }
-            if icons::icon_button(
-                ui,
-                Icon::Prev,
-                skip_size,
-                ink,
-                with_alpha(ink, 18),
-                app.t("Previous", "上一首"),
-            )
-            .clicked()
-            {
-                *prev = true;
-            }
-            if widgets::play_button(ui, play_size, app.playing, &app.palette).clicked() {
-                *toggle_play = true;
-            }
-            if icons::icon_button(
-                ui,
-                Icon::Next,
-                skip_size,
-                ink,
-                with_alpha(ink, 18),
-                app.t("Next", "下一首"),
-            )
-            .clicked()
-            {
-                *next = true;
-            }
-            let repeat_icon = if app.repeat == RepeatMode::One {
-                Icon::RepeatOne
-            } else {
-                Icon::Repeat
-            };
-            if icons::icon_button(
-                ui,
-                repeat_icon,
-                edge_size,
-                if app.repeat != RepeatMode::Off {
-                    app.palette.accent
-                } else {
-                    with_alpha(ink, 150)
-                },
-                with_alpha(ink, 18),
-                app.t("Repeat", "循环"),
-            )
-            .clicked()
-            {
-                *cycle_repeat = true;
-            }
-        },
-    );
-    ui.add_space(6.0);
-
-    ui.horizontal_wrapped(|ui| {
-        let ab_label = match app.ab_loop {
-            Some(AbLoop { a, b: Some(b) }) => {
-                format!("A-B {} – {}", format_duration(a), format_duration(b))
-            }
-            Some(AbLoop { a, b: None }) => format!(
-                "{} {} · {}",
-                app.t("A", "A"),
-                format_duration(a),
-                app.t("set B", "设置 B")
-            ),
-            None => app.t("A-B loop", "A-B 循环").to_owned(),
-        };
-        if widgets::ghost_button(ui, &ab_label, Some(Icon::Repeat), op)
-            .on_hover_text(app.t(
-                "Tap once for A, again for B, once more to clear.",
-                "按一次设 A，再按设 B，再按关闭。",
-            ))
-            .clicked()
-        {
-            *toggle_ab = true;
-        }
-        if app.ab_loop.is_some()
-            && widgets::ghost_button(ui, app.t("Clear A-B", "清除 A-B"), Some(Icon::Close), op)
+        let play_size = 54.0;
+        let skip_size = 38.0;
+        let edge_size = 34.0;
+        let spacing = ui.spacing().item_spacing.x;
+        let group = edge_size * 2.0 + skip_size * 2.0 + play_size + spacing * 4.0;
+        ui.allocate_ui_with_layout(
+            Vec2::new(width, play_size),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                ui.add_space(((ui.available_width() - group) / 2.0).max(0.0));
+                if icons::icon_button(
+                    ui,
+                    Icon::Shuffle,
+                    edge_size,
+                    if app.shuffle {
+                        app.palette.accent
+                    } else {
+                        with_alpha(ink, 150)
+                    },
+                    with_alpha(ink, 18),
+                    app.t("Shuffle", "随机"),
+                )
                 .clicked()
-        {
-            *clear_ab = true;
-        }
-        let stop_label = if app.stop_after_current {
-            format!("{} ✓", app.t("Stop after this song", "本曲结束后停止"))
-        } else {
-            app.t("Stop after this song", "本曲结束后停止").to_owned()
-        };
-        if widgets::ghost_button(ui, &stop_label, Some(Icon::Pause), op)
-            .on_hover_text(app.t(
-                "Pause when the current track ends instead of playing the next one.",
-                "当前歌曲播完后暂停，不播放下一首。",
-            ))
-            .clicked()
-        {
-            *toggle_stop_after = true;
-        }
-        if widgets::ghost_button(ui, app.t("Equalizer", "均衡器"), Some(Icon::Gauge), op).clicked()
-        {
-            *open_eq = true;
-        }
-        if widgets::ghost_button(ui, app.t("Sleep timer", "睡眠定时"), Some(Icon::Clock), op)
-            .clicked()
-        {
-            *open_sleep = true;
-        }
-        let desktop_label = if app.state.settings.desktop_lyrics {
-            app.t("Desktop lyrics ✓", "桌面歌词 ✓")
-        } else {
-            app.t("Desktop lyrics", "桌面歌词")
-        };
-        if widgets::ghost_button(ui, desktop_label, Some(Icon::DesktopLyrics), op)
-            .on_hover_text(app.t(
-                "Show or hide desktop lyrics. Size, opacity and lock are in Settings.",
-                "显示或隐藏桌面歌词；字号、透明度和锁定在设置中调整。",
-            ))
-            .clicked()
-        {
-            *toggle_desktop = true;
-        }
-        if widgets::ghost_button(ui, app.t("Tags", "标签"), Some(Icon::Tag), op).clicked() {
-            *open_tags = true;
-        }
-        if widgets::ghost_button(
-            ui,
-            &format!(
-                "{} {:.2}×",
-                app.t("Speed", "速度"),
-                app.state.settings.playback_speed
-            ),
-            Some(Icon::Gauge),
-            op,
-        )
-        .clicked()
-        {
-            *open_speed = true;
-        }
-        ui.label(
-            RichText::new(format!("{} · {}", app.t("Queue", "队列"), queue_total))
-                .size(10.0)
-                .color(ink_muted),
+                {
+                    *toggle_shuffle = true;
+                }
+                if icons::icon_button(
+                    ui,
+                    Icon::Prev,
+                    skip_size,
+                    ink,
+                    with_alpha(ink, 18),
+                    app.t("Previous", "上一首"),
+                )
+                .clicked()
+                {
+                    *prev = true;
+                }
+                if widgets::play_button(ui, play_size, app.playing, &app.palette).clicked() {
+                    *toggle_play = true;
+                }
+                if icons::icon_button(
+                    ui,
+                    Icon::Next,
+                    skip_size,
+                    ink,
+                    with_alpha(ink, 18),
+                    app.t("Next", "下一首"),
+                )
+                .clicked()
+                {
+                    *next = true;
+                }
+                let repeat_icon = if app.repeat == RepeatMode::One {
+                    Icon::RepeatOne
+                } else {
+                    Icon::Repeat
+                };
+                if icons::icon_button(
+                    ui,
+                    repeat_icon,
+                    edge_size,
+                    if app.repeat != RepeatMode::Off {
+                        app.palette.accent
+                    } else {
+                        with_alpha(ink, 150)
+                    },
+                    with_alpha(ink, 18),
+                    app.t("Repeat", "循环"),
+                )
+                .clicked()
+                {
+                    *cycle_repeat = true;
+                }
+            },
         );
+        ui.add_space(6.0);
+
+        ui.horizontal_wrapped(|ui| {
+            let ab_label = match app.ab_loop {
+                Some(AbLoop { a, b: Some(b) }) => {
+                    format!("A-B {} – {}", format_duration(a), format_duration(b))
+                }
+                Some(AbLoop { a, b: None }) => format!(
+                    "{} {} · {}",
+                    app.t("A", "A"),
+                    format_duration(a),
+                    app.t("set B", "设置 B")
+                ),
+                None => app.t("A-B loop", "A-B 循环").to_owned(),
+            };
+            if widgets::ghost_button(ui, &ab_label, Some(Icon::Repeat), op)
+                .on_hover_text(app.t(
+                    "Tap once for A, again for B, once more to clear.",
+                    "按一次设 A，再按设 B，再按关闭。",
+                ))
+                .clicked()
+            {
+                *toggle_ab = true;
+            }
+            if app.ab_loop.is_some()
+                && widgets::ghost_button(ui, app.t("Clear A-B", "清除 A-B"), Some(Icon::Close), op)
+                    .clicked()
+            {
+                *clear_ab = true;
+            }
+            let stop_label = if app.stop_after_current {
+                format!("{} ✓", app.t("Stop after this song", "本曲结束后停止"))
+            } else {
+                app.t("Stop after this song", "本曲结束后停止").to_owned()
+            };
+            if widgets::ghost_button(ui, &stop_label, Some(Icon::Pause), op)
+                .on_hover_text(app.t(
+                    "Pause when the current track ends instead of playing the next one.",
+                    "当前歌曲播完后暂停，不播放下一首。",
+                ))
+                .clicked()
+            {
+                *toggle_stop_after = true;
+            }
+            if widgets::ghost_button(ui, app.t("Equalizer", "均衡器"), Some(Icon::Gauge), op)
+                .clicked()
+            {
+                *open_eq = true;
+            }
+            if widgets::ghost_button(ui, app.t("Sleep timer", "睡眠定时"), Some(Icon::Clock), op)
+                .clicked()
+            {
+                *open_sleep = true;
+            }
+            let desktop_label = if app.state.settings.desktop_lyrics {
+                app.t("Desktop lyrics ✓", "桌面歌词 ✓")
+            } else {
+                app.t("Desktop lyrics", "桌面歌词")
+            };
+            if widgets::ghost_button(ui, desktop_label, Some(Icon::DesktopLyrics), op)
+                .on_hover_text(app.t(
+                    "Show or hide desktop lyrics. Size, opacity and lock are in Settings.",
+                    "显示或隐藏桌面歌词；字号、透明度和锁定在设置中调整。",
+                ))
+                .clicked()
+            {
+                *toggle_desktop = true;
+            }
+            if widgets::ghost_button(ui, app.t("Tags", "标签"), Some(Icon::Tag), op).clicked() {
+                *open_tags = true;
+            }
+            if widgets::ghost_button(
+                ui,
+                &format!(
+                    "{} {:.2}×",
+                    app.t("Speed", "速度"),
+                    app.state.settings.playback_speed
+                ),
+                Some(Icon::Gauge),
+                op,
+            )
+            .clicked()
+            {
+                *open_speed = true;
+            }
+            ui.label(
+                RichText::new(format!("{} · {}", app.t("Queue", "队列"), queue_total))
+                    .size(10.0)
+                    .color(ink_muted),
+            );
+        });
     });
 }
 

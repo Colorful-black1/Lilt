@@ -8,11 +8,18 @@ right, and one transport bar along the bottom.
 
 - The right pane uses the full body height (about 527 px at 1180×780), so roughly ten lyric
   lines are visible at once instead of two.
+- The lyric sheet and the transport controls have **no card fill or border**. They sit
+  directly on the cover-tinted page background, so the accent and text colours follow the
+  rest of the theme.
+- A **full-window progress line** is the divider between the lyrics and the bottom
+  controls. The played portion uses the accent colour, the rest a faint neutral line; the
+  time labels and buttons sit below it. The lyric scrollbar is hidden.
 - Lyric lines are centred horizontally. The active line is centred vertically in the pane
   with `scroll_to_rect(..., Align::Center)` whenever the highlighted line changes, so the
   sheet follows playback.
 - Played lines use the configured desktop-lyric played colour, upcoming lines use the
-  unplayed colour, and the active line is larger. Clicking a timed line seeks to it.
+  unplayed colour, and the active line is larger with a short accent underline. Clicking a
+  timed line seeks to it.
 - The pane header has **Lyrics / Details** tabs. Details keeps Up next, file information
   and **Show in folder**.
 - The bottom bar contains the seek bar, the five transport buttons and the A-B loop,
@@ -27,7 +34,7 @@ right, and one transport bar along the bottom.
 |---|---|
 | `00-before-1180x780.png` | Old layout: 180 px lyric card under the controls, two visible lines |
 | `01-after-1180x780.png` | New two-column page at the same size |
-| `02-after-1180x780-seek80.png` | At 1:33 the current line is highlighted near the middle; played lines use the played colour |
+| `02-after-1180x780-seek80.png` | At 1:33 the current line is underlined near the middle; played lines use the played colour; the full-width progress line separates the controls |
 | `03-after-900x600.png` | 900×600 keeps the sheet readable and the bottom chips on one row |
 | `04-after-720x540.png` | Minimum window: chips wrap to two rows, lyrics remain centred and unclipped |
 | `05-details-tab.png` | Details tab with Up next and the file card |
@@ -47,6 +54,6 @@ in `base/app/src/ui/now_playing.rs`; `dialogs.rs` delegates to it so the existin
 and action plumbing stays unchanged.
 
 ```text
-dist/Lilt-0.1.0-win64/Lilt.exe        11,897,856 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,464,749 bytes
+dist/Lilt-0.1.0-win64/Lilt.exe        11,904,000 bytes  (PE subsystem 2)
+dist/Lilt-0.1.0-win64-portable.zip    18,465,449 bytes
 ```
