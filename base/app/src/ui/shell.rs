@@ -71,7 +71,7 @@ pub fn render(app: &mut LiltApp, ctx: &egui::Context) {
             );
         });
 
-    if app.queue_drawer {
+    if app.queue_drawer && !app.now_playing {
         egui::SidePanel::right("queue_drawer")
             .exact_width(310.0)
             .resizable(false)
@@ -1027,7 +1027,7 @@ fn UIHeart(ui: &mut Ui, palette: &Palette, size: f32) {
     let _ = size;
 }
 
-fn queue_drawer(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
+pub(crate) fn queue_drawer(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
     ui.horizontal(|ui| {
         ui.label(
             RichText::new(app.t("Play queue", "播放队列"))

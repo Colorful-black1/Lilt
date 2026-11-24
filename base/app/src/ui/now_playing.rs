@@ -296,6 +296,37 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
             );
         });
 
+    if app.queue_drawer {
+        egui::Area::new(egui::Id::new("now_playing_queue_drawer"))
+            .fixed_pos(screen.min)
+            .order(egui::Order::Tooltip)
+            .show(ctx, |ui| {
+                ui.set_min_size(screen.size());
+                let scrim = ui.allocate_rect(ui.max_rect(), Sense::click());
+                ui.painter()
+                    .rect_filled(scrim.rect, 0.0, Color32::from_black_alpha(80));
+                let panel_w = (screen.width() * 0.38).clamp(280.0, 360.0);
+                let panel = Rect::from_min_max(
+                    egui::pos2(screen.right() - panel_w - 16.0, screen.top() + 16.0),
+                    egui::pos2(screen.right() - 16.0, screen.bottom() - 16.0),
+                );
+                ui.painter().rect(
+                    panel,
+                    16.0,
+                    mix(cp.deep, Color32::BLACK, 0.86),
+                    Stroke::new(1.0, with_alpha(ink, 30)),
+                    egui::StrokeKind::Inside,
+                );
+                let inner = panel.shrink2(Vec2::new(16.0, 14.0));
+                child_ui(ui, inner, Layout::top_down(Align::Min), |ui| {
+                    crate::ui::shell::queue_drawer(app, ui, &op);
+                });
+                if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
+                    app.queue_drawer = false;
+                }
+            });
+    }
+
     if close {
         app.now_playing = false;
     }
@@ -326,8 +357,7 @@ pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
         }
     }
     if open_queue {
-        app.now_playing = false;
-        app.queue_drawer = true;
+        app.queue_drawer = !app.queue_drawer;
     }
     if let Some(key) = &lyrics_song_key {
         if lyrics_offset_ms != app.lyrics_offset_for(key) {
@@ -489,17 +519,26 @@ fn left_column(
                 *toggle_fav = true;
             }
         }
+        let queue_tooltip = if app.queue_drawer {
+            app.t("Close queue", "关闭队列").to_owned()
+        } else {
+            format!(
+                "{} · {}",
+                app.t("Queue", "队列"),
+                app.active_queue().map(|q| q.songs.len()).unwrap_or(0)
+            )
+        };
         if icons::icon_button(
             ui,
             Icon::Queue,
             30.0,
-            with_alpha(ink, 165),
+            if app.queue_drawer {
+                palette.accent
+            } else {
+                with_alpha(ink, 165)
+            },
             with_alpha(ink, 18),
-            &format!(
-                "{} · {}",
-                app.t("Queue", "队列"),
-                app.active_queue().map(|q| q.songs.len()).unwrap_or(0)
-            ),
+            &queue_tooltip,
         )
         .clicked()
         {

@@ -116,7 +116,8 @@ Set `LILT_DATA_DIR` to use a different data folder.
   windows expand the content instead of leaving side bars, and the left cover group is
   vertically balanced. The current line follows playback, is kept in the middle, and has a
   short accent underline. Clicking any timed line seeks to it. The **Details** tab keeps Up
-  next and the file card.
+  next and the file card. The **Queue** button opens the play queue as a right-side drawer
+  over the player, with X/Escape to close; the list page uses the same drawer.
 - Up to 20 named queues with unique names, no duplicates, remembered positions, loading
   from a playlist, M3U export, and the target's Replace/Merge policy for same-name
   creation (Replace is the default).

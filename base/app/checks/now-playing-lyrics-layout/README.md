@@ -30,6 +30,9 @@ right, and one transport bar along the bottom.
   timed line seeks to it.
 - The pane header has **Lyrics / Details** tabs. Details keeps Up next, file information
   and **Show in folder**.
+- The **Queue** button opens the play queue as a right-side drawer **over the player**; the
+  player stays open and can be dismissed with the drawer's X or Escape. The list page uses
+  the same drawer, so switching between the two pages no longer loses the player.
 - The bottom row places the five transport buttons exactly in the centre. The A-B loop,
   stop-after, equalizer, sleep timer, desktop lyrics, tags and speed shortcuts sit at the
   outer edges; below 1180 px they become compact icon buttons so the centre never shifts.
@@ -48,6 +51,7 @@ right, and one transport bar along the bottom.
 | `05-details-tab.png` | Details tab with Up next and the file card |
 | `06-compact-1045x650.png` | Medium window uses short but complete labels; transport stays centred and nothing is cut off |
 | `07-maximized-1900x1000.png` | Maximized layout expands, balances the left group, and keeps the fully visible transport centred |
+| `08-queue-drawer.png` | Queue opened as a right-side drawer over the player; the player is still visible behind the scrim |
 
 The `02` capture uses `LILT_START_PAGE=now`, `LILT_LYRICS=1`, `LILT_AUTOPLAY=1` and
 `LILT_SEEK=80` against a copied test state, then PrintWindow at 1180×780.
@@ -64,6 +68,6 @@ in `base/app/src/ui/now_playing.rs`; `dialogs.rs` delegates to it so the existin
 and action plumbing stays unchanged.
 
 ```text
-dist/Lilt-0.1.0-win64/Lilt.exe        11,960,320 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,495,991 bytes
+dist/Lilt-0.1.0-win64/Lilt.exe        11,918,848 bytes  (PE subsystem 2)
+dist/Lilt-0.1.0-win64-portable.zip    18,472,214 bytes
 ```
