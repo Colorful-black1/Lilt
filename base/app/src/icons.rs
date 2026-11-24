@@ -569,17 +569,37 @@ pub fn icon_button(
     hover: Color32,
     tooltip: &str,
 ) -> egui::Response {
+    icon_button_scaled(ui, icon, size, color, hover, tooltip, 1.0)
+}
+
+/// Same as [`icon_button`], but the hover inset, corner radius and icon stroke
+/// scale with the button so desktop-lyrics controls zoom together with the
+/// card.
+pub fn icon_button_scaled(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    size: f32,
+    color: Color32,
+    hover: Color32,
+    tooltip: &str,
+    scale: f32,
+) -> egui::Response {
+    let scale = scale.max(0.01);
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), egui::Sense::click());
     let active = response.hovered() || response.has_focus();
     if active {
-        ui.painter().rect_filled(rect.shrink(1.0), 7.0, hover);
+        ui.painter().rect_filled(
+            rect.shrink((1.0 * scale).min(size * 0.1)),
+            7.0 * scale,
+            hover,
+        );
     }
     paint(
         ui.painter(),
-        Rect::from_center_size(rect.center(), Vec2::splat(size * 0.52)),
+        Rect::from_center_size(rect.center(), Vec2::splat((size * 0.52).max(0.5))),
         icon,
         color,
-        1.6,
+        (1.6 * scale).max(0.3),
     );
     if !tooltip.is_empty() {
         response.clone().on_hover_text(tooltip)

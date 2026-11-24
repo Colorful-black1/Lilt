@@ -19,16 +19,22 @@ raw window edge is only about two pixels wide and is almost impossible to hit.
 - `lyrics_window_proc` handles `WM_NCHITTEST` while the overlay is unlocked.
 - `lyrics_resize_hit` reads the screen coordinates from `lparam`, gets the
   window rect and DPI, and calls the pure `resize_hit_code` helper.
-- The border begins at the rounded region edge and extends eight points into
-  the card: `6 + 8` points horizontally and `5 + 8` points vertically, scaled by
-  the monitor DPI. The visible card edge therefore shows the standard resize
-  cursor on every side and in every corner.
+- The border begins at the rounded region edge and extends eight design points
+  into the card: `6 + 8` points horizontally and `5 + 8` points vertically.
+  Both the region margin and the band scale with the monitor DPI and the current
+  lyric zoom, so the visible card edge shows the standard resize cursor at every
+  window size. A small physical floor keeps the band grabbable when the card is
+  tiny.
 - The returned codes are the normal `HTLEFT`, `HTRIGHT`, `HTTOP`, `HTBOTTOM`
   and corner codes, so Windows handles the actual sizing drag and loads
   `IDC_SIZEWE`, `IDC_SIZENS` or `IDC_SIZENWSE` without custom cursor painting.
 - Locked lyrics still return `HTTRANSPARENT`, so click-through is unchanged.
-- The region margin constants are shared with `apply_rounded_region`, so moving
-  the card edge later cannot silently break the resize hit test.
+- The region margin constants are shared with `apply_rounded_region`, and the
+  rounded region now scales together with the card, so the visible edge and the
+  hit test stay aligned at every size.
+- `WM_GETMINMAXINFO` removes the old 460×160 tracking limit (minimum 1×1), so
+  the same resize border can drag the window down to the tiny sizes shown in
+  `../desktop-lyrics-proportional-zoom/04-unlocked-200x60-tiny.png`.
 
 A regression test checks all eight border directions, the centre and points
 outside the window.
@@ -68,15 +74,16 @@ cargo test
 ### Hover target
 
 The cursor appears when the pointer is inside the **visible card edge**, within
-about 8 points of it. The outer transparent halo (6 points horizontally, 5
-vertically) belongs to the rounded window region and passes clicks through to
-the desktop, so it intentionally has no resize cursor.
+about 8 design points of it (scaled with the card, with a small floor at tiny
+sizes). The outer transparent halo (6 points horizontally, 5 vertically at
+baseline) belongs to the rounded window region and passes clicks through to the
+desktop, so it intentionally has no resize cursor.
 
 ## Packaged artifacts
 
 ```text
-dist/Lilt-0.1.0-win64/Lilt.exe        11,924,992 bytes  (PE subsystem 2)
-dist/Lilt-0.1.0-win64-portable.zip    18,471,090 bytes
+dist/Lilt-0.1.0-win64/Lilt.exe        11,929,088 bytes  (PE subsystem 2)
+dist/Lilt-0.1.0-win64-portable.zip    18,472,679 bytes
 ```
 
 ## Limitations

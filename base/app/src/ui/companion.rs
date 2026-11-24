@@ -4,6 +4,7 @@
 //! small snapshot; the companion windows only render that snapshot and enqueue
 //! actions, which keeps every playback change on the main UI thread.
 
+use crate::desktop::LYRICS_DESIGN_HEIGHT;
 use crate::icons::{self, Icon};
 use crate::library;
 use crate::model::{format_duration, Language, RepeatMode};
@@ -30,15 +31,8 @@ const LYRICS_TITLE: &str = "Lilt Lyrics";
 const LYRICS_UNLOCK_TITLE: &str = "Lilt Lyrics Unlock";
 const MINI_TITLE: &str = "Lilt Mini Player";
 
-/// The lyrics card is laid out at 900×190. Its height drives the lyric scale,
-/// so dragging the unlocked window taller or shorter zooms the text
-/// proportionally instead of only adding empty card space. Width does not set
-/// the scale because `fit_font_size` already shrinks a long line to fit.
-const LYRICS_DESIGN_HEIGHT: f32 = 190.0;
-const LYRICS_MIN_WIDTH: f32 = 460.0;
-const LYRICS_MIN_HEIGHT: f32 = 160.0;
-const LYRICS_MAX_WIDTH: f32 = 3600.0;
-const LYRICS_MAX_HEIGHT: f32 = 760.0;
+const LYRICS_TOOLBAR_BUTTON: f32 = 44.0;
+const LYRICS_TOOLBAR_BUTTON_COMPACT: f32 = 38.0;
 
 #[derive(Clone)]
 pub struct CompanionSnapshot {
@@ -191,7 +185,6 @@ impl CompanionWindows {
                 .with_always_on_top()
                 .with_taskbar(false)
                 .with_resizable(true)
-                .with_min_inner_size([LYRICS_MIN_WIDTH, LYRICS_MIN_HEIGHT])
                 .with_close_button(false)
                 .with_minimize_button(false)
                 .with_maximize_button(false)
@@ -217,9 +210,12 @@ impl CompanionWindows {
             ctx.request_repaint_of(viewport_id);
 
             if unlock_puck_visible(lyrics_visible, locked) {
+                let puck_scale = lyrics_scale(size.y);
+                let puck_width = (UNLOCK_PUCK_WIDTH * puck_scale).max(1.0);
+                let puck_height = (UNLOCK_PUCK_HEIGHT * puck_scale).max(1.0);
                 let puck_position = egui::pos2(
-                    position.x + (size.x - UNLOCK_PUCK_WIDTH) * 0.5,
-                    position.y + 4.0,
+                    position.x + (size.x - puck_width) * 0.5,
+                    position.y + 4.0 * puck_scale,
                 );
                 let builder = egui::ViewportBuilder::default()
                     .with_title(LYRICS_UNLOCK_TITLE)
@@ -231,7 +227,7 @@ impl CompanionWindows {
                     .with_minimize_button(false)
                     .with_maximize_button(false)
                     .with_position(puck_position)
-                    .with_inner_size([UNLOCK_PUCK_WIDTH, UNLOCK_PUCK_HEIGHT]);
+                    .with_inner_size([puck_width, puck_height]);
                 let snapshot = self.snapshot.clone();
                 let actions = self.actions.clone();
                 let main_window = self.main_window.clone();
@@ -308,23 +304,22 @@ fn unlock_puck_visible(lyrics_visible: bool, locked: bool) -> bool {
 
 /// Proportional lyric zoom for the unlocked overlay. The configured size is
 /// the size at the 900×190 design height; every other height scales it by the
-/// same factor, including when the user scrolls over the window.
+/// same factor, including when the user scrolls over the window. There is no
+/// user-facing minimum or maximum.
 fn lyrics_scale(inner_height: f32) -> f32 {
-    (inner_height / LYRICS_DESIGN_HEIGHT).clamp(0.6, 4.0)
+    (inner_height / LYRICS_DESIGN_HEIGHT).max(0.01)
 }
 
-/// Scroll over the unlocked lyrics to zoom the window and text together.
-/// Positive `scroll_delta` (wheel up) is zoom in; both axes use one factor so
-/// the window keeps its current proportions.
+/// Scroll over the unlocked lyrics to zoom the window and all of its contents
+/// together. Positive `scroll_delta` (wheel up) is zoom in; both axes use one
+/// factor so the window keeps its current proportions. The one-pixel floor is
+/// only there because a zero-sized native window cannot exist.
 fn zoomed_lyrics_size(size: Vec2, scroll_delta: f32) -> Option<Vec2> {
     if !scroll_delta.is_finite() || scroll_delta.abs() < 0.5 {
         return None;
     }
     let factor = (scroll_delta * 0.0015).exp();
-    let next = Vec2::new(
-        (size.x * factor).clamp(LYRICS_MIN_WIDTH, LYRICS_MAX_WIDTH),
-        (size.y * factor).clamp(LYRICS_MIN_HEIGHT, LYRICS_MAX_HEIGHT),
-    );
+    let next = Vec2::new((size.x * factor).max(1.0), (size.y * factor).max(1.0));
     (next != size).then_some(next)
 }
 
@@ -414,23 +409,27 @@ fn draw_cover(ui: &mut Ui, snapshot: &CompanionSnapshot, size: f32, palette: &Pa
 /// itself carries the alpha (`LWA_ALPHA`), so an opaque fill here becomes
 /// translucent on screen while the text and toolbar stay readable. Locked
 /// lyrics skip this card entirely and use the colour-key transparency.
-fn draw_lyrics_card(ui: &Ui, rect: Rect, palette: &Palette) {
-    let radius = 18.0;
+fn draw_lyrics_card(ui: &Ui, rect: Rect, palette: &Palette, scale: f32) {
+    let radius = (18.0 * scale)
+        .min(rect.width() * 0.5)
+        .min(rect.height() * 0.5);
+    let width = (1.0 * scale).max(0.5);
     ui.painter()
         .rect_filled(rect, radius, Color32::from_rgb(13, 11, 10));
     ui.painter().rect_stroke(
         rect,
         radius,
-        Stroke::new(1.0, with_alpha(palette.accent, 70)),
+        Stroke::new(width, with_alpha(palette.accent, 70)),
         StrokeKind::Inside,
     );
+    let inset = (18.0 * scale).min(rect.width() * 0.45);
     let highlight = Rect::from_min_max(
-        rect.left_top() + Vec2::new(18.0, 1.0),
-        egui::pos2(rect.right() - 18.0, rect.top() + 2.0),
+        rect.left_top() + Vec2::new(inset, 1.0 * scale),
+        egui::pos2(rect.right() - inset, rect.top() + 2.0 * scale),
     );
     ui.painter().line_segment(
         [highlight.left_center(), highlight.right_center()],
-        Stroke::new(1.0, with_alpha(Color32::WHITE, 14)),
+        Stroke::new(width, with_alpha(Color32::WHITE, 14)),
     );
 }
 
@@ -611,40 +610,44 @@ fn lyrics_toolbar(
     main_window: &Arc<AtomicIsize>,
     palette: Palette,
     toolbar_button: f32,
+    unit: f32,
 ) {
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        if icons::icon_button(
+        ui.spacing_mut().item_spacing.x = 2.0 * unit;
+        if icons::icon_button_scaled(
             ui,
             Icon::Close,
             toolbar_button,
             with_alpha(Color32::WHITE, 210),
             with_alpha(Color32::WHITE, 34),
             snapshot.t("Close desktop lyrics", "关闭桌面歌词"),
+            unit,
         )
         .clicked()
         {
             push_action(actions, main_window, CompanionAction::CloseLyrics);
         }
-        if icons::icon_button(
+        if icons::icon_button_scaled(
             ui,
             Icon::Lock,
             toolbar_button,
             with_alpha(Color32::WHITE, 210),
             with_alpha(Color32::WHITE, 34),
             snapshot.t("Lock and click through", "锁定并鼠标穿透"),
+            unit,
         )
         .clicked()
         {
             push_action(actions, main_window, CompanionAction::ToggleLyricsLock);
         }
-        if icons::icon_button(
+        if icons::icon_button_scaled(
             ui,
             Icon::Expand,
             toolbar_button,
             with_alpha(Color32::WHITE, 210),
             with_alpha(Color32::WHITE, 34),
             snapshot.t("Open player", "打开播放页"),
+            unit,
         )
         .clicked()
         {
@@ -655,13 +658,14 @@ fn lyrics_toolbar(
         } else {
             with_alpha(Color32::WHITE, 70)
         };
-        if icons::icon_button(
+        if icons::icon_button_scaled(
             ui,
             Icon::Next,
             toolbar_button,
             control_color,
             with_alpha(Color32::WHITE, 34),
             snapshot.t("Next", "下一首"),
+            unit,
         )
         .clicked()
             && snapshot.has_song
@@ -678,26 +682,28 @@ fn lyrics_toolbar(
         } else {
             snapshot.t("Play", "播放")
         };
-        if icons::icon_button(
+        if icons::icon_button_scaled(
             ui,
             play_icon,
             toolbar_button,
             control_color,
             with_alpha(Color32::WHITE, 34),
             play_label,
+            unit,
         )
         .clicked()
             && snapshot.has_song
         {
             push_action(actions, main_window, CompanionAction::TogglePlay);
         }
-        if icons::icon_button(
+        if icons::icon_button_scaled(
             ui,
             Icon::Prev,
             toolbar_button,
             control_color,
             with_alpha(Color32::WHITE, 34),
             snapshot.t("Previous", "上一首"),
+            unit,
         )
         .clicked()
             && snapshot.has_song
@@ -716,13 +722,14 @@ fn lyrics_toolbar(
         } else {
             snapshot.t("Add to favorites", "添加到我喜欢")
         };
-        if icons::icon_button(
+        if icons::icon_button_scaled(
             ui,
             Icon::Heart,
             toolbar_button,
             heart_color,
             with_alpha(Color32::WHITE, 34),
             heart_label,
+            unit,
         )
         .clicked()
             && snapshot.has_song
@@ -743,10 +750,19 @@ fn render_lyrics(
         return;
     };
     theme::apply_style(ctx, snapshot.palette);
+    let window_scale = lyrics_scale(ctx.input(|input| {
+        input
+            .viewport()
+            .inner_rect
+            .or(input.viewport().outer_rect)
+            .map(|rect| rect.height())
+            .unwrap_or(LYRICS_DESIGN_HEIGHT)
+    }));
     crate::desktop::configure_companion_window(
         LYRICS_TITLE,
         crate::desktop::CompanionWindowKind::Lyrics,
         snapshot.lyrics_locked,
+        window_scale,
     );
     handle_close(ctx, actions, main_window, CompanionAction::CloseLyrics);
     remember_viewport(ctx, memory, true);
@@ -770,28 +786,43 @@ fn render_lyrics(
                 }
             }
             let active_size =
-                (snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0) * scale).clamp(12.0, 224.0);
-            let card = ui.max_rect().shrink2(Vec2::new(6.0, 5.0));
+                (snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0) * scale).max(1.0);
+            let card_inset = Vec2::new(
+                (6.0 * scale).min(viewport.width() * 0.25),
+                (5.0 * scale).min(viewport.height() * 0.25),
+            );
+            let card = viewport.shrink2(card_inset);
             if lyrics_chrome_visible(locked) {
-                draw_lyrics_card(ui, card, &palette);
+                draw_lyrics_card(ui, card, &palette, scale);
             }
-            let inner = card.shrink2(Vec2::new(20.0, 8.0));
+            let inner = card.shrink2(Vec2::new(
+                (20.0 * scale).min(card.width() * 0.25),
+                (8.0 * scale).min(card.height() * 0.2),
+            ));
             let mut body = inner;
 
             if lyrics_chrome_visible(locked) {
-                let toolbar_button = if inner.width() >= 560.0 { 44.0 } else { 38.0 };
-                let header_height = toolbar_button + 6.0;
-                let pill_width = 7.0 * toolbar_button + 6.0 * 2.0 + 20.0;
+                let base_button = if inner.width() < 560.0 * scale {
+                    LYRICS_TOOLBAR_BUTTON_COMPACT
+                } else {
+                    LYRICS_TOOLBAR_BUTTON
+                };
+                let toolbar_padding = 32.0 * scale;
+                let max_button = ((inner.width() - toolbar_padding).max(1.0) / 7.0).max(1.0);
+                let toolbar_button = (base_button * scale).min(max_button).max(1.0);
+                let unit = (toolbar_button / base_button).max(0.01);
+                let header_height = toolbar_button + 6.0 * unit;
+                let pill_width = 7.0 * toolbar_button + 6.0 * 2.0 * unit + 20.0 * unit;
                 let header =
                     Rect::from_min_size(inner.min, Vec2::new(inner.width(), header_height));
                 let pill = Rect::from_min_size(
-                    egui::pos2(header.right() - pill_width, header.top() + 1.0),
-                    Vec2::new(pill_width, toolbar_button + 4.0),
+                    egui::pos2(header.right() - pill_width, header.top() + unit),
+                    Vec2::new(pill_width, toolbar_button + 4.0 * unit),
                 );
                 let drag_rect = Rect::from_min_max(
                     header.min,
                     egui::pos2(
-                        (pill.left() - 10.0).max(header.left() + 30.0),
+                        (pill.left() - 10.0 * unit).max(header.left() + 30.0 * unit),
                         header.bottom(),
                     ),
                 );
@@ -799,12 +830,12 @@ fn render_lyrics(
                 icons::paint(
                     ui.painter(),
                     Rect::from_center_size(
-                        egui::pos2(drag_rect.left() + 10.0, drag_rect.center().y),
-                        Vec2::splat(22.0),
+                        egui::pos2(drag_rect.left() + 10.0 * unit, drag_rect.center().y),
+                        Vec2::splat(22.0 * unit),
                     ),
                     Icon::Grip,
                     with_alpha(ink, 140),
-                    1.2,
+                    (1.2 * unit).max(0.3),
                 );
                 if drag.drag_started() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
@@ -812,24 +843,36 @@ fn render_lyrics(
                 if drag.double_clicked() {
                     push_action(actions, main_window, CompanionAction::OpenNowPlaying);
                 }
+                let pill_radius = (18.0 * unit).min(pill.height() * 0.5);
                 ui.painter()
-                    .rect_filled(pill, 18.0, Color32::from_rgb(15, 13, 11));
+                    .rect_filled(pill, pill_radius, Color32::from_rgb(15, 13, 11));
                 ui.painter().rect_stroke(
                     pill,
-                    18.0,
-                    Stroke::new(1.0, with_alpha(palette.accent, 90)),
+                    pill_radius,
+                    Stroke::new((1.0 * unit).max(0.5), with_alpha(palette.accent, 90)),
                     StrokeKind::Inside,
                 );
-                ui.allocate_ui_at_rect(pill.shrink2(Vec2::new(10.0, 2.0)), |ui| {
-                    lyrics_toolbar(ui, &snapshot, actions, main_window, palette, toolbar_button);
+                ui.allocate_ui_at_rect(pill.shrink2(Vec2::new(10.0 * unit, 2.0 * unit)), |ui| {
+                    lyrics_toolbar(
+                        ui,
+                        &snapshot,
+                        actions,
+                        main_window,
+                        palette,
+                        toolbar_button,
+                        unit,
+                    );
                 });
-                body.min.y = header.bottom() + 8.0;
+                body.min.y = header.bottom() + 8.0 * unit;
             } else {
                 // The separate unlock puck sits in this strip; keep the lyric
                 // lines below it.
-                body.min.y = inner.top() + 38.0;
+                body.min.y = inner.top() + UNLOCK_PUCK_HEIGHT * scale;
             }
-            body.max.y = inner.bottom() - 2.0;
+            body.max.y = inner.bottom() - 2.0 * scale;
+            if body.bottom() <= body.top() {
+                return;
+            }
 
             // The whole lyric area can be dragged, like KuGou's overlay. The
             // toolbar lives in the header above, so this never steals its
@@ -1012,11 +1055,15 @@ fn render_lyrics_unlock(
         LYRICS_UNLOCK_TITLE,
         crate::desktop::CompanionWindowKind::Unlock,
         false,
+        1.0,
     );
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
         .show(ctx, |ui| {
-            let rect = ui.max_rect().shrink(1.0);
+            let scale = (ui.max_rect().height() / UNLOCK_PUCK_HEIGHT).max(0.01);
+            let rect = ui
+                .max_rect()
+                .shrink((1.0 * scale).min(ui.max_rect().width() * 0.1));
             let response = ui
                 .allocate_rect(rect, Sense::click())
                 .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -1025,13 +1072,13 @@ fn render_lyrics_unlock(
             } else {
                 Color32::from_rgba_unmultiplied(12, 10, 9, 222)
             };
-            ui.painter()
-                .rect_filled(rect, UNLOCK_PUCK_HEIGHT * 0.5, background);
+            let radius = rect.height() * 0.5;
+            ui.painter().rect_filled(rect, radius, background);
             ui.painter().rect_stroke(
                 rect,
-                UNLOCK_PUCK_HEIGHT * 0.5,
+                radius,
                 Stroke::new(
-                    1.0,
+                    (1.0 * scale).max(0.5),
                     with_alpha(
                         snapshot.palette.accent,
                         if response.hovered() { 170 } else { 100 },
@@ -1041,11 +1088,13 @@ fn render_lyrics_unlock(
             );
             let label = snapshot.t("Unlock", "解锁");
             let color = with_alpha(Color32::WHITE, 232);
-            let galley =
-                ui.painter()
-                    .layout_no_wrap(label.to_owned(), FontId::proportional(12.5), color);
-            let icon_size = 18.0;
-            let gap = 7.0;
+            let galley = ui.painter().layout_no_wrap(
+                label.to_owned(),
+                FontId::proportional((12.5 * scale).max(1.0)),
+                color,
+            );
+            let icon_size = (18.0 * scale).max(1.0);
+            let gap = 7.0 * scale;
             let total = icon_size + gap + galley.size().x;
             let left = rect.center().x - total * 0.5;
             icons::paint(
@@ -1056,7 +1105,7 @@ fn render_lyrics_unlock(
                 ),
                 Icon::Unlock,
                 color,
-                1.6,
+                (1.6 * scale).max(0.3),
             );
             ui.painter().galley(
                 egui::pos2(
@@ -1087,6 +1136,7 @@ fn render_mini(
         MINI_TITLE,
         crate::desktop::CompanionWindowKind::Mini,
         false,
+        1.0,
     );
     handle_close(ctx, actions, main_window, CompanionAction::CloseMini);
     remember_viewport(ctx, memory, false);
@@ -1369,16 +1419,16 @@ mod tests {
     }
 
     #[test]
-    fn lyric_scale_follows_window_height_and_stays_bounded() {
+    fn lyric_scale_follows_window_height_without_caps() {
         assert!((lyrics_scale(190.0) - 1.0).abs() < 0.001);
         assert!((lyrics_scale(285.0) - 1.5).abs() < 0.001);
         assert!((lyrics_scale(160.0) - 160.0 / 190.0).abs() < 0.001);
-        assert!((lyrics_scale(10.0) - 0.6).abs() < 0.001);
-        assert!((lyrics_scale(5000.0) - 4.0).abs() < 0.001);
+        assert!((lyrics_scale(10.0) - 10.0 / 190.0).abs() < 0.001);
+        assert!((lyrics_scale(5000.0) - 5000.0 / 190.0).abs() < 0.001);
     }
 
     #[test]
-    fn scroll_zooms_both_axes_by_one_factor_and_clamps() {
+    fn scroll_zooms_both_axes_by_one_factor_without_caps() {
         let size = Vec2::new(900.0, 190.0);
         let zoomed = zoomed_lyrics_size(size, 100.0).expect("wheel up should zoom");
         assert!(zoomed.x > size.x && zoomed.y > size.y);
@@ -1388,15 +1438,16 @@ mod tests {
         assert!(smaller.x < size.x && smaller.y < size.y);
         assert!((smaller.x / smaller.y - size.x / size.y).abs() < 0.001);
 
+        let huge = zoomed_lyrics_size(Vec2::new(6000.0, 1200.0), 100.0)
+            .expect("large windows should keep growing");
+        assert!(huge.x > 6000.0 && huge.y > 1200.0);
+
         assert_eq!(zoomed_lyrics_size(size, 0.1), None);
         assert_eq!(
-            zoomed_lyrics_size(Vec2::new(LYRICS_MIN_WIDTH, LYRICS_MIN_HEIGHT), -1000.0),
-            None
+            zoomed_lyrics_size(Vec2::new(2.0, 2.0), -1000.0),
+            Some(Vec2::new(1.0, 1.0))
         );
-        assert_eq!(
-            zoomed_lyrics_size(Vec2::new(LYRICS_MAX_WIDTH, LYRICS_MAX_HEIGHT), 1000.0),
-            None
-        );
+        assert_eq!(zoomed_lyrics_size(Vec2::new(1.0, 1.0), -1000.0), None);
     }
 
     #[test]

@@ -179,10 +179,12 @@ Set `LILT_DATA_DIR` to use a different data folder.
   unlock. Settings has A−/A+ buttons beside the desktop lyric size slider, and Now Playing
   has a `词` quick button that only shows or hides the overlay. Unlocked, resize the window
   or scroll over it to zoom the lyrics proportionally: the size slider is the baseline at
-  the 900×190 design size, and both lyric lines scale from the window height while long
-  lines still shrink to fit. The visible card edge has an 8-point native resize band, so
-  the standard horizontal, vertical and diagonal cursors appear on hover. The default size
-  is 900×190 (minimum 460×160). `Ctrl+Alt+L` toggles the window.
+  the 900×190 design size, and the lyric lines, toolbar buttons and icons scale together
+  from the window height while long lines still shrink to fit. There is no fixed minimum
+  or maximum window size. The visible card edge has a native resize band (8 points at the
+  900×190 baseline, scaled with the card), so the standard horizontal, vertical and
+  diagonal cursors appear on hover. The default size is 900×190. `Ctrl+Alt+L` toggles the
+  window.
 - **Mini player.** A compact always-on-top window with cover art, title/artist/album,
   previous/play/next, shuffle/repeat, elapsed time and a seek bar. Its transport and seek
   actions go through the same playback engine and stay in sync with the main window. The

@@ -1,0 +1,16 @@
+Desktop lyrics: unbounded size check
+
+1. WM_GETMINMAXINFO after removing the 460x160 limit:
+   min track = 1x1
+   max track = 100000x100000
+
+2. SetWindowPos 200x60 -> 200x60 (below the old 460x160 minimum)
+
+3. SetWindowPos 3000x633 -> 3000x633
+4.1 WM_MOUSEWHEEL +120 -> 3186x672
+4.2 WM_MOUSEWHEEL +120 -> 3382x713
+4.3 WM_MOUSEWHEEL +120 -> 3589x757
+4.4 WM_MOUSEWHEEL +120 -> 3808x804
+   The last step is above the old 3600x760 maximum; there is no upper clamp.
+
+5. Reset -> 900x190

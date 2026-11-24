@@ -27,6 +27,10 @@ pub enum CompanionWindowKind {
     Unlock,
 }
 
+/// Logical height of the desktop-lyrics design. The UI and the native rounded
+/// window region share this value so their corners and resize border stay aligned.
+pub const LYRICS_DESIGN_HEIGHT: f32 = 190.0;
+
 /// Metadata and timeline for the Windows system media flyout.
 #[derive(Clone, Debug, Default)]
 pub struct MediaInfo {
@@ -42,7 +46,7 @@ pub struct MediaInfo {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{CompanionWindowKind, DesktopAction, MediaInfo};
+    use super::{CompanionWindowKind, DesktopAction, MediaInfo, LYRICS_DESIGN_HEIGHT};
     use crate::icon;
     use crate::model::{Language, RepeatMode};
     use eframe::egui;
@@ -97,6 +101,21 @@ mod platform {
         top: i32,
         right: i32,
         bottom: i32,
+    }
+
+    #[repr(C)]
+    struct WinPoint {
+        x: i32,
+        y: i32,
+    }
+
+    #[repr(C)]
+    struct MinMaxInfo {
+        reserved: WinPoint,
+        max_size: WinPoint,
+        max_position: WinPoint,
+        min_track: WinPoint,
+        max_track: WinPoint,
     }
 
     static LYRICS_LAYER_HWND: AtomicIsize = AtomicIsize::new(0);
@@ -821,7 +840,12 @@ mod platform {
     /// Applies the desktop-lyric appearance: a semi-transparent rounded card
     /// while unlocked and a pure black colour key while locked. The mini
     /// player keeps its own translucent rounded window region.
-    pub fn configure_companion_window(title: &str, kind: CompanionWindowKind, click_through: bool) {
+    pub fn configure_companion_window(
+        title: &str,
+        kind: CompanionWindowKind,
+        click_through: bool,
+        scale: f32,
+    ) {
         let hwnd = match kind {
             CompanionWindowKind::Lyrics => find_window_by_title(title, &LYRICS_WINDOW),
             CompanionWindowKind::Mini => find_window_by_title(title, &MINI_WINDOW),
@@ -854,16 +878,21 @@ mod platform {
         }
         if lyrics {
             if !click_through {
-                apply_rounded_region(hwnd, &LYRICS_LAYER_HWND, &LYRICS_LAYER_SIZE);
+                apply_rounded_region(hwnd, &LYRICS_LAYER_HWND, &LYRICS_LAYER_SIZE, scale);
             }
             return;
         }
-        apply_rounded_region(hwnd, &MINI_LAYER_HWND, &MINI_LAYER_SIZE);
+        apply_rounded_region(hwnd, &MINI_LAYER_HWND, &MINI_LAYER_SIZE, scale);
     }
 
     /// Sets a rounded window region once per window size. `SetWindowRgn` takes
     /// ownership of the region, so it is not deleted here.
-    fn apply_rounded_region(hwnd: *mut c_void, last_hwnd: &AtomicIsize, last_size: &AtomicU64) {
+    fn apply_rounded_region(
+        hwnd: *mut c_void,
+        last_hwnd: &AtomicIsize,
+        last_size: &AtomicU64,
+        scale: f32,
+    ) {
         let mut rect = WinRect {
             left: 0,
             top: 0,
@@ -887,17 +916,18 @@ mod platform {
 
         unsafe {
             let dpi = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
-            let margin_x = (COMPANION_REGION_MARGIN_X * dpi).round() as i32;
-            let margin_y = (COMPANION_REGION_MARGIN_Y * dpi).round() as i32;
-            let radius = (18.0 * dpi).round() as i32;
-            let region = CreateRoundRectRgn(
-                margin_x,
-                margin_y,
-                width - margin_x + 1,
-                height - margin_y + 1,
-                radius * 2,
-                radius * 2,
-            );
+            let scale = scale.max(0.01);
+            let margin_x = ((COMPANION_REGION_MARGIN_X * dpi * scale).round().max(0.0) as i32)
+                .min((width / 4).max(0));
+            let margin_y = ((COMPANION_REGION_MARGIN_Y * dpi * scale).round().max(0.0) as i32)
+                .min((height / 4).max(0));
+            let radius = (18.0 * dpi * scale)
+                .round()
+                .min((width.min(height) / 2).max(1) as f32) as i32;
+            let right = (width - margin_x + 1).max(margin_x + 1);
+            let bottom = (height - margin_y + 1).max(margin_y + 1);
+            let region =
+                CreateRoundRectRgn(margin_x, margin_y, right, bottom, radius * 2, radius * 2);
             if !region.is_null() {
                 SetWindowRgn(hwnd, region, 1);
             }
@@ -928,6 +958,19 @@ mod platform {
         wparam: usize,
         lparam: isize,
     ) -> isize {
+        if message == WM_GETMINMAXINFO {
+            // Let the default procedure fill the other fields first; a
+            // MINMAXINFO left partly uninitialised can stop the native sizing
+            // loop from moving at all.
+            DefWindowProcW(hwnd, message, wparam, lparam);
+            let info = &mut *(lparam as *mut MinMaxInfo);
+            info.min_track = WinPoint { x: 1, y: 1 };
+            info.max_track = WinPoint {
+                x: 100_000,
+                y: 100_000,
+            };
+            return 0;
+        }
         if message == WM_NCHITTEST {
             if LYRICS_CLICK_THROUGH.load(Ordering::Relaxed) {
                 return HTTRANSPARENT;
@@ -962,15 +1005,24 @@ mod platform {
         let packed = lparam as i32;
         let x = (packed & 0xffff) as u16 as i16 as i32;
         let y = ((packed >> 16) & 0xffff) as u16 as i16 as i32;
+        let mut client = WinRect {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetClientRect(hwnd, &mut client) == 0 {
+            return None;
+        }
         let dpi = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
+        let height = (client.bottom - client.top).max(1) as f32 / dpi;
+        let scale = (height / LYRICS_DESIGN_HEIGHT).max(0.01);
         // The rounded window region already clips the outer 6/5-point margin,
-        // so the resize zone must extend past that margin to remain clickable.
-        let border_x = ((COMPANION_REGION_MARGIN_X + LYRICS_RESIZE_EDGE) * dpi)
-            .round()
-            .max(1.0) as i32;
-        let border_y = ((COMPANION_REGION_MARGIN_Y + LYRICS_RESIZE_EDGE) * dpi)
-            .round()
-            .max(1.0) as i32;
+        // so the resize zone extends past that margin. The band scales with
+        // the leaf, with a small physical floor so it stays grabbable.
+        let edge = (LYRICS_RESIZE_EDGE * dpi * scale).max(4.0 * dpi);
+        let border_x = ((COMPANION_REGION_MARGIN_X * dpi * scale) + edge).round() as i32;
+        let border_y = ((COMPANION_REGION_MARGIN_Y * dpi * scale) + edge).round() as i32;
         resize_hit_code(x, y, &rect, border_x, border_y)
     }
 
@@ -1023,6 +1075,7 @@ mod platform {
     }
 
     const WM_PAINT: u32 = 0x000F;
+    const WM_GETMINMAXINFO: u32 = 0x0024;
     const WM_NCHITTEST: u32 = 0x0084;
     const GWLP_WNDPROC: i32 = -4;
     const HTTRANSPARENT: isize = -1;
@@ -1275,6 +1328,7 @@ mod platform {
         _title: &str,
         _kind: CompanionWindowKind,
         _click_through: bool,
+        _scale: f32,
     ) {
     }
 }
@@ -1288,6 +1342,11 @@ pub fn wake_main_window(hwnd: isize) {
 
 /// Apply the native rounded shape and, for the lyric window, the click-through
 /// state used by the companion windows.
-pub fn configure_companion_window(title: &str, kind: CompanionWindowKind, click_through: bool) {
-    platform::configure_companion_window(title, kind, click_through);
+pub fn configure_companion_window(
+    title: &str,
+    kind: CompanionWindowKind,
+    click_through: bool,
+    scale: f32,
+) {
+    platform::configure_companion_window(title, kind, click_through, scale);
 }

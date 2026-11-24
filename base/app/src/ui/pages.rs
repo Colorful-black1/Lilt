@@ -2701,8 +2701,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Desktop lyrics", "桌面歌词"),
                     app.t(
-                        "A borderless always-on-top overlay: current line on the left, next line on the right. Unlocked, drag the window taller or shorter, or scroll over it, to scale the lyrics evenly; long lines still shrink to show in full.",
-                        "无边框置顶歌词浮窗：当前行靠左、下一行靠右。解锁后可拖大/拖小窗口或滚动滚轮等比例缩放歌词；长歌词仍会自动缩小以完整显示。",
+                        "A borderless always-on-top overlay: current line on the left, next line on the right. Unlocked, resize the window or scroll over it to scale the lyrics and controls together, with no fixed minimum or maximum; long lines still shrink to show in full.",
+                        "无边框置顶歌词浮窗：当前行靠左、下一行靠右。解锁后可拖大/拖小窗口或滚动滚轮，歌词和按钮会一起缩放，不设固定最小或最大尺寸；长歌词仍会自动缩小以完整显示。",
                     ),
                     |ui| {
                         if widgets::toggle_switch(ui, &mut desktop_lyrics, palette).clicked() {
@@ -2733,8 +2733,8 @@ fn settings_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, compact: boo
                     palette,
                     app.t("Desktop lyric size", "桌面歌词字号"),
                     app.t(
-                        "Size of the active line at 900×190; resizing or scrolling the unlocked window scales the lyrics, and long lines still shrink to fit.",
-                        "900×190 窗口下的当前行字号；缩放解锁窗口会等比放大或缩小歌词，长歌词仍会缩小以完整显示。",
+                        "Size of the active line at 900×190; resizing or scrolling the unlocked window scales the lyrics and buttons together, and long lines still shrink to fit.",
+                        "900×190 窗口下的当前行字号；缩放解锁窗口会让歌词和按钮一起放大或缩小，长歌词仍会缩小以完整显示。",
                     ),
                     |ui| {
                         ui.horizontal(|ui| {
