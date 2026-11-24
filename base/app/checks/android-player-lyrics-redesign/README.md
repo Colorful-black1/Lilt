@@ -54,5 +54,5 @@ The APK is built with `gradlew.bat :app:testDebugUnitTest :app:assembleDebug`; R
 migrations and user data are unchanged by this UI-only round.
 
 ```text
-base/app/Lilt-1.0-debug.apk    22,948,389 bytes
+base/app/Lilt-1.0-debug.apk    22,948,692 bytes
 ```

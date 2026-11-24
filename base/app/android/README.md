@@ -81,6 +81,9 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   the middle, above the title, instead of a card at the bottom. Tapping the lyric block
   opens an immersive full-screen sheet with centred, auto-scrolling lines, tap-to-seek,
   source label, offset controls, seek bar and transport; the pencil opens the editor.
+- **System-bar aware layout.** The home mini player and the player transport apply the
+  platform `navigationBars` inset, so their buttons sit above both gesture navigation and
+  the taller 3-button navigation bar. No fixed bar height is assumed.
 - **Online lyrics (optional).** When a track starts without lyrics, the playback service
   queries LRCLIB in the background and writes a high-confidence match into Room. Close
   matches open a version picker instead of silently replacing the studio version with a
