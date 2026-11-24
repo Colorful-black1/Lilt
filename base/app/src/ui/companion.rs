@@ -30,6 +30,16 @@ const LYRICS_TITLE: &str = "Lilt Lyrics";
 const LYRICS_UNLOCK_TITLE: &str = "Lilt Lyrics Unlock";
 const MINI_TITLE: &str = "Lilt Mini Player";
 
+/// The lyrics card is laid out at 900×190. Its height drives the lyric scale,
+/// so dragging the unlocked window taller or shorter zooms the text
+/// proportionally instead of only adding empty card space. Width does not set
+/// the scale because `fit_font_size` already shrinks a long line to fit.
+const LYRICS_DESIGN_HEIGHT: f32 = 190.0;
+const LYRICS_MIN_WIDTH: f32 = 460.0;
+const LYRICS_MIN_HEIGHT: f32 = 160.0;
+const LYRICS_MAX_WIDTH: f32 = 3600.0;
+const LYRICS_MAX_HEIGHT: f32 = 760.0;
+
 #[derive(Clone)]
 pub struct CompanionSnapshot {
     pub language: Language,
@@ -181,7 +191,7 @@ impl CompanionWindows {
                 .with_always_on_top()
                 .with_taskbar(false)
                 .with_resizable(true)
-                .with_min_inner_size([460.0, 160.0])
+                .with_min_inner_size([LYRICS_MIN_WIDTH, LYRICS_MIN_HEIGHT])
                 .with_close_button(false)
                 .with_minimize_button(false)
                 .with_maximize_button(false)
@@ -294,6 +304,28 @@ fn lyrics_chrome_visible(locked: bool) -> bool {
 
 fn unlock_puck_visible(lyrics_visible: bool, locked: bool) -> bool {
     lyrics_visible && locked
+}
+
+/// Proportional lyric zoom for the unlocked overlay. The configured size is
+/// the size at the 900×190 design height; every other height scales it by the
+/// same factor, including when the user scrolls over the window.
+fn lyrics_scale(inner_height: f32) -> f32 {
+    (inner_height / LYRICS_DESIGN_HEIGHT).clamp(0.6, 4.0)
+}
+
+/// Scroll over the unlocked lyrics to zoom the window and text together.
+/// Positive `scroll_delta` (wheel up) is zoom in; both axes use one factor so
+/// the window keeps its current proportions.
+fn zoomed_lyrics_size(size: Vec2, scroll_delta: f32) -> Option<Vec2> {
+    if !scroll_delta.is_finite() || scroll_delta.abs() < 0.5 {
+        return None;
+    }
+    let factor = (scroll_delta * 0.0015).exp();
+    let next = Vec2::new(
+        (size.x * factor).clamp(LYRICS_MIN_WIDTH, LYRICS_MAX_WIDTH),
+        (size.y * factor).clamp(LYRICS_MIN_HEIGHT, LYRICS_MAX_HEIGHT),
+    );
+    (next != size).then_some(next)
 }
 
 fn push_action(
@@ -725,11 +757,20 @@ fn render_lyrics(
     let alpha = |value: u8| ((value as f32) * opacity).round() as u8;
     let locked = snapshot.lyrics_locked;
     let outline = with_alpha(Color32::from_rgb(8, 7, 6), 235);
-    let active_size = snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0);
 
     egui::CentralPanel::default()
         .frame(egui::Frame::NONE.fill(Color32::TRANSPARENT))
         .show(ctx, |ui| {
+            let viewport = ui.max_rect();
+            let scale = lyrics_scale(viewport.height());
+            if !locked {
+                let scroll = ctx.input(|input| input.smooth_scroll_delta.y);
+                if let Some(size) = zoomed_lyrics_size(viewport.size(), scroll) {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+                }
+            }
+            let active_size =
+                (snapshot.desktop_lyrics_font_size.clamp(18.0, 56.0) * scale).clamp(12.0, 224.0);
             let card = ui.max_rect().shrink2(Vec2::new(6.0, 5.0));
             if lyrics_chrome_visible(locked) {
                 draw_lyrics_card(ui, card, &palette);
@@ -858,7 +899,7 @@ fn render_lyrics(
                 )
             };
 
-            let gap = 4.0;
+            let gap = 4.0 * scale;
             let mut main_base = if has_lyrics {
                 active_size
             } else {
@@ -1325,6 +1366,37 @@ mod tests {
         assert!((fit_font_size(40.0, 1000.0, 50.0, 500.0, 100.0) - 20.0).abs() < 0.01);
         assert!((fit_font_size(40.0, 200.0, 200.0, 500.0, 100.0) - 20.0).abs() < 0.01);
         assert!((fit_font_size(40.0, 200.0, 40.0, 500.0, 100.0) - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn lyric_scale_follows_window_height_and_stays_bounded() {
+        assert!((lyrics_scale(190.0) - 1.0).abs() < 0.001);
+        assert!((lyrics_scale(285.0) - 1.5).abs() < 0.001);
+        assert!((lyrics_scale(160.0) - 160.0 / 190.0).abs() < 0.001);
+        assert!((lyrics_scale(10.0) - 0.6).abs() < 0.001);
+        assert!((lyrics_scale(5000.0) - 4.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn scroll_zooms_both_axes_by_one_factor_and_clamps() {
+        let size = Vec2::new(900.0, 190.0);
+        let zoomed = zoomed_lyrics_size(size, 100.0).expect("wheel up should zoom");
+        assert!(zoomed.x > size.x && zoomed.y > size.y);
+        assert!((zoomed.x / zoomed.y - size.x / size.y).abs() < 0.001);
+
+        let smaller = zoomed_lyrics_size(size, -100.0).expect("wheel down should zoom out");
+        assert!(smaller.x < size.x && smaller.y < size.y);
+        assert!((smaller.x / smaller.y - size.x / size.y).abs() < 0.001);
+
+        assert_eq!(zoomed_lyrics_size(size, 0.1), None);
+        assert_eq!(
+            zoomed_lyrics_size(Vec2::new(LYRICS_MIN_WIDTH, LYRICS_MIN_HEIGHT), -1000.0),
+            None
+        );
+        assert_eq!(
+            zoomed_lyrics_size(Vec2::new(LYRICS_MAX_WIDTH, LYRICS_MAX_HEIGHT), 1000.0),
+            None
+        );
     }
 
     #[test]

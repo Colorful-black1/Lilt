@@ -1,0 +1,16 @@
+Desktop lyrics wheel zoom check
+
+The lyric window was resized to 900x190, then WM_MOUSEWHEEL delta=+120
+was delivered to the window. One notch scales both axes by one factor.
+
+start:               900x190
+wheel up 1:         954x201
+wheel up 2:         1012x212
+wheel up 3:         1073x224
+
+wheel down 1:       1010x212
+wheel down 2:       952x201
+wheel down 3:       897x188
+
+The text is scaled from the window height, so the size changes above
+also change the lyric font. The two axes always move by the same factor.
