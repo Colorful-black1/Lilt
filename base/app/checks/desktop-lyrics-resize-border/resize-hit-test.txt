@@ -1,0 +1,22 @@
+Desktop lyrics resize border check
+
+The frameless lyric window used to report HTCLIENT across its whole client area,
+so Windows never showed a resize cursor. The custom WM_NCHITTEST now returns
+the standard HT* border codes while unlocked.
+
+window: 510,300 900x190 (900x190)
+
+left edge        hit=HTLEFT         cursor=SIZEWE    window=lyrics
+right edge       hit=HTRIGHT        cursor=SIZEWE    window=lyrics
+top edge         hit=HTTOP          cursor=SIZENS    window=lyrics
+bottom edge      hit=HTBOTTOM       cursor=SIZENS    window=lyrics
+top-left         hit=HTTOPLEFT      cursor=SIZENWSE  window=lyrics
+bottom-right     hit=HTBOTTOMRIGHT  cursor=SIZENWSE  window=lyrics
+center           hit=HTCLIENT       cursor=ARROW     window=lyrics
+
+Drag check: press the bottom-right resize border and move +60,+40 px.
+before: 510,300 900x190
+after:  510,300 960x230
+
+The after size should be 960x230: the bottom-right border resized both axes.
+The lyric scale follows the window height, so the same drag also enlarges the text.

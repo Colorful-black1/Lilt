@@ -9,7 +9,7 @@ Lilt 是一个本地优先的音乐播放器，对目标应用 Musicolet 6.14.1 
 - **桌面版**：Rust + egui/eframe + Rodio，源码在 `base/app`
 - **Android 版**：Kotlin + Jetpack Compose + Media3 + Room，源码在 `base/app/android`
 
-两个版本都可选地联网获取歌词：自动查询 LRCLIB，找不到时可在歌词面板手动请求 AI 并预览后保存。只发送歌名、艺术家、专辑和时长，不上传音频、路径或收听历史；设置中可关闭。不包含广告、统计或崩溃上报 SDK。Android 为歌词获取申请 `INTERNET` / `ACCESS_NETWORK_STATE` 权限。桌面歌词与 Android 悬浮歌词支持按 LRC 进度双色填充，可在设置中自定义已播放/未播放颜色；PC 解锁态桌面歌词可拖动窗口或滚动滚轮等比例缩放。未内嵌标签的 `歌手 - 歌名` 文件名会用于补全显示标签（PC/Android）；PC 开发者模式会记录 AI 请求与结果，且不记录 API Key。
+两个版本都可选地联网获取歌词：自动查询 LRCLIB，找不到时可在歌词面板手动请求 AI 并预览后保存。只发送歌名、艺术家、专辑和时长，不上传音频、路径或收听历史；设置中可关闭。不包含广告、统计或崩溃上报 SDK。Android 为歌词获取申请 `INTERNET` / `ACCESS_NETWORK_STATE` 权限。桌面歌词与 Android 悬浮歌词支持按 LRC 进度双色填充，可在设置中自定义已播放/未播放颜色；PC 解锁态桌面歌词可拖动窗口或滚动滚轮等比例缩放，卡片边缘会显示标准双向缩放光标。未内嵌标签的 `歌手 - 歌名` 文件名会用于补全显示标签（PC/Android）；PC 开发者模式会记录 AI 请求与结果，且不记录 API Key。
 
 ## 目录结构
 

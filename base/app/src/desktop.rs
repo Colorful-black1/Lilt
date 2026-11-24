@@ -887,8 +887,8 @@ mod platform {
 
         unsafe {
             let dpi = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
-            let margin_x = (6.0 * dpi).round() as i32;
-            let margin_y = (5.0 * dpi).round() as i32;
+            let margin_x = (COMPANION_REGION_MARGIN_X * dpi).round() as i32;
+            let margin_y = (COMPANION_REGION_MARGIN_Y * dpi).round() as i32;
             let radius = (18.0 * dpi).round() as i32;
             let region = CreateRoundRectRgn(
                 margin_x,
@@ -928,14 +928,76 @@ mod platform {
         wparam: usize,
         lparam: isize,
     ) -> isize {
-        if message == WM_NCHITTEST && LYRICS_CLICK_THROUGH.load(Ordering::Relaxed) {
-            return HTTRANSPARENT;
+        if message == WM_NCHITTEST {
+            if LYRICS_CLICK_THROUGH.load(Ordering::Relaxed) {
+                return HTTRANSPARENT;
+            }
+            if let Some(hit) = lyrics_resize_hit(hwnd, lparam) {
+                return hit;
+            }
         }
         let original = LYRICS_ORIGINAL_PROC.load(Ordering::Relaxed);
         if original != 0 {
             CallWindowProcW(original, hwnd, message, wparam, lparam)
         } else {
             DefWindowProcW(hwnd, message, wparam, lparam)
+        }
+    }
+
+    /// A frameless winit window draws its client area over the whole window, so
+    /// `DefWindowProc` reports `HTCLIENT` even on the frame and Windows never
+    /// offers a resize cursor. Supply the missing resize border ourselves while
+    /// unlocked. The hit test uses screen coordinates from `WM_NCHITTEST` and a
+    /// DPI-scaled eight-point border.
+    unsafe fn lyrics_resize_hit(hwnd: *mut c_void, lparam: isize) -> Option<isize> {
+        let mut rect = WinRect {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        };
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return None;
+        }
+        let packed = lparam as i32;
+        let x = (packed & 0xffff) as u16 as i16 as i32;
+        let y = ((packed >> 16) & 0xffff) as u16 as i16 as i32;
+        let dpi = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
+        // The rounded window region already clips the outer 6/5-point margin,
+        // so the resize zone must extend past that margin to remain clickable.
+        let border_x = ((COMPANION_REGION_MARGIN_X + LYRICS_RESIZE_EDGE) * dpi)
+            .round()
+            .max(1.0) as i32;
+        let border_y = ((COMPANION_REGION_MARGIN_Y + LYRICS_RESIZE_EDGE) * dpi)
+            .round()
+            .max(1.0) as i32;
+        resize_hit_code(x, y, &rect, border_x, border_y)
+    }
+
+    fn resize_hit_code(
+        x: i32,
+        y: i32,
+        rect: &WinRect,
+        border_x: i32,
+        border_y: i32,
+    ) -> Option<isize> {
+        if x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom {
+            return None;
+        }
+        let left = x - rect.left < border_x;
+        let right = rect.right - 1 - x < border_x;
+        let top = y - rect.top < border_y;
+        let bottom = rect.bottom - 1 - y < border_y;
+        match (left, right, top, bottom) {
+            (true, _, true, _) => Some(HTTOPLEFT),
+            (_, true, true, _) => Some(HTTOPRIGHT),
+            (true, _, _, true) => Some(HTBOTTOMLEFT),
+            (_, true, _, true) => Some(HTBOTTOMRIGHT),
+            (true, _, _, _) => Some(HTLEFT),
+            (_, true, _, _) => Some(HTRIGHT),
+            (_, _, true, _) => Some(HTTOP),
+            (_, _, _, true) => Some(HTBOTTOM),
+            _ => None,
         }
     }
 
@@ -964,6 +1026,17 @@ mod platform {
     const WM_NCHITTEST: u32 = 0x0084;
     const GWLP_WNDPROC: i32 = -4;
     const HTTRANSPARENT: isize = -1;
+    const HTLEFT: isize = 10;
+    const HTRIGHT: isize = 11;
+    const HTTOP: isize = 12;
+    const HTTOPLEFT: isize = 13;
+    const HTTOPRIGHT: isize = 14;
+    const HTBOTTOM: isize = 15;
+    const HTBOTTOMLEFT: isize = 16;
+    const HTBOTTOMRIGHT: isize = 17;
+    const COMPANION_REGION_MARGIN_X: f32 = 6.0;
+    const COMPANION_REGION_MARGIN_Y: f32 = 5.0;
+    const LYRICS_RESIZE_EDGE: f32 = 8.0;
 
     #[link(name = "user32")]
     extern "system" {
@@ -992,6 +1065,7 @@ mod platform {
         ) -> isize;
         fn DefWindowProcW(hwnd: *mut c_void, msg: u32, wparam: usize, lparam: isize) -> isize;
         fn GetClientRect(hwnd: *mut c_void, rect: *mut WinRect) -> i32;
+        fn GetWindowRect(hwnd: *mut c_void, rect: *mut WinRect) -> i32;
         fn CreateRoundRectRgn(
             left: i32,
             top: i32,
@@ -1057,6 +1131,31 @@ mod platform {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn resize_hit_test_matches_the_visible_border() {
+            let rect = WinRect {
+                left: 100,
+                top: 200,
+                right: 1000,
+                bottom: 390,
+            };
+            assert_eq!(resize_hit_code(110, 300, &rect, 14, 13), Some(HTLEFT));
+            assert_eq!(resize_hit_code(985, 300, &rect, 14, 13), None);
+            assert_eq!(resize_hit_code(990, 300, &rect, 14, 13), Some(HTRIGHT));
+            assert_eq!(resize_hit_code(500, 210, &rect, 14, 13), Some(HTTOP));
+            assert_eq!(resize_hit_code(500, 382, &rect, 14, 13), Some(HTBOTTOM));
+            assert_eq!(resize_hit_code(110, 210, &rect, 14, 13), Some(HTTOPLEFT));
+            assert_eq!(resize_hit_code(990, 210, &rect, 14, 13), Some(HTTOPRIGHT));
+            assert_eq!(resize_hit_code(110, 382, &rect, 14, 13), Some(HTBOTTOMLEFT));
+            assert_eq!(
+                resize_hit_code(990, 382, &rect, 14, 13),
+                Some(HTBOTTOMRIGHT)
+            );
+            assert_eq!(resize_hit_code(500, 300, &rect, 14, 13), None);
+            assert_eq!(resize_hit_code(99, 300, &rect, 14, 13), None);
+            assert_eq!(resize_hit_code(1000, 300, &rect, 14, 13), None);
+        }
 
         #[test]
         fn tray_menu_ids_map_to_actions() {

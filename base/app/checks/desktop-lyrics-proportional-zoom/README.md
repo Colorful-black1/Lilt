@@ -96,6 +96,8 @@ dist/Lilt-0.1.0-win64-portable.zip    18,472,292 bytes
 
 - Resizing only the left or right edge changes available width but not the
   lyric scale; drag the top/bottom edge, a corner, or use the wheel to zoom.
+  A follow-up adds the native resize border and cursors: see
+  `../desktop-lyrics-resize-border/`.
 - The toolbar keeps its 44/38 px target size while the lyrics scale, so the
   controls stay easy to hit at every zoom level.
 - Desktop-lyrics window position and size still last for the current session
