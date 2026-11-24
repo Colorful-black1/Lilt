@@ -23,7 +23,9 @@ cargo build
 Release builds use the Windows GUI subsystem, so double-clicking `lilt.exe` does not open
 a terminal. For diagnostics, enable **Settings → Developer → Developer mode**; Lilt opens a
 separate `Lilt developer console` window that tails `developer.log`. Closing that window
-does not stop playback, and logs live in the data folder below. Command-line flags such as
+does not stop playback, and logs live in the data folder below. AI requests, results,
+errors and model/connection tests are logged there with the API key redacted; the log is
+appended rather than cleared when developer mode is re-enabled. Command-line flags such as
 `--list-audio` still print to the terminal they are launched from.
 
 Screenshot mode (starts without stealing focus, draws 120 frames, writes a PNG and exits):
@@ -89,6 +91,11 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - Real folder scanning (mp3/flac/ogg/opus/wav/m4a/aac and more), hierarchical folder
   browsing, breadcrumbs, exclude/include rules, hidden-folder and scan-on-start options,
   manual rescan and live scan progress.
+- **Filename tag fallback.** When a file has no title or artist tag, a filename such as
+  `周杰伦 - 晴天`, `Aimer-After Rain`, `01. Artist - Title` or `(02) Artist-Title` is split
+  into artist and title for display. Leading track numbers are only removed when they look
+  like a track prefix, so `7 Rings` and `1984` stay titles. Real embedded tags and user tag
+  edits always win; no audio file is modified.
 - Playback through a local Symphonia decoder with content-aware probing, so M4A/MP4
   files play even when they use a `.mp3` name and damaged files report an error instead
   of closing the player; pause/resume, seek, next/previous (10-second replay
@@ -109,12 +116,15 @@ Set `LILT_DATA_DIR` to use a different data folder.
 - **Online lyrics (optional).** When a track starts without lyrics, Lilt queries LRCLIB in
   the background. High-confidence matches are written as a `.lrc` sidecar; close matches
   open a version picker so a live/remastered take cannot silently replace the studio one.
-  When LRCLIB has nothing, the lyrics panel offers a manual **AI lyrics** button. AI output
-  is previewed before saving. The AI panel supports OpenAI-compatible providers (DeepSeek,
+  When LRCLIB has nothing, the lyrics panel offers a manual **AI lyrics** button. The AI
+  prompt asks for a draft LRC with approximate timestamps instead of requiring web search
+  or verified timing; short copyright refusals are reported as errors. AI output is
+  previewed before saving. The AI panel supports OpenAI-compatible providers (DeepSeek,
   GLM, MiMo, OpenAI, OpenCode Go/Zen, Kimi, Qwen, SiliconFlow and custom endpoints) with
   model listing and encrypted API-key storage. Only title, artist, album and duration are
   sent; audio files, paths and listening history stay local. Settings has a master switch
-  and a cache clear button.
+  and a cache clear button; Developer mode logs AI requests, results and errors (never the
+  key) to `developer.log`.
 - **Locate current song** from the top bar, the Songs header or the now-playing overlay.
   It opens the complete song list and scrolls the playing row into view; the one-shot
   scroll does not fight later manual scrolling.

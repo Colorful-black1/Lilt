@@ -315,28 +315,22 @@ pub fn read_song(path: &Path, extras: &HashMap<String, SongExtra>) -> Option<Son
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("Untitled");
-    let (fallback_track, fallback_title) = parse_track_prefix(stem);
+    let guess = guess_from_file_stem(stem);
     if track == 0 {
-        track = fallback_track;
+        track = guess.track;
     }
-    if title.is_empty() {
-        title = fallback_title;
+    let title_is_placeholder = title.trim().is_empty()
+        || title.trim().eq_ignore_ascii_case("untitled")
+        || title.trim().eq_ignore_ascii_case("<unknown>")
+        || title.trim().eq_ignore_ascii_case(stem.trim());
+    if title_is_placeholder {
+        title = guess.title;
     }
-    if artist.is_empty() {
-        artist = canonical
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.file_name())
-            .and_then(|n| n.to_str())
-            .map(|n| {
-                let lower = n.to_lowercase();
-                if lower == "music" || lower == "starter music" || lower == "singles" {
-                    "Unknown artist".to_owned()
-                } else {
-                    n.to_owned()
-                }
-            })
-            .unwrap_or_else(|| "Unknown artist".to_owned());
+    let artist_is_placeholder = artist.trim().is_empty()
+        || artist.trim().eq_ignore_ascii_case("unknown artist")
+        || artist.trim().eq_ignore_ascii_case("<unknown>");
+    if artist_is_placeholder {
+        artist = guess.artist.unwrap_or_else(|| "Unknown artist".to_owned());
     }
     if album.is_empty() {
         album = canonical
@@ -417,27 +411,124 @@ fn parse_gain(text: &str) -> Option<f32> {
     cleaned.parse::<f32>().ok()
 }
 
-fn parse_track_prefix(stem: &str) -> (u32, String) {
-    let mut chars = stem.char_indices().peekable();
-    let mut digits = String::new();
-    while let Some((_, ch)) = chars.peek().copied() {
-        if ch.is_ascii_digit() {
-            digits.push(ch);
-            chars.next();
+#[derive(Clone, Debug, Default, PartialEq)]
+struct FilenameGuess {
+    track: u32,
+    title: String,
+    artist: Option<String>,
+}
+
+/// Split a file stem into an optional track number, title and artist. Only used
+/// when the embedded tags are missing, so a conservative guess is better than
+/// showing the whole filename as the title.
+fn guess_from_file_stem(stem: &str) -> FilenameGuess {
+    let (track, rest) = strip_track_prefix(stem);
+    let (artist, title) = split_artist_title(&rest);
+    let title = if title.trim().is_empty() {
+        clean_file_title(stem)
+    } else {
+        title
+    };
+    FilenameGuess {
+        track,
+        title: if title.trim().is_empty() {
+            "Untitled".to_owned()
         } else {
-            break;
+            title
+        },
+        artist,
+    }
+}
+
+fn strip_track_prefix(stem: &str) -> (u32, String) {
+    let trimmed = stem.trim_start();
+    if trimmed.is_empty() {
+        return (0, stem.to_owned());
+    }
+    let bracket = trimmed.starts_with('(');
+    let body = if bracket { &trimmed[1..] } else { trimmed };
+    let digit_count = body.chars().take_while(|ch| ch.is_ascii_digit()).count();
+    if digit_count == 0 || digit_count > 3 {
+        return (0, stem.to_owned());
+    }
+    let digits = &body[..digit_count];
+    if bracket {
+        if !body[digit_count..].starts_with(')') {
+            return (0, stem.to_owned());
+        }
+        let rest = body[digit_count + 1..]
+            .trim_start_matches(|ch: char| ch.is_whitespace())
+            .to_owned();
+        if rest.is_empty() {
+            return (0, stem.to_owned());
+        }
+        return (digits.parse().unwrap_or(0), rest);
+    }
+    let after = &body[digit_count..];
+    let Some(first) = after.chars().next() else {
+        return (0, stem.to_owned());
+    };
+    let punctuation = matches!(first, '-' | '.' | '_' | ')' | ']' | '、');
+    let whitespace = first.is_whitespace();
+    if !punctuation && !whitespace {
+        return (0, stem.to_owned());
+    }
+    // `7 Rings` and `1984` are titles, not track numbers. A space-only
+    // separator is accepted only for zero-padded numbers such as `01 Song`.
+    if whitespace && !digits.starts_with('0') {
+        return (0, stem.to_owned());
+    }
+    let rest = after
+        .trim_start_matches(|ch: char| {
+            ch.is_whitespace() || matches!(ch, '-' | '.' | '_' | ')' | ']' | '、')
+        })
+        .to_owned();
+    if rest.is_empty() {
+        (0, stem.to_owned())
+    } else {
+        (digits.parse().unwrap_or(0), rest)
+    }
+}
+
+fn split_artist_title(text: &str) -> (Option<String>, String) {
+    let text = clean_file_title(text);
+    let mut best: Option<(usize, usize)> = None;
+    for separator in [" - ", " – ", " — ", " － "] {
+        if let Some(index) = text.find(separator) {
+            if best.is_none_or(|(best_index, _)| index < best_index) {
+                best = Some((index, separator.len()));
+            }
         }
     }
-    if digits.is_empty() {
-        return (0, clean_file_title(stem));
+    if let Some((index, separator_len)) = best {
+        let artist = valid_artist(&text[..index]);
+        let title = clean_file_title(&text[index + separator_len..]);
+        if let (Some(artist), false) = (artist, title.is_empty()) {
+            return (Some(artist), title);
+        }
     }
-    let mut rest = &stem[digits.len()..];
-    rest = rest.trim_start_matches([' ', '-', '_', '.', ')']);
-    let title = clean_file_title(rest);
-    if title.is_empty() {
-        (digits.parse().unwrap_or(0), clean_file_title(stem))
+    // No spaced separator: accept the first dash that leaves a usable artist.
+    for (index, ch) in text
+        .char_indices()
+        .filter(|(_, ch)| matches!(ch, '-' | '–' | '—' | '－'))
+    {
+        let artist = valid_artist(&text[..index]);
+        let title = clean_file_title(&text[index + ch.len_utf8()..]);
+        if let (Some(artist), false) = (artist, title.is_empty()) {
+            return (Some(artist), title);
+        }
+    }
+    (None, text)
+}
+
+fn valid_artist(text: &str) -> Option<String> {
+    let artist = clean_file_title(text)
+        .trim_matches(|ch: char| ch.is_whitespace() || matches!(ch, '-' | '–' | '—' | '－'))
+        .to_owned();
+    if artist.is_empty() || artist.chars().all(|ch| ch.is_ascii_digit()) {
+        None
     } else {
-        (digits.parse().unwrap_or(0), title)
+        Some(artist)
     }
 }
 
@@ -1166,11 +1257,139 @@ mod tests {
     }
 
     #[test]
-    fn track_prefix_is_stripped() {
+    fn filename_guesses_split_artist_and_title() {
         assert_eq!(
-            parse_track_prefix("03 - Glass Horizon"),
-            (3, "Glass Horizon".to_owned())
+            guess_from_file_stem("03 - Glass Horizon"),
+            FilenameGuess {
+                track: 3,
+                title: "Glass Horizon".to_owned(),
+                artist: None,
+            }
         );
-        assert_eq!(parse_track_prefix("Intro"), (0, "Intro".to_owned()));
+        assert_eq!(
+            guess_from_file_stem("周杰伦 - 晴天"),
+            FilenameGuess {
+                track: 0,
+                title: "晴天".to_owned(),
+                artist: Some("周杰伦".to_owned()),
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("01. 周杰伦 - 晴天"),
+            FilenameGuess {
+                track: 1,
+                title: "晴天".to_owned(),
+                artist: Some("周杰伦".to_owned()),
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("Aimer-After Rain"),
+            FilenameGuess {
+                track: 0,
+                title: "After Rain".to_owned(),
+                artist: Some("Aimer".to_owned()),
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("All Time Low - Time-Bomb"),
+            FilenameGuess {
+                track: 0,
+                title: "Time-Bomb".to_owned(),
+                artist: Some("All Time Low".to_owned()),
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("AC-DC - Back in Black"),
+            FilenameGuess {
+                track: 0,
+                title: "Back in Black".to_owned(),
+                artist: Some("AC-DC".to_owned()),
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("Artist – En Dash"),
+            FilenameGuess {
+                track: 0,
+                title: "En Dash".to_owned(),
+                artist: Some("Artist".to_owned()),
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("7 Rings"),
+            FilenameGuess {
+                track: 0,
+                title: "7 Rings".to_owned(),
+                artist: None,
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("1984"),
+            FilenameGuess {
+                track: 0,
+                title: "1984".to_owned(),
+                artist: None,
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("01 Song"),
+            FilenameGuess {
+                track: 1,
+                title: "Song".to_owned(),
+                artist: None,
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("(01) Song"),
+            FilenameGuess {
+                track: 1,
+                title: "Song".to_owned(),
+                artist: None,
+            }
+        );
+        assert_eq!(
+            guess_from_file_stem("忘记时间_20200523220957"),
+            FilenameGuess {
+                track: 0,
+                title: "忘记时间 20200523220957".to_owned(),
+                artist: None,
+            }
+        );
+    }
+
+    #[test]
+    fn read_song_uses_filename_fallback_without_tags() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join(format!("lilt-filename-test-{}-{stamp}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Aimer-After Rain.mp3");
+        std::fs::write(&path, b"x").unwrap();
+        let song = read_song(&path, &HashMap::new()).expect("fallback song");
+        assert_eq!(song.title, "After Rain");
+        assert_eq!(song.artist, "Aimer");
+        assert_eq!(
+            song.album,
+            dir.file_name().unwrap().to_string_lossy().to_string()
+        );
+        assert_eq!(song.track, 0);
+
+        let key = normalize_key(&canonical_clean(&path));
+        let mut extras = HashMap::new();
+        extras.insert(
+            key,
+            SongExtra {
+                title: Some("Manual title".to_owned()),
+                artist: Some("Manual artist".to_owned()),
+                ..SongExtra::default()
+            },
+        );
+        let song = read_song(&path, &extras).expect("manual override song");
+        assert_eq!(song.title, "Manual title");
+        assert_eq!(song.artist, "Manual artist");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

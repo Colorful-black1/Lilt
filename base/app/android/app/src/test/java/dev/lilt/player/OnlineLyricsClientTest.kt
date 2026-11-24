@@ -1,9 +1,11 @@
 package dev.lilt.player
 
 import dev.lilt.player.data.OnlineLyricsClient
+import dev.lilt.player.data.OnlineLyricsClient.OnlineLyricsException
 import dev.lilt.player.library.AiConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.net.ServerSocket
 import java.util.concurrent.ArrayBlockingQueue
@@ -108,5 +110,29 @@ class OnlineLyricsClientTest {
         val chatText = chatRequest.poll(3, TimeUnit.SECONDS).orEmpty()
         assertTrue(chatText.contains("POST /v1/chat/completions"))
         assertTrue(chatText.contains("Test Song"))
+        assertTrue(chatText.contains("\"temperature\":0"))
+        assertTrue(chatText.lowercase().contains("draft lrc"))
+        assertTrue(!chatText.lowercase().contains("use web search"))
+    }
+
+    @Test
+    fun treatsAShortRefusalAsAnError() {
+        val request = ArrayBlockingQueue<String>(1)
+        val port = serveOnce(
+            """{"choices":[{"message":{"content":"I'm sorry, I cannot provide the lyrics because of copyright."}}]}""",
+            request,
+        )
+        try {
+            OnlineLyricsClient.fetchAiLyrics(
+                config = config(port),
+                title = "Test Song",
+                artist = "Test Artist",
+                album = "Test Album",
+                durationMs = 120_000L,
+            )
+            fail("expected a refusal error")
+        } catch (error: OnlineLyricsException) {
+            assertTrue(error.message.orEmpty().contains("拒绝"))
+        }
     }
 }

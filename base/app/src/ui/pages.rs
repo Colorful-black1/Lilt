@@ -1934,8 +1934,8 @@ fn online_lyrics_card(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
         ui.add_space(4.0);
         ui.label(
             RichText::new(app.t(
-                "The AI provider may charge for requests. If the model cannot search the web, results may be incomplete or wrong; use the preview before saving.",
-                "AI 请求可能产生费用。模型不支持联网搜索时，结果可能不完整或有误，请先预览再保存。",
+                "The AI provider may charge for requests. Model coverage varies; if one model cannot find the track, try another model. Use the preview before saving.",
+                "AI 请求可能产生费用。不同模型的歌词覆盖不同；某个模型找不到时可换一个模型，结果请先预览再保存。",
             ))
             .size(9.5)
             .color(palette.faint),

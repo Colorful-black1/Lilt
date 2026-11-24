@@ -58,6 +58,10 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - Kotlin + Jetpack Compose, one activity and Compose Navigation.
 - MediaStore scan for mp3, flac, ogg, opus, wav, m4a, aac and m4b, persisted in Room.
   Opening the app rescans; stale rows are removed; progress is shown.
+- **Filename tag fallback.** When MediaStore reports a blank title/artist or the
+  `<unknown>` placeholder, a filename such as `周杰伦 - 晴天`, `Aimer-After Rain`,
+  `01. Artist - Title` or `(02) Artist-Title` is split into artist and title for display.
+  `7 Rings` and `1984` stay titles; real tags and single-song tag overrides always win.
 - Folder-first browsing with breadcrumbs, recursive play/shuffle and folder counts.
 - Include-only and exclude folder rules that rebuild the visible library immediately.
 - **Library tab with songs, albums, artists, favourites, recently added, most played,
@@ -77,7 +81,9 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   queries LRCLIB in the background and writes a high-confidence match into Room. Close
   matches open a version picker instead of silently replacing the studio version with a
   live/remastered one. When LRCLIB has nothing, the lyrics panel offers a manual **AI
-  lyrics** button. AI output is previewed and validated before saving. Settings has a
+  lyrics** button. The prompt asks for a draft LRC with approximate timestamps rather than
+  requiring web search or verified timing, and short copyright refusals are reported as
+  errors. AI output is previewed and validated before saving. Settings has a
   master switch, OpenAI-compatible provider/model fields, model fetching, an encrypted API
   key (Android Keystore) and a cache clear button. Room v9 adds `lyrics.source`,
   `lyrics.fetchedAt` and `lyrics_fetch_state` for negative/ambiguous results and for
@@ -202,18 +208,21 @@ Android Keystore AES key and is excluded from backups. Media3 also declares
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 57 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 60 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
-  index, LRC parsing, lyric offsets, floating lyric line windows and font clamping, widget
-  progress/time formatting, backup JSON round trips, platform/format rejection, song
-  reference resolution, A-B loop bounds, stop-after bounds, duplicate grouping,
-  missing-reference grouping, EQ curves/profiles, queue resume positions, list reordering,
-  virtual tag merging, online lyric matching/cleanup, base URL normalization and the
+  index, filename tag fallback and track-prefix handling, LRC parsing, lyric offsets,
+  floating lyric line windows and font clamping, widget progress/time formatting, backup
+  JSON round trips, platform/format rejection, song reference resolution, A-B loop bounds,
+  stop-after bounds, duplicate grouping, missing-reference grouping, EQ curves/profiles,
+  queue resume positions, list reordering, virtual tag merging, online lyric
+  matching/cleanup, draft AI prompt/refusal handling, base URL normalization and the
   OpenAI-compatible HTTP client.
 - `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6, 6→7,
   7→8 and 8→9 migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see
-  `../checks/round-8-b-online-lyrics-android/README.md` for automatic LRCLIB lookup,
+  `../checks/filename-tag-fallback/README.md` for filename-derived artist/title evidence,
+  `../checks/ai-lyrics-prompt-fix/README.md` for the draft AI prompt and live endpoint
+  check, `../checks/round-8-b-online-lyrics-android/README.md` for automatic LRCLIB lookup,
   candidate selection, AI preview/save and the manifest permission dump,
   `../checks/round-7-d/README.md` for stop-after and duplicate-song evidence,
   `../checks/round-7-c/README.md` for A-B loop and missing-file re-link evidence,

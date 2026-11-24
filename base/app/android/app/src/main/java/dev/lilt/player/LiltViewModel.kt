@@ -1197,7 +1197,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
                     mediaId = mediaId,
                     title = song.title,
                     provider = provider,
-                    error = "AI 没有找到可靠的歌词",
+                    error = "AI 没有返回可用的歌词",
                 )
                 else -> AiLyricsUiState(
                     mediaId = mediaId,

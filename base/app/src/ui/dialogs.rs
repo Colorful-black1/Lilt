@@ -8,7 +8,7 @@ use crate::theme::{cover_palette, display_font, mix, with_alpha, Palette};
 use crate::widgets;
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, ScrollArea, Sense,
-    Stroke, StrokeKind, Ui, Vec2,
+    Stroke, Ui, Vec2,
 };
 
 pub fn now_playing(app: &mut LiltApp, ctx: &egui::Context) {
@@ -1677,7 +1677,7 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                             );
                             ui.label(
                                 RichText::new(app.t(
-                                    "AI results can be incomplete or inaccurate. Check the text before saving. Only verified LRC should keep sync.",
+                                    "AI results can be incomplete or inaccurate. Check the text before saving. Only timed LRC can keep sync.",
                                     "AI 结果可能不完整或不准确，请检查后再保存。只有带时间轴的 LRC 才能同步高亮。",
                                 ))
                                 .size(10.0)

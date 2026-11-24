@@ -53,6 +53,9 @@ Requests are serialized on desktop and spaced by at least 350 ms; Android uses t
 spacing between the primary and fallback search. A `429` response is honoured with its
 `Retry-After` value. Response bodies are bounded (2 MB for LRCLIB, 1 MB for AI).
 
+LRCLIB occasionally returns `null` for fields such as `duration`. These fields are
+treated as their default values instead of rejecting the whole search result.
+
 LRCLIB is a free community service, not an official lyrics store. A miss does not mean the
 track has no lyrics; it can be added to LRCLIB later. The local cache is deliberately
 short for misses.
@@ -85,20 +88,33 @@ shape. Base URLs are normalized:
 OpenCode Go additionally receives a stable `x-opencode-session` header; without it the
 gateway returns 400.
 
-### Does AI really search the web?
+### AI prompt, model coverage and logs
 
-Not necessarily. These are chat-completion endpoints. A provider/model that supports web
-search may find lyrics; a model without web access can only use its trained knowledge and
-may be incomplete or wrong. The app therefore:
+These are chat-completion endpoints, not a lyrics database. Lilt asks for a **draft** LRC
+from the model's own knowledge, with approximate `[mm:ss.xx]` timestamps, and tells the
+model that the user will review and edit the result. It does not require the model to
+perform a web search or prove that every line was verified; a model without web access can
+still return what it knows. `NOT_FOUND` is reserved for songs the model does not know.
+
+The app therefore:
 
 - only calls AI from a button;
 - shows the provider and a warning;
+- detects short copyright refusals and reports them instead of showing a refusal as lyrics;
 - validates line count/timestamps and shows a timestamp/plain-text marker;
 - requires the user to save the preview.
 
-The model list is fetched from `/models`; if that fails, the provider's built-in suggestion
-list is shown. The API key is stored with the OS user protection (Windows DPAPI; Android
-Keystore AES/GCM) and is excluded from backups.
+Model coverage varies. If one model returns nothing for a track, another model in the same
+provider list may know it. The provider list is fetched from `/models`; if that fails, the
+provider's built-in suggestion list is shown. “Test connection” also sends a minimal chat
+completion, so it verifies generation rather than only authentication. The API key is
+stored with the OS user protection (Windows DPAPI; Android Keystore AES/GCM) and is
+excluded from backups.
+
+On desktop, **Settings → Developer → Developer mode** writes AI request/result lines to
+`developer.log`: provider, model, endpoint, elapsed time, HTTP status or error, and the
+returned character/line count. The API key is never logged, and the log is appended rather
+than truncated when developer mode is re-enabled.
 
 ## Privacy and control
 
@@ -123,3 +139,4 @@ See:
 
 - `base/app/checks/round-8-a-online-lyrics-pc/`
 - `base/app/checks/round-8-b-online-lyrics-android/`
+- `base/app/checks/ai-lyrics-prompt-fix/`

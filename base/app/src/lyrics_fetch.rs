@@ -168,15 +168,32 @@ pub struct AiConfig {
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LrclibRecord {
+    #[serde(deserialize_with = "null_as_default")]
     pub id: u64,
+    #[serde(deserialize_with = "null_as_default")]
     pub track_name: String,
+    #[serde(deserialize_with = "null_as_default")]
     pub artist_name: String,
+    #[serde(deserialize_with = "null_as_default")]
     pub album_name: String,
+    #[serde(deserialize_with = "null_as_default")]
     pub duration: f64,
+    #[serde(deserialize_with = "null_as_default")]
     pub instrumental: bool,
+    #[serde(deserialize_with = "null_as_default")]
     pub has_word_sync: bool,
     pub plain_lyrics: Option<String>,
     pub synced_lyrics: Option<String>,
+}
+
+/// LRCLIB occasionally returns `null` for fields documented as numbers or
+/// strings. A single null must not discard an otherwise usable search result.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 impl LrclibRecord {
@@ -837,7 +854,8 @@ fn ai_request(
     if body.is_some() {
         all_headers.push(("Content-Type", "application/json"));
     }
-    request_text(
+    let started = Instant::now();
+    let result = request_text(
         method,
         &url,
         &all_headers,
@@ -851,7 +869,21 @@ fn ai_request(
         }
         other => other.to_string(),
     })
-    .map_err(|message| message.replace(&config.api_key, "***"))
+    .map_err(|message| message.replace(&config.api_key, "***"));
+    let elapsed = started.elapsed().as_millis();
+    match &result {
+        Ok(text) => crate::console::log(format!(
+            "AI {method} {url} [{} / {}] ok: {} bytes in {elapsed} ms",
+            config.provider,
+            config.model,
+            text.len()
+        )),
+        Err(error) => crate::console::log(format!(
+            "AI {method} {url} [{} / {}] failed in {elapsed} ms: {error}",
+            config.provider, config.model
+        )),
+    }
+    result
 }
 
 pub fn fetch_models(config: &AiConfig, session: &str) -> Result<Vec<String>, String> {
@@ -933,6 +965,7 @@ fn complete(config: &AiConfig, session: &str, system: &str, user: &str) -> Resul
             {"role": "system", "content": system},
             {"role": "user", "content": user}
         ],
+        "temperature": 0,
         "stream": false
     })
     .to_string();
@@ -951,23 +984,24 @@ fn complete(config: &AiConfig, session: &str, system: &str, user: &str) -> Resul
 }
 
 pub fn test_ai(config: &AiConfig, session: &str) -> Result<String, String> {
-    match fetch_models(config, session) {
-        Ok(models) => Ok(format!("连接成功 · {} 个模型", models.len())),
-        Err(first) => {
-            let text = complete(
-                config,
-                session,
-                "You are a connection test. Reply with exactly OK.",
-                "OK",
-            )?;
-            let first_line = text.lines().next().unwrap_or("").trim();
-            if first_line.is_empty() {
-                Err(first)
-            } else {
-                Ok(format!("连接成功 · {first_line}"))
-            }
-        }
+    // Listing models proves authentication but not generation. Always send a
+    // tiny chat request too, otherwise a broken chat endpoint still reports a
+    // successful connection.
+    let models = fetch_models(config, session);
+    let text = complete(
+        config,
+        session,
+        "You are a connection test. Reply with exactly OK.",
+        "OK",
+    )?;
+    let first_line = text.lines().next().unwrap_or("").trim();
+    if first_line.is_empty() {
+        return Err("AI 未返回内容".to_owned());
     }
+    Ok(match models {
+        Ok(models) => format!("连接成功 · {} 个模型 · {first_line}", models.len()),
+        Err(_) => format!("连接成功 · {first_line}"),
+    })
 }
 
 pub fn clean_ai_text(raw: &str) -> Option<String> {
@@ -1011,6 +1045,36 @@ pub fn clean_ai_text(raw: &str) -> Option<String> {
     (!cleaned.is_empty()).then_some(cleaned)
 }
 
+const AI_LYRICS_SYSTEM: &str = "You prepare a draft LRC file for a user who owns a local copy of the recording. \
+Write the lyric lines you know from your own knowledge, each prefixed with an approximate [mm:ss.xx] timestamp. \
+The user will review and edit the draft before saving, so approximate timing is acceptable; never return NOT_FOUND \
+just because the exact timing is uncertain. Return only the LRC lines. Do not add a title, translation, notes or \
+explanation. If you do not know this song at all, return exactly NOT_FOUND.";
+
+fn looks_like_refusal(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let short = text.lines().filter(|line| !line.trim().is_empty()).count() <= 3;
+    short
+        && [
+            "i can't provide",
+            "i cannot provide",
+            "i can't help with",
+            "i cannot help with",
+            "unable to provide",
+            "can't provide lyrics",
+            "cannot provide lyrics",
+            "cannot reproduce",
+            "can't reproduce",
+            "copyright",
+            "版权",
+            "无法提供",
+            "不能提供",
+            "抱歉，我",
+        ]
+        .iter()
+        .any(|marker| lower.contains(marker))
+}
+
 pub fn fetch_ai_lyrics(
     config: &AiConfig,
     session: &str,
@@ -1028,16 +1092,18 @@ pub fn fetch_ai_lyrics(
     } else {
         "unknown".to_owned()
     };
-    let system = "You are a lyrics lookup tool. Find the lyrics for the requested recording. \
-Use web search when the provider supports it. Return ONLY the lyrics as LRC with [mm:ss.xx] \
-timestamps on every line. If you cannot verify the lyrics, return exactly NOT_FOUND. Never \
-invent, translate or explain.";
     let user = format!(
         "Title: {title}\nArtist: {artist}\nAlbum: {album}\nDuration: {minutes}\n\n\
-Return verified LRC lyrics, or NOT_FOUND."
+         The user owns a local copy. Return draft LRC lyrics, or NOT_FOUND."
     );
-    let text = complete(config, session, system, &user)?;
-    Ok(clean_ai_text(&text))
+    let text = complete(config, session, AI_LYRICS_SYSTEM, &user)?;
+    let Some(cleaned) = clean_ai_text(&text) else {
+        return Ok(None);
+    };
+    if looks_like_refusal(&cleaned) {
+        return Err("AI 供应商拒绝提供歌词（可能受版权限制）".to_owned());
+    }
+    Ok(Some(cleaned))
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1510,6 +1576,40 @@ mod tests {
             "{request}"
         );
         assert!(request.contains("Test Song"));
+        assert!(request.contains("\"temperature\":0"), "{request}");
+        assert!(request.to_lowercase().contains("draft lrc"), "{request}");
+        assert!(
+            !request.to_lowercase().contains("use web search"),
+            "{request}"
+        );
+    }
+
+    #[test]
+    fn treats_a_short_refusal_as_an_error() {
+        let (port, _request) = spawn_http_server(
+            r#"{"choices":[{"message":{"content":"I'm sorry, I cannot provide the lyrics because of copyright."}}]}"#
+                .to_owned(),
+        );
+        let error = fetch_ai_lyrics(
+            &test_config(port),
+            "session",
+            "Test Song",
+            "Test Artist",
+            "Test Album",
+            120.0,
+        )
+        .unwrap_err();
+        assert!(error.contains("拒绝"), "{error}");
+    }
+
+    #[test]
+    fn tolerates_null_lrclib_fields() {
+        let raw = r#"[{"id":1,"trackName":null,"artistName":null,"albumName":null,"duration":null,"instrumental":null,"hasWordSync":null,"plainLyrics":null,"syncedLyrics":"[00:01.00] Line"}]"#;
+        let records: Vec<LrclibRecord> = serde_json::from_str(raw).unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].duration, 0.0);
+        assert_eq!(records[0].track_name, "");
+        assert!(!records[0].instrumental);
     }
 
     #[test]

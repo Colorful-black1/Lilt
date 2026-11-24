@@ -1,0 +1,41 @@
+AI lyrics diagnostic
+====================
+
+Configuration
+-------------
+provider: opencode-go
+model:    deepseek-v4.1-flash
+endpoint: https://opencode.ai/zen/go/v1
+
+The API key was already stored by Lilt. It was decrypted only in memory for this
+diagnostic and is not printed, written to this file or included in logs.
+
+Endpoint and client checks
+--------------------------
+GET /models: HTTP 200, 37 models, configured model present.
+
+The same Rust client used by the app (`lyrics_fetch::fetch_ai_lyrics`, ureq with
+native TLS and the OpenCode Go session header) was run against the real endpoint:
+
+  "After Rain" / "Aimer"                 -> NOT_FOUND
+  "Aimer-After Rain" / "Unknown artist"  -> NOT_FOUND
+  "晴天" / "周杰伦"                       -> LRC, 33 lines, 1350 characters
+
+Conclusion
+----------
+The endpoint, API key, session header and HTTP client work. The old prompt
+required "verified" lyrics plus web search; chat-completions endpoints do not
+provide a web-search tool, so a cautious model could return NOT_FOUND for every
+track. The new prompt asks for a draft with approximate timestamps and returns
+NOT_FOUND only when the song is unknown. A model can still miss niche tracks;
+LRCLIB remains the primary source and the filename fallback improves its input.
+
+LRCLIB cross-check
+------------------
+With the corrected metadata from the filename fallback:
+
+  track_name=After Rain, artist_name=Aimer -> 20 records
+
+The first records include synced lyrics, including a 293-second version that
+matches the 4:53 file. This is the normal successful path; AI is only needed
+when LRCLIB has no usable record.

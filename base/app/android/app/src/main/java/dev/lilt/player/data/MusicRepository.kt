@@ -9,6 +9,7 @@ import androidx.room.withTransaction
 import dev.lilt.player.library.LyricsSource
 import dev.lilt.player.library.clampLyricsOffset
 import dev.lilt.player.library.movedItem
+import dev.lilt.player.library.resolveScannedTags
 import dev.lilt.player.library.withTagOverride
 import dev.lilt.player.library.withTagOverrides
 import kotlinx.coroutines.Dispatchers
@@ -249,18 +250,23 @@ class MusicRepository(
                 val extension = displayName.substringAfterLast('.', "").lowercase()
                 if (extension.isNotEmpty() && extension !in supported) continue
                 val rawTitle = cursor.getString(titleIndex)
-                    ?: displayName.substringBeforeLast('.').ifBlank { "Untitled" }
+                val resolved = resolveScannedTags(
+                    displayName = displayName,
+                    rawTitle = rawTitle,
+                    rawArtist = cursor.getString(artistIndex),
+                    rawTrack = cursor.getInt(trackIndex),
+                )
                 val folder = folderFrom(cursor.getString(folderIndex), displayName)
                 rows += SongEntity(
                     mediaId = cursor.getLong(idIndex),
-                    title = rawTitle.ifBlank { "Untitled" },
-                    artist = cleanUnknown(cursor.getString(artistIndex), "Unknown artist"),
+                    title = resolved.title,
+                    artist = resolved.artist,
                     album = cleanUnknown(cursor.getString(albumIndex), "Unknown album"),
                     albumId = cursor.getLong(albumIdIndex),
                     folder = folder,
                     displayName = displayName,
                     durationMs = cursor.getLong(durationIndex).coerceAtLeast(0),
-                    track = cursor.getInt(trackIndex),
+                    track = resolved.track,
                     year = cursor.getInt(yearIndex),
                     mime = cursor.getString(mimeIndex) ?: "",
                     dateAdded = cursor.getLong(addedIndex),

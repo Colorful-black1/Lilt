@@ -5,8 +5,7 @@ use crate::theme::{display_font, with_alpha, Palette};
 use crate::ui::common::{detail_parent, nav_page};
 use crate::widgets;
 use eframe::egui::{
-    self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke,
-    StrokeKind, Ui, Vec2,
+    self, Align, Align2, Color32, FontId, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, Vec2,
 };
 
 pub fn render(app: &mut LiltApp, ctx: &egui::Context) {

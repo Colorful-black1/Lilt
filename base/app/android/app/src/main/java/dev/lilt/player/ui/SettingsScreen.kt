@@ -460,8 +460,8 @@ fun SettingsScreen(
                 )
                 Text(
                     t(
-                        "OpenAI-compatible providers. The model may or may not be able to search the web; the preview marks AI output as potentially inaccurate.",
-                        "OpenAI 兼容供应商。模型是否支持联网搜索取决于供应商；预览会提示 AI 结果可能不准确。",
+                        "OpenAI-compatible providers. Model coverage varies; if one model cannot find a track, try another. The preview marks AI output as potentially inaccurate.",
+                        "OpenAI 兼容供应商。不同模型的歌词覆盖不同；某个模型找不到时可切换其他模型。预览会提示 AI 结果可能不准确。",
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -630,8 +630,8 @@ fun SettingsScreen(
                 }
                 Text(
                     t(
-                        "The AI provider may charge for requests. If you clear a song's lyrics, Lilt will not fetch them again automatically.",
-                        "AI 请求可能产生费用。手动清空某首歌的歌词后，Lilt 不会再次自动获取。",
+                        "The AI provider may charge for requests. If one model cannot find lyrics, try another model. If you clear a song's lyrics, Lilt will not fetch them again automatically.",
+                        "AI 请求可能产生费用。若某个模型找不到歌词，可切换其他模型。手动清空某首歌的歌词后，Lilt 不会再次自动获取。",
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -49,10 +49,10 @@ fn write_banner(path: &Path) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(mut file) = std::fs::File::create(path) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
         let _ = writeln!(
             file,
-            "Lilt {} developer console",
+            "\n=== Lilt {} developer console ===",
             crate::model::APP_VERSION
         );
         let _ = writeln!(
@@ -61,7 +61,6 @@ fn write_banner(path: &Path) {
             crate::library::data_dir().display()
         );
         let _ = writeln!(file, "Closing this window will not stop playback.");
-        let _ = writeln!(file);
     }
 }
 

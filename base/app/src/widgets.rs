@@ -1,6 +1,6 @@
 use crate::icons::{self, Icon};
 use crate::model::{initials, Song};
-use crate::theme::{cover_palette, mix, with_alpha, Palette};
+use crate::theme::{cover_palette, with_alpha, Palette};
 use eframe::egui::{
     self, Align2, Color32, FontId, Rect, Response, RichText, Sense, Shape, Stroke, StrokeKind, Ui,
     Vec2,

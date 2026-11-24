@@ -92,20 +92,19 @@ object OnlineLyricsClient {
     fun testAi(config: AiConfig): String {
         val normalized = config.normalized()
             ?: throw OnlineLyricsException("接口地址或模型无效")
-        return runCatching {
-            val models = fetchModels(normalized)
-            "连接成功 · ${models.size} 个模型"
-        }.getOrElse { first ->
-            val text = complete(
-                normalized,
-                "You are a connection test. Reply with exactly OK.",
-                "OK",
-                READ_TIMEOUT_MS,
-            )
-            val line = text.lineSequence().firstOrNull()?.trim().orEmpty()
-            if (line.isEmpty()) throw first
-            "连接成功 · $line"
-        }
+        // Listing models only proves authentication. Also send a tiny chat
+        // request so a broken generation endpoint is not reported as success.
+        val models = runCatching { fetchModels(normalized) }
+        val text = complete(
+            normalized,
+            "You are a connection test. Reply with exactly OK.",
+            "OK",
+            READ_TIMEOUT_MS,
+        )
+        val line = text.lineSequence().firstOrNull()?.trim().orEmpty()
+        if (line.isEmpty()) throw OnlineLyricsException("AI 未返回内容")
+        return models.getOrNull()?.let { "连接成功 · ${it.size} 个模型 · $line" }
+            ?: "连接成功 · $line"
     }
 
     fun fetchAiLyrics(
@@ -123,13 +122,42 @@ object OnlineLyricsClient {
         } else {
             "unknown"
         }
-        val system = "You are a lyrics lookup tool. Find the lyrics for the requested " +
-            "recording. Use web search when the provider supports it. Return ONLY the " +
-            "lyrics as LRC with [mm:ss.xx] timestamps on every line. If you cannot verify " +
-            "the lyrics, return exactly NOT_FOUND. Never invent, translate or explain."
+        val system = "You prepare a draft LRC file for a user who owns a local copy " +
+            "of the recording. Write the lyric lines you know from your own knowledge, " +
+            "each prefixed with an approximate [mm:ss.xx] timestamp. The user will review " +
+            "and edit the draft before saving, so approximate timing is acceptable; never " +
+            "return NOT_FOUND just because the exact timing is uncertain. Return only the " +
+            "LRC lines. Do not add a title, translation, notes or explanation. If you do " +
+            "not know this song at all, return exactly NOT_FOUND."
         val user = "Title: $title\nArtist: $artist\nAlbum: $album\nDuration: $minutes\n\n" +
-            "Return verified LRC lyrics, or NOT_FOUND."
-        return cleanAiText(complete(normalized, system, user, AI_READ_TIMEOUT_MS))
+            "The user owns a local copy. Return draft LRC lyrics, or NOT_FOUND."
+        val cleaned = cleanAiText(complete(normalized, system, user, AI_READ_TIMEOUT_MS))
+            ?: return null
+        if (looksLikeRefusal(cleaned)) {
+            throw OnlineLyricsException("AI 供应商拒绝提供歌词（可能受版权限制）")
+        }
+        return cleaned
+    }
+
+    private fun looksLikeRefusal(text: String): Boolean {
+        val lower = text.lowercase(Locale.ROOT)
+        val short = text.lineSequence().count { it.isNotBlank() } <= 3
+        return short && listOf(
+            "i can't provide",
+            "i cannot provide",
+            "i can't help with",
+            "i cannot help with",
+            "unable to provide",
+            "can't provide lyrics",
+            "cannot provide lyrics",
+            "cannot reproduce",
+            "can't reproduce",
+            "copyright",
+            "版权",
+            "无法提供",
+            "不能提供",
+            "抱歉，我",
+        ).any { lower.contains(it) }
     }
 
     private fun complete(
@@ -147,6 +175,7 @@ object OnlineLyricsClient {
                     put(JSONObject().put("role", "user").put("content", user))
                 },
             )
+            put("temperature", 0)
             put("stream", false)
         }.toString()
         val text = aiRequest(config, "chat/completions", body, timeout)

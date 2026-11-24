@@ -2696,6 +2696,13 @@ impl LiltApp {
             model: model.to_owned(),
             api_key,
         };
+        crate::console::log(format!(
+            "AI lyrics request: provider={} model={} title={:?} artist={:?}",
+            config.provider,
+            config.model,
+            song.display_title(),
+            song.display_artist()
+        ));
         self.lyrics_inflight.insert(key.to_owned());
         self.set_lyrics_status(key, LyricsStatus::AiFetching);
         self.lyrics_fetcher.send(FetchCommand::Ai {
@@ -2768,6 +2775,10 @@ impl LiltApp {
         }
         match self.ai_config_from_settings() {
             Ok(config) => {
+                crate::console::log(format!(
+                    "AI models request: provider={} model={} base={}",
+                    config.provider, config.model, config.base_url
+                ));
                 self.ai_models_loading = true;
                 self.ai_status = None;
                 self.lyrics_fetcher.send(FetchCommand::AiModels { config });
@@ -2784,6 +2795,10 @@ impl LiltApp {
         }
         match self.ai_config_from_settings() {
             Ok(config) => {
+                crate::console::log(format!(
+                    "AI connection test: provider={} model={} base={}",
+                    config.provider, config.model, config.base_url
+                ));
                 self.ai_testing = true;
                 self.ai_status = None;
                 self.lyrics_fetcher.send(FetchCommand::AiTest { config });
@@ -2934,6 +2949,11 @@ impl LiltApp {
                 self.lyrics_inflight.remove(&key);
                 match result {
                     Ok(Some(text)) => {
+                        let lines = text.lines().filter(|line| !line.trim().is_empty()).count();
+                        crate::console::log(format!(
+                            "AI lyrics ok: {key} chars={} lines={lines}",
+                            text.len()
+                        ));
                         let Some(song) = self.song_by_key(&key).cloned() else {
                             return;
                         };
@@ -2950,16 +2970,18 @@ impl LiltApp {
                         });
                     }
                     Ok(None) => {
+                        crate::console::log(format!("AI lyrics not found: {key}"));
                         self.set_lyrics_status(&key, LyricsStatus::NotFound);
                         self.notify(
                             self.t(
-                                "AI could not find verified lyrics for this track.",
-                                "AI 没有找到可靠的歌词。",
+                                "AI could not find usable lyrics for this track.",
+                                "AI 没有返回可用的歌词。",
                             )
                             .to_owned(),
                         );
                     }
                     Err(error) => {
+                        crate::console::log(format!("AI lyrics failed: {key}: {error}"));
                         self.set_lyrics_status(&key, LyricsStatus::Error(error.clone()));
                         self.notify(error);
                     }
@@ -2969,6 +2991,7 @@ impl LiltApp {
                 self.ai_models_loading = false;
                 match result {
                     Ok(models) => {
+                        crate::console::log(format!("AI models ok: {} available", models.len()));
                         self.ai_models = models;
                         self.ai_status = Some((
                             true,
@@ -2980,6 +3003,7 @@ impl LiltApp {
                         ));
                     }
                     Err(error) => {
+                        crate::console::log(format!("AI models failed: {error}"));
                         self.ai_status = Some((false, error));
                     }
                 }
@@ -2987,8 +3011,14 @@ impl LiltApp {
             FetchEvent::AiTest { result } => {
                 self.ai_testing = false;
                 match result {
-                    Ok(message) => self.ai_status = Some((true, message)),
-                    Err(error) => self.ai_status = Some((false, error)),
+                    Ok(message) => {
+                        crate::console::log(format!("AI connection test ok: {message}"));
+                        self.ai_status = Some((true, message));
+                    }
+                    Err(error) => {
+                        crate::console::log(format!("AI connection test failed: {error}"));
+                        self.ai_status = Some((false, error));
+                    }
                 }
             }
             FetchEvent::Skipped { key } => {
