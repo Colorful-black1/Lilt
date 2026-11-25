@@ -65,6 +65,8 @@ class BackupTest {
             accent = "sage",
             includeOnly = true,
             playbackSpeed = 1.25f,
+            shuffle = true,
+            repeatMode = "one",
             fadeInMs = 750,
             floatingFontSize = 31.5f,
             floatingPlayedColor = 0xFF12AB34.toInt(),
@@ -99,6 +101,8 @@ class BackupTest {
         assertEquals("glass", decoded.searches.single().query)
         assertEquals("zh", decoded.settings.language)
         assertEquals(1.25f, decoded.settings.playbackSpeed, 0.001f)
+        assertTrue(decoded.settings.shuffle)
+        assertEquals("one", decoded.settings.repeatMode)
         assertEquals(31.5f, decoded.settings.floatingFontSize, 0.001f)
         assertEquals(0xFF12AB34.toInt(), decoded.settings.floatingPlayedColor)
         assertEquals(0xFFF0E6DC.toInt(), decoded.settings.floatingUnplayedColor)
@@ -129,6 +133,7 @@ class BackupTest {
         val backup = sampleBackup().copy(
             settings = BackupSettings(
                 playbackSpeed = 9f,
+                repeatMode = "shuffle-ish",
                 lyricsFontSize = 99f,
                 fadeInMs = 99_999,
                 floatingFontSize = 2f,
@@ -136,6 +141,7 @@ class BackupTest {
         )
         val decoded = LiltBackup.decode(backup.encode())
         assertEquals(3f, decoded.settings.playbackSpeed, 0.001f)
+        assertEquals("off", decoded.settings.repeatMode)
         assertEquals(24f, decoded.settings.lyricsFontSize, 0.001f)
         assertEquals(4_000, decoded.settings.fadeInMs)
         assertEquals(18f, decoded.settings.floatingFontSize, 0.001f)

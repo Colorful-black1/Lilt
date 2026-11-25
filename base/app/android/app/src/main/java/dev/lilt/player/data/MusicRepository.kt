@@ -90,6 +90,14 @@ class MusicRepository(
         music.song(id)?.withTagOverride(tagOverrides.get(id))
     }
 
+    /** Queue restore needs the same tag overrides as the visible library list. */
+    suspend fun songsWithTags(ids: List<Long>): List<SongEntity> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyList()
+        val songs = music.songsById(ids)
+        val overrides = tagOverrides.all().associateBy { it.mediaId }
+        songs.withTagOverrides(overrides)
+    }
+
     suspend fun saveTagOverride(
         mediaId: Long,
         title: String,

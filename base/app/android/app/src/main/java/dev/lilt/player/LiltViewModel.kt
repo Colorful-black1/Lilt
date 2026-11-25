@@ -17,7 +17,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -42,6 +41,7 @@ import dev.lilt.player.data.toProfile
 import dev.lilt.player.data.SearchHistoryEntity
 import dev.lilt.player.data.SettingsStore
 import dev.lilt.player.data.SongEntity
+import dev.lilt.player.data.songMediaItem
 import dev.lilt.player.data.SongStateEntity
 import dev.lilt.player.library.EQ_PRESETS
 import dev.lilt.player.library.EqProfile
@@ -435,7 +435,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         countedMediaId = -1L
         _stopAfterNotice.value = false
         player.setMediaItems(
-            songs.map(::mediaItem),
+            songs.map(::songMediaItem),
             startIndex.coerceIn(0, songs.lastIndex),
             startPositionMs.coerceAtLeast(0),
         )
@@ -488,11 +488,11 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun enqueueNext(song: SongEntity) {
         val player = controller ?: return
         val index = player.currentMediaItemIndex
-        player.addMediaItem(index + 1, mediaItem(song))
+        player.addMediaItem(index + 1, songMediaItem(song))
     }
 
     fun addToQueue(song: SongEntity) {
-        controller?.addMediaItem(mediaItem(song))
+        controller?.addMediaItem(songMediaItem(song))
     }
 
     fun saveCurrentQueue(name: String) {
@@ -587,7 +587,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
         val position = player.currentPosition.coerceAtLeast(0)
         val wasPlaying = player.isPlaying
         runCatching {
-            player.replaceMediaItem(index, mediaItem(song))
+            player.replaceMediaItem(index, songMediaItem(song))
             player.seekTo(index, position)
             if (wasPlaying) player.play()
         }
@@ -637,6 +637,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleShuffle() {
         val player = controller ?: return
         player.shuffleModeEnabled = !player.shuffleModeEnabled
+        settings.setShuffle(player.shuffleModeEnabled)
         publish(player)
     }
 
@@ -647,6 +648,13 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
             else -> Player.REPEAT_MODE_OFF
         }
+        settings.setRepeatMode(
+            when (player.repeatMode) {
+                Player.REPEAT_MODE_ALL -> "all"
+                Player.REPEAT_MODE_ONE -> "one"
+                else -> "off"
+            }
+        )
         publish(player)
     }
 
@@ -1012,7 +1020,15 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
             )
             pushEq()
         }
-        controller?.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
+        controller?.let { player ->
+            player.setPlaybackParameters(PlaybackParameters(settings.playbackSpeed.value))
+            player.shuffleModeEnabled = settings.shuffle.value
+            player.repeatMode = when (settings.repeatMode.value) {
+                "all" -> Player.REPEAT_MODE_ALL
+                "one" -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
+            }
+        }
         refreshFloatingOverlay()
         _missingFiles.value = repository.missingReferences()
         return result.summary
@@ -1041,7 +1057,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addSongsToQueue(songs: List<SongEntity>) {
         if (songs.isEmpty()) return
-        controller?.addMediaItems(songs.map(::mediaItem))
+        controller?.addMediaItems(songs.map(::songMediaItem))
     }
 
     fun addSongsToPlaylist(playlistId: Long, songs: List<SongEntity>) {
@@ -1518,20 +1534,6 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-
-    private fun mediaItem(song: SongEntity): MediaItem = MediaItem.Builder()
-        .setMediaId(song.mediaId.toString())
-        .setUri(song.contentUri)
-        .setMediaMetadata(
-            MediaMetadata.Builder()
-                .setTitle(song.title)
-                .setArtist(song.artist)
-                .setAlbumTitle(song.album)
-                .setDurationMs(song.durationMs)
-                .setArtworkUri(MusicRepository.albumArtUri(song.albumId))
-                .build()
-        )
-        .build()
 
     override fun onCleared() {
         controller?.removeListener(listener)

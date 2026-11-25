@@ -37,8 +37,13 @@ import com.google.common.util.concurrent.ListenableFuture
 import dev.lilt.player.LockScreenActivity
 import dev.lilt.player.MainActivity
 import dev.lilt.player.data.LiltDatabase
+import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.OnlineLyricsEngine
+import dev.lilt.player.data.PlaybackSession
+import dev.lilt.player.data.PlaybackSessionStore
+import dev.lilt.player.data.SettingsStore
 import dev.lilt.player.data.SongStateEntity
+import dev.lilt.player.data.songMediaItem
 import dev.lilt.player.library.EQ_BANDS
 import dev.lilt.player.library.EQ_FREQUENCIES
 import dev.lilt.player.library.EqProfile
@@ -81,6 +86,12 @@ class PlaybackService : MediaSessionService() {
     private var virtualizer: Virtualizer? = null
     private val prefs by lazy { getSharedPreferences("lilt_effects", MODE_PRIVATE) }
     private val settingsPrefs by lazy { getSharedPreferences("lilt_settings", MODE_PRIVATE) }
+    private val appSettings by lazy { SettingsStore(this) }
+    private val sessionStore by lazy { PlaybackSessionStore(this) }
+    private val repository by lazy {
+        MusicRepository(this, LiltDatabase.get(this), appSettings)
+    }
+    private var restoringSession = false
     private val audioManager by lazy { getSystemService(AudioManager::class.java) }
     private var profile = EqProfile()
     private var perDevice = true
@@ -185,6 +196,14 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+    private val sessionTicker = object : Runnable {
+        override fun run() {
+            if (player?.isPlaying == true) {
+                saveSession()
+                mainHandler.postDelayed(this, 5_000L)
+            }
+        }
+    }
     private val abTicker = object : Runnable {
         override fun run() {
             val exo = player ?: return
@@ -277,6 +296,7 @@ class PlaybackService : MediaSessionService() {
                 }
                 overlay?.applyState(overlayState())
                 WidgetRenderer.update(this@PlaybackService, exo)
+                saveSession()
                 if (sleep.mode == MODE_OFF) return
                 if (sleep.pendingStop) {
                     stopForSleep()
@@ -297,14 +317,25 @@ class PlaybackService : MediaSessionService() {
                 if (isPlaying) {
                     startSleepTicker()
                     startWidgetTicker()
+                    startSessionTicker()
                     if (stopAfterCurrent) startStopAfterTicker()
                     maybeFetchOnlineLyrics(exo.currentMediaItem)
                 } else {
                     stopSleepTicker()
                     stopWidgetTicker()
+                    stopSessionTicker()
+                    saveSession()
                 }
                 overlay?.applyState(overlayState())
                 WidgetRenderer.update(this@PlaybackService, exo)
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int,
+            ) {
+                saveSession()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -313,6 +344,7 @@ class PlaybackService : MediaSessionService() {
                 }
                 overlay?.applyState(overlayState())
                 WidgetRenderer.update(this@PlaybackService, exo)
+                saveSession()
             }
         })
         session = MediaSession.Builder(this, wrapper)
@@ -491,7 +523,13 @@ class PlaybackService : MediaSessionService() {
         loadOverlayLyrics(exo.currentMediaItem?.mediaId?.toLongOrNull() ?: -1L)
         syncOverlay()
         WidgetRenderer.update(this, exo)
-        if (exo.isPlaying) startWidgetTicker()
+        exo.shuffleModeEnabled = appSettings.shuffle.value
+        exo.repeatMode = repeatModeValue(appSettings.repeatMode.value)
+        if (exo.isPlaying) {
+            startWidgetTicker()
+            startSessionTicker()
+        }
+        restoreLastSession()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -716,6 +754,105 @@ class PlaybackService : MediaSessionService() {
 
     private fun stopWidgetTicker() {
         mainHandler.removeCallbacks(widgetTicker)
+    }
+
+    private fun startSessionTicker() {
+        mainHandler.removeCallbacks(sessionTicker)
+        mainHandler.postDelayed(sessionTicker, 5_000L)
+    }
+
+    private fun stopSessionTicker() {
+        mainHandler.removeCallbacks(sessionTicker)
+    }
+
+    private fun repeatModeValue(value: String): Int = when (value) {
+        "all" -> Player.REPEAT_MODE_ALL
+        "one" -> Player.REPEAT_MODE_ONE
+        else -> Player.REPEAT_MODE_OFF
+    }
+
+    private fun sessionSnapshot(): PlaybackSession? {
+        val exo = player ?: return null
+        if (exo.mediaItemCount == 0) return null
+        val ids = ArrayList<Long>(exo.mediaItemCount)
+        for (index in 0 until exo.mediaItemCount) {
+            exo.getMediaItemAt(index).mediaId.toLongOrNull()?.takeIf { it > 0L }?.let(ids::add)
+        }
+        if (ids.isEmpty()) return null
+        return PlaybackSession(
+            queueIds = ids,
+            index = exo.currentMediaItemIndex.coerceIn(0, ids.lastIndex),
+            positionMs = if (exo.playbackState == Player.STATE_ENDED) {
+                0L
+            } else {
+                exo.currentPosition.coerceAtLeast(0L)
+            },
+            activeQueueId = appSettings.activeQueueId.value,
+            updatedAt = System.currentTimeMillis(),
+        )
+    }
+
+    private fun saveSession() {
+        if (restoringSession) return
+        val snapshot = sessionSnapshot() ?: return
+        overlayScope.launch(Dispatchers.IO) { sessionStore.save(snapshot) }
+    }
+
+    private fun saveSessionNow() {
+        if (restoringSession) return
+        val snapshot = sessionSnapshot() ?: return
+        sessionStore.save(snapshot)
+    }
+
+    /**
+     * Restores the last queue into the player without autoplay. Media3 then
+     * publishes the paused item to the app, notification and mini player.
+     */
+    private fun restoreLastSession() {
+        val exo = player ?: return
+        if (exo.mediaItemCount > 0) return
+        val snapshot = sessionStore.load() ?: return
+        restoringSession = true
+        overlayScope.launch {
+            try {
+                val songs = withContext(Dispatchers.IO) {
+                    repository.songsWithTags(snapshot.queueIds)
+                }
+                if (exo.mediaItemCount > 0) {
+                    // The user started something while the snapshot was loading.
+                    restoringSession = false
+                    return@launch
+                }
+                val byId = songs.associateBy { it.mediaId }
+                val ordered = snapshot.queueIds.mapNotNull { byId[it] }
+                if (ordered.isEmpty()) {
+                    sessionStore.clear()
+                    restoringSession = false
+                    return@launch
+                }
+                val currentId = snapshot.queueIds.getOrNull(snapshot.index)
+                val exact = currentId
+                    ?.let { id -> ordered.indexOfFirst { it.mediaId == id } }
+                    ?.takeIf { it >= 0 }
+                val start = exact ?: snapshot.index.coerceIn(0, ordered.lastIndex)
+                val duration = ordered[start].durationMs
+                val startPosition = if (exact == null || duration <= 0L) {
+                    0L
+                } else if (snapshot.positionMs >= duration - 2_000L) {
+                    0L
+                } else {
+                    snapshot.positionMs.coerceAtLeast(0L)
+                }
+                exo.setMediaItems(ordered.map(::songMediaItem), start, startPosition)
+                exo.shuffleModeEnabled = appSettings.shuffle.value
+                exo.repeatMode = repeatModeValue(appSettings.repeatMode.value)
+                exo.prepare()
+                restoringSession = false
+                saveSession()
+            } catch (_: Exception) {
+                restoringSession = false
+            }
+        }
     }
 
     private inner class FadePlayer(inner: Player) : ForwardingPlayer(inner) {
@@ -1195,6 +1332,7 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        saveSessionNow()
         val exo = player
         if (exo == null || !exo.playWhenReady || exo.mediaItemCount == 0) {
             stopSelf()
@@ -1206,6 +1344,8 @@ class PlaybackService : MediaSessionService() {
         cancelFade()
         stopSleepTicker()
         stopWidgetTicker()
+        stopSessionTicker()
+        saveSessionNow()
         mainHandler.removeCallbacks(abTicker)
         mainHandler.removeCallbacks(stopAfterTicker)
         mainHandler.removeCallbacks(overlayTicker)

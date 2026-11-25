@@ -621,6 +621,9 @@ pub struct Settings {
     pub only_included: bool,
     pub previous_always: bool,
     pub shuffle_scope_all: bool,
+    /// Last playback-mode choice, restored on the next launch.
+    pub shuffle: bool,
+    pub repeat: RepeatMode,
     pub gapless: bool,
     /// `k_i_cfd` (crossfade ms) is subtracted from the play-count target.
     pub crossfade_seconds: f32,
@@ -683,6 +686,14 @@ pub struct Settings {
     pub desktop_lyrics_unplayed_color: Option<[u8; 3]>,
     /// Compact always-on-top player window.
     pub mini_player: bool,
+    /// Main-window and companion-window geometry, restored on launch.
+    pub main_window_position: Option<[f32; 2]>,
+    pub main_window_size: Option<[f32; 2]>,
+    pub main_window_maximized: bool,
+    pub desktop_lyrics_position: Option<[f32; 2]>,
+    pub desktop_lyrics_size: Option<[f32; 2]>,
+    pub mini_player_position: Option<[f32; 2]>,
+    pub mini_player_size: Option<[f32; 2]>,
     /// Fetches missing lyrics from LRCLIB when a song starts. The AI fallback is
     /// always started from a button, never automatically.
     pub online_lyrics: bool,
@@ -712,6 +723,8 @@ impl Default for Settings {
             previous_always: false,
             // `k_i_sflm_ob` default 0 = shuffle all songs in the queue.
             shuffle_scope_all: true,
+            shuffle: false,
+            repeat: RepeatMode::Off,
             // `k_b_glp` default true.
             gapless: true,
             // `k_i_cfd` default 0 ms.
@@ -758,6 +771,13 @@ impl Default for Settings {
             desktop_lyrics_played_color: None,
             desktop_lyrics_unplayed_color: None,
             mini_player: false,
+            main_window_position: None,
+            main_window_size: None,
+            main_window_maximized: false,
+            desktop_lyrics_position: None,
+            desktop_lyrics_size: None,
+            mini_player_position: None,
+            mini_player_size: None,
             online_lyrics: true,
             ai_provider: "deepseek".to_owned(),
             ai_base_url: "https://api.deepseek.com/v1".to_owned(),
@@ -1260,6 +1280,30 @@ mod tests {
             Some([240, 230, 220])
         );
         assert!(parsed.settings.mini_player);
+    }
+
+    #[test]
+    fn playback_modes_and_window_geometry_survive_state_files() {
+        let parsed: Persisted = serde_json::from_str("{}").unwrap();
+        assert!(!parsed.settings.shuffle);
+        assert_eq!(parsed.settings.repeat, RepeatMode::Off);
+        assert_eq!(parsed.settings.main_window_position, None);
+        assert_eq!(parsed.settings.main_window_size, None);
+        assert!(!parsed.settings.main_window_maximized);
+
+        let parsed: Persisted = serde_json::from_str(
+            r#"{"settings":{"shuffle":true,"repeat":"one","main_window_position":[120,80],"main_window_size":[1280,800],"main_window_maximized":true,"desktop_lyrics_position":[10,20],"desktop_lyrics_size":[900,200],"mini_player_position":[30,40],"mini_player_size":[420,176]}}"#,
+        )
+        .unwrap();
+        assert!(parsed.settings.shuffle);
+        assert_eq!(parsed.settings.repeat, RepeatMode::One);
+        assert_eq!(parsed.settings.main_window_position, Some([120.0, 80.0]));
+        assert_eq!(parsed.settings.main_window_size, Some([1280.0, 800.0]));
+        assert!(parsed.settings.main_window_maximized);
+        assert_eq!(parsed.settings.desktop_lyrics_position, Some([10.0, 20.0]));
+        assert_eq!(parsed.settings.desktop_lyrics_size, Some([900.0, 200.0]));
+        assert_eq!(parsed.settings.mini_player_position, Some([30.0, 40.0]));
+        assert_eq!(parsed.settings.mini_player_size, Some([420.0, 176.0]));
     }
 
     #[test]

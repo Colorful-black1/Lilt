@@ -40,7 +40,7 @@ configure `signingConfigs` in `app/build.gradle.kts`.
 
 ## Put it on a phone
 
-1. Copy `app/Lilt-0.2.1-debug.apk` to the phone by USB or a local file transfer.
+1. Copy `app/Lilt-0.2.2-debug.apk` to the phone by USB or a local file transfer.
 2. Tap the file in the phone's file manager. If Android asks, allow that file manager to
    install unknown apps.
 3. Open Lilt and allow audio access. The first scan starts automatically; the refresh
@@ -105,6 +105,13 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   never bypasses the secure keyguard.
   The setting defaults on and can be turned off or previewed in **Settings → Lock screen**.
   Automatic display uses the same display-over-other-apps permission as floating lyrics.
+- **Session restore and playback-mode memory.** Shuffle and repeat are saved in settings
+  and survive a restart. The playback service writes the last queue, song, index and
+  position to a local session file every five seconds and on pause, seek, task removal and
+  destroy. A cold start loads it paused, shows the saved song in the mini player, and Play
+  continues from the same position; it never autoplays. Missing files are skipped and tag
+  overrides are applied. Page/tab/search state and the transient session are not restored
+  from the backup.
 - **Manual update check.** About shows the current version and the GitHub Releases URL.
   Checking downloads a newer APK automatically; **Install update** hands it to the system
   package installer, which may ask for permission to install unknown apps. The APK is
@@ -171,7 +178,8 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **Local backup and restore.** **Settings → Backup & restore** writes one versioned JSON
   file through the system file picker. It contains playlists, queues, favourites, play
   counts, history, bookmarks, lyrics and offsets, tag overrides, folder rules, recent
-  searches, EQ settings and app settings; audio files are never included. Restore asks for
+  searches, EQ settings (including shuffle/repeat) and app settings; audio files and the
+  transient playback session are never included. Restore asks for
   confirmation, resolves backup song ids against the current library (by id, then folder +
   file name, then title/artist/duration), replaces the user tables in one Room transaction
   and applies the settings. References to files that are no longer present are skipped and
@@ -242,15 +250,15 @@ Android Keystore AES key and is excluded from backups. Media3 also declares
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 62 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 65 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
   index, filename tag fallback and track-prefix handling, LRC parsing, lyric offsets,
   floating lyric line windows and font clamping, widget progress/time formatting, backup
   JSON round trips, platform/format rejection, song reference resolution, A-B loop bounds,
   stop-after bounds, duplicate grouping, missing-reference grouping, EQ curves/profiles,
   queue resume positions, list reordering, virtual tag merging, online lyric
-  matching/cleanup, draft AI prompt/refusal handling, base URL normalization and the
-  OpenAI-compatible HTTP client.
+  matching/cleanup, draft AI prompt/refusal handling, base URL normalization, the
+  OpenAI-compatible HTTP client and playback-session JSON round trips.
 - `./gradlew connectedDebugAndroidTest` passes the Room 1→2, 2→3, 3→4, 4→5, 5→6, 6→7,
   7→8 and 8→9 migration tests on an Android 15 emulator.
 - The APK was installed on an Android 15 emulator and the main flow was exercised; see

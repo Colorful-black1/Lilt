@@ -59,12 +59,12 @@ on both platforms; the download/install code is ready for that first release.
 ## Tests
 
 ```text
-PC:      72 passed, 0 failed, 1 ignored
-Android: 62 passed, 0 failed
+PC:      73 passed, 0 failed, 1 ignored
+Android: 65 passed, 0 failed
 ```
 
 ```text
-dist/Lilt-0.2.1-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
-dist/Lilt-0.2.1-win64-portable.zip    18,531,896 bytes
-base/app/Lilt-0.2.1-debug.apk         22,707,742 bytes
+dist/Lilt-0.2.2-win64/Lilt.exe        12,055,552 bytes  (PE subsystem 2)
+dist/Lilt-0.2.2-win64-portable.zip    18,515,751 bytes
+base/app/Lilt-0.2.2-debug.apk         22,148,381 bytes
 ```

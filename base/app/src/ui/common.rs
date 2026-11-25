@@ -731,7 +731,7 @@ pub fn album_detail(app: &mut LiltApp, ui: &mut Ui, palette: &Palette, name: &st
                 if ghost_button(ui, app.t("Shuffle", "随机"), Some(Icon::Shuffle), palette)
                     .clicked()
                 {
-                    app.shuffle = true;
+                    app.enable_shuffle();
                     let name = album.name.clone();
                     app.play_context(keys.clone(), 0, &name);
                 }

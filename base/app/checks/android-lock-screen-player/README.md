@@ -3,8 +3,8 @@
 This round adds the KuGou-style favourite and floating-lyrics actions to the
 media notification, keeps the previous / play-pause / next group centred, adds
 a full-screen player over the lock screen, and adds shuffle / repeat controls
-plus synced lyrics to that player. It also bumps both builds to `0.2.1`
-(Android `versionCode 3`).
+plus synced lyrics to that player. The current build is `0.2.2`
+(Android `versionCode 4`); the first version of this round was `0.2.1`.
 
 ## Notification
 
@@ -114,12 +114,12 @@ intended heart / previous / play / next / 词 order.
   saved lyrics show "暂无歌词" until lyrics are added in the app.
 
 ```text
-PC:      72 passed, 0 failed, 1 ignored
-Android: 62 passed, 0 failed
+PC:      73 passed, 0 failed, 1 ignored
+Android: 65 passed, 0 failed
 ```
 
 ```text
-dist/Lilt-0.2.1-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
-dist/Lilt-0.2.1-win64-portable.zip    18,531,896 bytes
-base/app/Lilt-0.2.1-debug.apk         22,707,742 bytes
+dist/Lilt-0.2.2-win64/Lilt.exe        12,055,552 bytes  (PE subsystem 2)
+dist/Lilt-0.2.2-win64-portable.zip    18,515,751 bytes
+base/app/Lilt-0.2.2-debug.apk         22,148,381 bytes
 ```

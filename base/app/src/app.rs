@@ -301,6 +301,8 @@ pub struct LiltApp {
     pub hidden_to_tray: bool,
     pub quitting: bool,
     pub was_minimized: bool,
+    window_geometry_applied: bool,
+    window_geometry_guard_until: Instant,
     desktop_attempts: u8,
     desktop_next_try: Instant,
 }
@@ -350,6 +352,8 @@ impl LiltApp {
             _ => Page::Folders,
         };
 
+        let saved_shuffle = state.settings.shuffle;
+        let saved_repeat = state.settings.repeat;
         let mut app = Self {
             state,
             songs: Vec::new(),
@@ -378,8 +382,8 @@ impl LiltApp {
             current_key: None,
             playing: false,
             fade: None,
-            shuffle: false,
-            repeat: RepeatMode::Off,
+            shuffle: saved_shuffle,
+            repeat: saved_repeat,
             pending_next: None,
             counted_current: false,
             ab_loop: None,
@@ -441,9 +445,18 @@ impl LiltApp {
             hidden_to_tray: false,
             quitting: false,
             was_minimized: false,
+            window_geometry_applied: false,
+            window_geometry_guard_until: Instant::now(),
             desktop_attempts: 0,
             desktop_next_try: Instant::now() + Duration::from_millis(800),
         };
+
+        app.companions.set_saved_geometry(
+            app.state.settings.desktop_lyrics_position,
+            app.state.settings.desktop_lyrics_size,
+            app.state.settings.mini_player_position,
+            app.state.settings.mini_player_size,
+        );
 
         if app.state.settings.scan_on_start {
             app.start_scan();
@@ -869,6 +882,127 @@ impl LiltApp {
     fn maybe_save(&mut self) {
         if self.dirty && self.last_save.elapsed() > Duration::from_millis(900) {
             self.save_now();
+        }
+    }
+
+    /// Applies the saved main-window geometry once, after the first frame has
+    /// created the native window. Screenshot runs keep their requested size.
+    fn apply_window_geometry(&mut self, ctx: &egui::Context) {
+        if self.window_geometry_applied || self.screenshot.is_some() {
+            return;
+        }
+        self.window_geometry_applied = true;
+        // Do not read the viewport back until the queued geometry commands
+        // have reached the native window, or the default size would overwrite
+        // the settings we are trying to restore.
+        self.window_geometry_guard_until = Instant::now() + Duration::from_millis(800);
+        let settings = &self.state.settings;
+        if let Some(size) = settings.main_window_size {
+            if size[0].is_finite() && size[1].is_finite() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                    size[0].max(720.0),
+                    size[1].max(540.0),
+                )));
+            }
+        }
+        if let Some(position) = settings.main_window_position {
+            if position[0].is_finite() && position[1].is_finite() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(
+                    position[0],
+                    position[1],
+                )));
+            }
+        }
+        if settings.main_window_maximized {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+        }
+    }
+
+    fn remember_window_geometry(&mut self, ctx: &egui::Context) {
+        if self.screenshot.is_some()
+            || self.hidden_to_tray
+            || Instant::now() < self.window_geometry_guard_until
+        {
+            return;
+        }
+        let (maximized, outer, inner) = ctx.input(|input| {
+            let viewport = input.viewport();
+            (viewport.maximized, viewport.outer_rect, viewport.inner_rect)
+        });
+        let Some(maximized) = maximized else {
+            return;
+        };
+        let mut changed = false;
+        if maximized {
+            // Keep the previous normal geometry so unmaximizing on the next
+            // launch still returns to a useful size.
+            if !self.state.settings.main_window_maximized {
+                self.state.settings.main_window_maximized = true;
+                changed = true;
+            }
+        } else if let (Some(outer), Some(inner)) = (outer, inner) {
+            if self.state.settings.main_window_maximized {
+                self.state.settings.main_window_maximized = false;
+                changed = true;
+            }
+            let position = [outer.min.x, outer.min.y];
+            if position_changed(self.state.settings.main_window_position, position) {
+                self.state.settings.main_window_position = Some(position);
+                changed = true;
+            }
+            let size = [inner.width(), inner.height()];
+            if size[0] > 1.0
+                && size[1] > 1.0
+                && size_changed(self.state.settings.main_window_size, size)
+            {
+                self.state.settings.main_window_size = Some(size);
+                changed = true;
+            }
+        }
+        if changed {
+            self.dirty = true;
+        }
+    }
+
+    fn remember_companion_geometry(&mut self) {
+        let geometry = self.companions.geometry();
+        let mut changed = false;
+        if let Some(position) = geometry.lyrics_position {
+            let value = [position.x, position.y];
+            if position_changed(self.state.settings.desktop_lyrics_position, value) {
+                self.state.settings.desktop_lyrics_position = Some(value);
+                changed = true;
+            }
+        }
+        if let Some(size) = geometry.lyrics_size {
+            let value = [size.x, size.y];
+            if size.x > 1.0
+                && size.y > 1.0
+                && size_changed(self.state.settings.desktop_lyrics_size, value)
+            {
+                self.state.settings.desktop_lyrics_size = Some(value);
+                changed = true;
+            }
+        }
+        if let Some(position) = geometry.mini_position {
+            let value = [position.x, position.y];
+            if position_changed(self.state.settings.mini_player_position, value) {
+                self.state.settings.mini_player_position = Some(value);
+                changed = true;
+            }
+        }
+        if let Some(size) = geometry.mini_size {
+            let value = [size.x, size.y];
+            if size.x > 1.0
+                && size.y > 1.0
+                && size_changed(self.state.settings.mini_player_size, value)
+            {
+                self.state.settings.mini_player_size = Some(value);
+                changed = true;
+            }
+        }
+        if changed {
+            self.dirty = true;
         }
     }
 
@@ -1690,8 +1824,23 @@ impl LiltApp {
         self.dirty = true;
     }
 
+    /// Turns shuffle on without toggling it off first. Used by the shuffle
+    /// buttons that immediately start a shuffled queue.
+    pub fn enable_shuffle(&mut self) {
+        if self.shuffle {
+            return;
+        }
+        self.shuffle = true;
+        self.state.settings.shuffle = true;
+        self.dirty = true;
+        self.save_now();
+    }
+
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
+        self.state.settings.shuffle = self.shuffle;
+        self.dirty = true;
+        self.save_now();
         self.notify(if self.shuffle {
             self.t("Shuffle on", "随机播放已开启").to_owned()
         } else {
@@ -1705,6 +1854,9 @@ impl LiltApp {
             RepeatMode::All => RepeatMode::One,
             RepeatMode::One => RepeatMode::Off,
         };
+        self.state.settings.repeat = self.repeat;
+        self.dirty = true;
+        self.save_now();
     }
 
     pub fn toggle_favorite(&mut self, key: &str) {
@@ -3456,6 +3608,8 @@ impl LiltApp {
         self.modal = None;
         let current_roots = self.state.library_roots.clone();
         let summary = backup::apply_backup(&mut self.state, backup, &current_roots);
+        self.shuffle = self.state.settings.shuffle;
+        self.repeat = self.state.settings.repeat;
         let mut eq = self.state.eq_profile(self.state.settings.eq_device);
         eq.enabled = self.state.settings.eq_enabled;
         self.active_eq = eq.clone();
@@ -4562,6 +4716,7 @@ impl eframe::App for LiltApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        self.apply_window_geometry(ctx);
         self.update_desktop(ctx, frame);
         self.handle_companion_actions(ctx);
         self.update_theme(ctx);
@@ -4580,6 +4735,8 @@ impl eframe::App for LiltApp {
         }
         crate::ui::render(self, ctx);
         self.update_companions(ctx);
+        self.remember_window_geometry(ctx);
+        self.remember_companion_geometry();
         self.maybe_save();
         self.sync_hidden_window_state();
         self.handle_screenshot(ctx);
@@ -4609,6 +4766,18 @@ impl Drop for LiltApp {
         let _ = library::save_state(&self.state);
         crate::console::shutdown();
     }
+}
+
+fn position_changed(old: Option<[f32; 2]>, new: [f32; 2]) -> bool {
+    old.map_or(true, |value| {
+        (value[0] - new[0]).abs() > 0.5 || (value[1] - new[1]).abs() > 0.5
+    })
+}
+
+fn size_changed(old: Option<[f32; 2]>, new: [f32; 2]) -> bool {
+    old.map_or(true, |value| {
+        (value[0] - new[0]).abs() > 0.5 || (value[1] - new[1]).abs() > 0.5
+    })
 }
 
 fn missing_file_entry(state: &Persisted, key: &str) -> MissingFile {

@@ -98,7 +98,7 @@ fn folders_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
                 .clicked()
                 && !keys.is_empty()
             {
-                app.shuffle = true;
+                app.enable_shuffle();
                 app.play_context(keys.clone(), 0, &play_name);
             }
             if widgets::ghost_button(
@@ -372,7 +372,7 @@ fn songs_page(app: &mut LiltApp, ui: &mut Ui, palette: &Palette) {
                 .clicked()
                 && !keys.is_empty()
             {
-                app.shuffle = true;
+                app.enable_shuffle();
                 let name = app.t("All songs", "所有歌曲").to_owned();
                 app.play_context(keys.clone(), 0, &name);
             }

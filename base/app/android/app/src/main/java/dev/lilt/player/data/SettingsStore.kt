@@ -11,6 +11,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
 
+fun normalizeRepeatMode(value: String?): String = when (value) {
+    "all", "one" -> value
+    else -> "off"
+}
+
 /** Small, local preferences. No account and no network. */
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("lilt_settings", Context.MODE_PRIVATE)
@@ -22,6 +27,9 @@ class SettingsStore(context: Context) {
     val queueConflict: StateFlow<String> =
         MutableStateFlow(prefs.getString("queue_conflict", "replace") ?: "replace")
     val playbackSpeed: StateFlow<Float> = MutableStateFlow(prefs.getFloat("speed", 1f))
+    val shuffle: StateFlow<Boolean> = MutableStateFlow(prefs.getBoolean("shuffle", false))
+    val repeatMode: StateFlow<String> =
+        MutableStateFlow(normalizeRepeatMode(prefs.getString("repeat_mode", "off")))
     val activeQueueId: StateFlow<Long> = MutableStateFlow(prefs.getLong("active_queue", -1L))
     val songSort: StateFlow<String> =
         MutableStateFlow(prefs.getString("song_sort", "title") ?: "title")
@@ -97,6 +105,11 @@ class SettingsStore(context: Context) {
                 "lyrics_font_size" ->
                     (lyricsFontSize as MutableStateFlow).value =
                         prefs.getFloat(key, 15f)
+                "shuffle" ->
+                    (shuffle as MutableStateFlow).value = prefs.getBoolean(key, false)
+                "repeat_mode" ->
+                    (repeatMode as MutableStateFlow).value =
+                        normalizeRepeatMode(prefs.getString(key, "off"))
             }
         }
 
@@ -132,6 +145,17 @@ class SettingsStore(context: Context) {
     fun setPlaybackSpeed(value: Float) {
         prefs.edit { putFloat("speed", value) }
         (playbackSpeed as MutableStateFlow).value = value
+    }
+
+    fun setShuffle(value: Boolean) {
+        prefs.edit { putBoolean("shuffle", value) }
+        (shuffle as MutableStateFlow).value = value
+    }
+
+    fun setRepeatMode(value: String) {
+        val cleaned = normalizeRepeatMode(value)
+        prefs.edit { putString("repeat_mode", cleaned) }
+        (repeatMode as MutableStateFlow).value = cleaned
     }
 
     fun setActiveQueue(id: Long) {
@@ -282,6 +306,8 @@ class SettingsStore(context: Context) {
         includeOnly = includeOnly.value,
         queueConflict = queueConflict.value,
         playbackSpeed = playbackSpeed.value,
+        shuffle = shuffle.value,
+        repeatMode = repeatMode.value,
         songSort = songSort.value,
         songSortDescending = songSortDescending.value,
         fadeInMs = fadeInMs.value,
@@ -314,6 +340,8 @@ class SettingsStore(context: Context) {
         setIncludeOnly(backup.includeOnly)
         setQueueConflict(backup.queueConflict)
         setPlaybackSpeed(backup.playbackSpeed)
+        setShuffle(backup.shuffle)
+        setRepeatMode(backup.repeatMode)
         setSongSort(backup.songSort)
         setSongSortDescending(backup.songSortDescending)
         setFadeInMs(backup.fadeInMs)

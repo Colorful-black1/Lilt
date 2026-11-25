@@ -309,12 +309,14 @@ fn count_label(count: usize, one: &str, many: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Bookmark, SongExtra};
+    use crate::model::{Bookmark, RepeatMode, SongExtra};
 
     fn sample_state() -> Persisted {
         let mut state = Persisted::default();
         state.settings.volume = 0.42;
         state.settings.fade_in_ms = 750;
+        state.settings.shuffle = true;
+        state.settings.repeat = RepeatMode::One;
         state.playlists.push(Playlist {
             id: 7,
             name: "Night list".to_owned(),
@@ -355,6 +357,8 @@ mod tests {
         let text = to_json(&make_backup(&state)).unwrap();
         let parsed = from_json(&text).unwrap();
         assert_eq!(parsed.data.settings.volume, 0.42);
+        assert!(parsed.data.settings.shuffle);
+        assert_eq!(parsed.data.settings.repeat, RepeatMode::One);
         assert_eq!(parsed.data.playlists.len(), 1);
         assert_eq!(parsed.data.playlists[0].songs, vec!["a.mp3", "b.mp3"]);
         assert_eq!(parsed.data.queues[0].position, 12.5);

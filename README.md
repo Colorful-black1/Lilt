@@ -9,7 +9,7 @@ Lilt 是一个本地优先的音乐播放器，对目标应用 Musicolet 6.14.1 
 - **桌面版**：Rust + egui/eframe + Rodio，源码在 `base/app`
 - **Android 版**：Kotlin + Jetpack Compose + Media3 + Room，源码在 `base/app/android`
 
-两个版本都可选地联网获取歌词：自动查询 LRCLIB，找不到时可在歌词面板手动请求 AI 并预览后保存。只发送歌名、艺术家、专辑和时长，不上传音频、路径或收听历史；设置中可关闭。不包含广告、统计或崩溃上报 SDK。Android 为歌词获取申请 `INTERNET` / `ACCESS_NETWORK_STATE` 权限。桌面歌词与 Android 悬浮歌词支持按 LRC 进度双色填充，可在设置中自定义已播放/未播放颜色；PC 解锁态桌面歌词可拖动窗口或滚动滚轮无级缩放，歌词和按钮会一起放大缩小，卡片边缘会显示标准双向缩放光标。未内嵌标签的 `歌手 - 歌名` 文件名会用于补全显示标签（PC/Android）；PC 开发者模式会记录 AI 请求与结果，且不记录 API Key。PC 正在播放页采用歌词优先的两栏布局，歌词随播放自动居中滚动；Android 播放页居中显示当前/下一行歌词，点击歌词区域可进入全屏歌词页。Android 通知栏的媒体卡新增收藏与悬浮歌词按钮，上一首/播放暂停/下一首保持居中；锁屏后可显示带同步滚动歌词、随机与循环控制的全屏播放界面，上滑回到系统解锁界面。PC 与 Android 的“关于与更新”支持手动检查 GitHub Releases，发现新版本后自动下载安装包。
+两个版本都可选地联网获取歌词：自动查询 LRCLIB，找不到时可在歌词面板手动请求 AI 并预览后保存。只发送歌名、艺术家、专辑和时长，不上传音频、路径或收听历史；设置中可关闭。不包含广告、统计或崩溃上报 SDK。Android 为歌词获取申请 `INTERNET` / `ACCESS_NETWORK_STATE` 权限。桌面歌词与 Android 悬浮歌词支持按 LRC 进度双色填充，可在设置中自定义已播放/未播放颜色；PC 解锁态桌面歌词可拖动窗口或滚动滚轮无级缩放，歌词和按钮会一起放大缩小，卡片边缘会显示标准双向缩放光标。未内嵌标签的 `歌手 - 歌名` 文件名会用于补全显示标签（PC/Android）；PC 开发者模式会记录 AI 请求与结果，且不记录 API Key。PC 正在播放页采用歌词优先的两栏布局，歌词随播放自动居中滚动；Android 播放页居中显示当前/下一行歌词，点击歌词区域可进入全屏歌词页。Android 通知栏的媒体卡新增收藏与悬浮歌词按钮，上一首/播放暂停/下一首保持居中；锁屏后可显示带同步滚动歌词、随机与循环控制的全屏播放界面，上滑回到系统解锁界面。PC 与 Android 都会记住随机/循环；Android 退出后重新进入会在首页底部恢复上次歌曲并暂停，点播放从上次进度继续；PC 同时恢复主窗口、桌面歌词和迷你播放器位置。PC 与 Android 的“关于与更新”支持手动检查 GitHub Releases，发现新版本后自动下载安装包。
 
 ## 目录结构
 
@@ -143,10 +143,10 @@ Pop-Location
 adb install -r base/app/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-如需把调试包同步到 `base/app/Lilt-0.2.1-debug.apk`（该文件不入库）：
+如需把调试包同步到 `base/app/Lilt-0.2.2-debug.apk`（该文件不入库）：
 
 ```powershell
-Copy-Item base/app/android/app/build/outputs/apk/debug/app-debug.apk base/app/Lilt-0.2.1-debug.apk -Force
+Copy-Item base/app/android/app/build/outputs/apk/debug/app-debug.apk base/app/Lilt-0.2.2-debug.apk -Force
 ```
 
 构建 release 包（默认未签名，正式分发前需自行配置签名）：
@@ -159,7 +159,7 @@ Pop-Location
 
 ## 验收证据
 
-- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`round-8-a-online-lyrics-pc/`、`round-8-b-online-lyrics-android/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`、`android-floating-lyrics-compact/`、`player-bar-alignment/`、`lyrics-progress-colors/`、`desktop-lyrics-unlock-button/`、`filename-tag-fallback/`、`ai-lyrics-prompt-fix/`：桌面版与 Android 版各轮截图、UI dump、测试说明
+- `base/app/checks/round-1/`、`round-2/`、`round-3/`、`round-4/`、`round-4-c/`、`round-5/`、`round-6/`、`round-6-b/`、`round-6-c/`、`round-6-d1/`、`round-6-d2/`、`round-7-a/`、`round-7-b/`、`round-7-c/`、`round-7-d/`、`round-8-a-online-lyrics-pc/`、`round-8-b-online-lyrics-android/`、`bugfix-m4a-crash/`、`desktop-lyrics-redesign/`、`desktop-lyrics-kugou/`、`android-floating-lyrics-compact/`、`player-bar-alignment/`、`lyrics-progress-colors/`、`desktop-lyrics-unlock-button/`、`filename-tag-fallback/`、`ai-lyrics-prompt-fix/`、`android-session-restore/`、`pc-state-restore/`：桌面版与 Android 版各轮截图、UI dump、测试说明
 - `base/app/shots/`：布局检查截图
 - `base/checks/`：工作区级检查截图
 - `docs/online-lyrics.md`：在线歌词来源、隐私、限速、AI 供应商与密钥说明

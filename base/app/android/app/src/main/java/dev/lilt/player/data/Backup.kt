@@ -351,6 +351,8 @@ data class BackupSettings(
     val includeOnly: Boolean = false,
     val queueConflict: String = "replace",
     val playbackSpeed: Float = 1f,
+    val shuffle: Boolean = false,
+    val repeatMode: String = "off",
     val songSort: String = "title",
     val songSortDescending: Boolean = false,
     val fadeInMs: Int = 0,
@@ -381,6 +383,8 @@ data class BackupSettings(
         put("includeOnly", includeOnly)
         put("queueConflict", queueConflict)
         put("playbackSpeed", playbackSpeed)
+        put("shuffle", shuffle)
+        put("repeatMode", repeatMode)
         put("songSort", songSort)
         put("songSortDescending", songSortDescending)
         put("fadeInMs", fadeInMs)
@@ -416,6 +420,8 @@ data class BackupSettings(
             queueConflict = json.stringOr("queueConflict", "replace")
                 .takeIf { it == "merge" } ?: "replace",
             playbackSpeed = json.floatOr("playbackSpeed", 1f, 0.5f, 3f),
+            shuffle = json.booleanOr("shuffle", false),
+            repeatMode = normalizeRepeatMode(json.stringOr("repeatMode", "off")),
             songSort = json.stringOr("songSort", "title").let { value ->
                 if (value in setOf(
                         "title",

@@ -95,6 +95,15 @@ struct ViewportMemory {
     mini_size: Option<Vec2>,
 }
 
+/// Last known companion-window geometry, for persisting across launches.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CompanionGeometry {
+    pub lyrics_position: Option<egui::Pos2>,
+    pub lyrics_size: Option<Vec2>,
+    pub mini_position: Option<egui::Pos2>,
+    pub mini_size: Option<Vec2>,
+}
+
 /// Owns the shared snapshots and the native viewport lifecycle.
 pub struct CompanionWindows {
     snapshot: Arc<Mutex<Option<CompanionSnapshot>>>,
@@ -129,6 +138,39 @@ impl CompanionWindows {
 
     pub fn set_main_window(&self, hwnd: isize) {
         self.main_window.store(hwnd, Ordering::Relaxed);
+    }
+
+    /// Seeds the in-memory viewport geometry from the saved settings. The
+    /// first `sync` for a visible window then reopens it at this position.
+    pub fn set_saved_geometry(
+        &self,
+        lyrics_position: Option<[f32; 2]>,
+        lyrics_size: Option<[f32; 2]>,
+        mini_position: Option<[f32; 2]>,
+        mini_size: Option<[f32; 2]>,
+    ) {
+        let lyrics_position = lyrics_position.and_then(pair_pos);
+        let lyrics_size = lyrics_size.and_then(pair_size);
+        let mini_position = mini_position.and_then(pair_pos);
+        let mini_size = mini_size.and_then(pair_size);
+        if let Ok(mut memory) = self.memory.lock() {
+            memory.lyrics_position = lyrics_position;
+            memory.lyrics_size = lyrics_size;
+            memory.mini_position = mini_position;
+            memory.mini_size = mini_size;
+        }
+    }
+
+    pub fn geometry(&self) -> CompanionGeometry {
+        self.memory
+            .lock()
+            .map(|memory| CompanionGeometry {
+                lyrics_position: memory.lyrics_position,
+                lyrics_size: memory.lyrics_size,
+                mini_position: memory.mini_position,
+                mini_size: memory.mini_size,
+            })
+            .unwrap_or_default()
     }
 
     pub fn take_actions(&self) -> Vec<CompanionAction> {
@@ -275,6 +317,15 @@ impl CompanionWindows {
             ctx.request_repaint_of(viewport_id);
         }
     }
+}
+
+fn pair_pos(value: [f32; 2]) -> Option<egui::Pos2> {
+    (value[0].is_finite() && value[1].is_finite()).then_some(egui::pos2(value[0], value[1]))
+}
+
+fn pair_size(value: [f32; 2]) -> Option<Vec2> {
+    (value[0].is_finite() && value[1].is_finite() && value[0] > 1.0 && value[1] > 1.0)
+        .then_some(Vec2::new(value[0], value[1]))
 }
 
 fn default_lyrics_position(ctx: &egui::Context) -> egui::Pos2 {

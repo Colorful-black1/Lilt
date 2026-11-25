@@ -165,6 +165,7 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
     fun toggleShuffle() {
         val c = controller ?: return
         c.shuffleModeEnabled = !c.shuffleModeEnabled
+        settings.setShuffle(c.shuffleModeEnabled)
         publish(c)
     }
 
@@ -175,6 +176,13 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
             Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
             else -> Player.REPEAT_MODE_OFF
         }
+        settings.setRepeatMode(
+            when (c.repeatMode) {
+                Player.REPEAT_MODE_ALL -> "all"
+                Player.REPEAT_MODE_ONE -> "one"
+                else -> "off"
+            }
+        )
         publish(c)
     }
 

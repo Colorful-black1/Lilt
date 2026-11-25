@@ -103,6 +103,11 @@ Set `LILT_DATA_DIR` to use a different data folder.
   ReplayGain tag application, the target's 0–4000 ms play/pause volume fades (250 ms
   steps) with its own quadratic curves, and a sleep timer with custom hours/minutes, N
   songs, the five-entry histories, "wait until the song ends" and "fade out the last song".
+- **Playback and window restore.** Shuffle and repeat are saved with the playback
+  settings, so they survive a restart along with the active queue, song, position,
+  volume and speed. The main window size/position, desktop-lyrics geometry and
+  mini-player position are remembered too. Sleep timers, A-B loops and
+  stop-after-this-song are intentionally one-shot and are not restored.
 - **Fixed transport bar.** The bottom bar uses a fixed three-column layout: the
   transport group stays at the window centre and previous/next align with play
   regardless of the song title length.
