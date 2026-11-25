@@ -25,7 +25,7 @@ lyric block opens an immersive lyric sheet.
 
 ## Evidence
 
-Captured on the `lilt35` emulator (Android 15, 1080×1920, density 420) with the real library
+Captured on the `lilt35` emulator (Android 15, 1080脳1920, density 420) with the real library
 already scanned.
 
 | File | What it shows |
@@ -54,5 +54,5 @@ The APK is built with `gradlew.bat :app:testDebugUnitTest :app:assembleDebug`; R
 migrations and user data are unchanged by this UI-only round.
 
 ```text
-base/app/Lilt-0.2.0-debug.apk    22,605,528 bytes
+base/app/Lilt-0.2.1-debug.apk    22,115,290 bytes
 ```

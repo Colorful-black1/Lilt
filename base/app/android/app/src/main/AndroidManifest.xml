@@ -38,6 +38,15 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LockScreenActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Lilt" />
+
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"

@@ -110,6 +110,7 @@
 - 单曲停止：播放页一键在服务内 100 ms 检查，曲末暂停并回到 0:00；切歌自动取消，暂停后恢复播放仍保留设置。
 - 重复歌曲检测：设置页按规范化标题、艺术家与相近时长分组，标记最佳副本；可试听，不删除文件。
 - 纯黑/深色/浅色/跟随系统主题，5 种强调色，中英界面。
+- 通知栏媒体卡新增收藏/悬浮歌词按钮，播放页与全屏歌词页的三键组保持居中；锁屏可显示全屏播放器，上滑露出系统解锁界面，设置中可开关或预览。
 
 尚未实现：
 
@@ -159,7 +160,7 @@
 | 单曲停止 | ✅ | ✅ | 两端一键在本曲结束后暂停；切歌自动取消 |
 | 重复歌曲检测 | ✅ | ✅ | 规范化标题/艺术家/时长分组，最佳副本优先；只报告不删除 |
 | 音频工具 | △ | △ | 交叉淡化、批量文件操作、裁剪/CUE/转换仍缺 |
-| 桌面/悬浮体验 | △ | △ | PC 已完成酷狗式左右双行桌面歌词、半透明解锁卡片、长歌词自动缩放、解锁态窗口/滚轮等比例缩放、浮钮解锁与迷你播放器；Android 已完成紧凑单行悬浮歌词与无卡片锁定态，缺锁屏歌词 |
+| 桌面/悬浮体验 | △ | △ | PC 已完成酷狗式左右双行桌面歌词、半透明解锁卡片、长歌词自动缩放、解锁态窗口/滚轮等比例缩放、浮钮解锁与迷你播放器；Android 已完成紧凑单行悬浮歌词、通知栏收藏/歌词按钮与锁屏全屏播放器，缺锁屏歌词滚动/Auto/磁贴 |
 
 ---
 
@@ -305,7 +306,7 @@
 - Android Auto `MediaLibraryService`。
 - 车载/驾驶模式。
 - 悬浮歌词（Round 7-A 已完成，需要可选的悬浮窗权限）。
-- 锁屏歌词（通知或自定义锁屏页）。
+- 锁屏歌词/锁屏全屏播放器（自定义锁屏页已完成；滚动歌词未做）。
 - Chromecast（局域网投屏，可选）。
 
 验收：
@@ -936,6 +937,26 @@
 
 未纳入本轮：自动安装 PC zip、在应用内无确认安装 Android APK、后台定时检查。
 
+### Android 通知栏收藏/歌词按钮与锁屏播放器（已完成）
+
+交付：
+
+- 通知栏媒体卡新增“收藏”和“词”按钮。Android 13+ 通过 MediaSession media button preferences 把两个自定义命令注册到系统媒体控件，Android 12 及以下用自定义 `DefaultMediaNotificationProvider` 保持“收藏、上一首、播放/暂停、下一首、词”的顺序；收藏与现有 Room 收藏状态同步，词按钮切换悬浮歌词。
+- 播放页、全屏歌词页和锁屏播放器的上一首/播放暂停/下一首改为三段式布局，左右两侧等宽占位，保证中间组精确居中。
+- 新增锁屏全屏播放器：时钟/日期、专辑封面背景、标题/艺术家、可拖动进度、循环与收藏、居中播放控制、上滑解锁提示。锁屏后自动显示；上滑或点击提示关闭 Lilt 锁屏并露出系统 PIN/图案解锁界面，不绕过安全锁。
+- 设置新增“锁屏”卡片：默认开启、悬浮窗权限提示与授权、预览锁屏界面；开关写入 Android 备份/恢复。
+- 版本升级为 0.2.1（Android versionCode 3），PC 与 Android 共用发布标签。
+
+验收：
+
+- API 35 模拟器验证通知卡出现收藏与“词”，收藏图标随状态切换，词按钮可开关悬浮歌词。
+- 锁屏在应用前台和后台时均可出现；播放/暂停、上一首/下一首、收藏、循环、拖动进度生效；上滑后系统锁屏显示。
+- 手势导航与三键导航下锁屏内容不被底部栏遮挡；关闭开关后锁屏不再自动出现，预览仍可用。
+- `adb install -r` 覆盖 0.2.0 后歌曲、收藏、队列和歌词保留。
+- 证据见 `base/app/checks/android-lock-screen-player/`。
+
+未纳入：锁屏歌词滚动、Android Auto/快捷设置磁贴、悬浮窗权限缺失时的自动弹出兜底。
+
 ### 第 9 轮：Android 系统集成
 
 交付：
@@ -1026,10 +1047,11 @@
 | 2026-11-25 | Android 导航栏避让 | 完成 | 主页迷你播放器与播放页底部控制使用 `WindowInsets.navigationBars`，手势导航与三键导航均不重叠；Android 60 项测试 |
 | 2026-11-25 | PC 播放页队列抽屉 | 完成 | 播放页队列按钮改为当前页右侧抽屉，播放页保持打开；列表页与播放页共用队列抽屉 |
 | 2026-11-25 | 更新检查 0.2.0 | 完成 | PC/Android 手动检查 GitHub Releases、自动下载安装包、直接显示 GitHub 链接、版本统一 0.2.0、Android 固定调试签名 |
+| 2026-11-25 | Android 通知栏收藏/歌词与锁屏播放器 | 完成 | 通知栏新增收藏/词按钮、播放控制居中、锁屏全屏播放器、上滑回系统解锁、设置与备份、版本 0.2.1 |
 | 2026-11-23 | Bugfix | 完成 | PC M4A/MP4 解码崩溃修复、内容探测标签/时长、损坏文件错误提示、PC 41 项测试 |
 | 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`；酷狗式左右双行与自动缩放验证见 `base/app/checks/desktop-lyrics-kugou/`；Android 单行悬浮歌词、无卡片锁定态与“词”开关验证见 `base/app/checks/android-floating-lyrics-compact/`；文件名标签兜底验证见 `base/app/checks/filename-tag-fallback/`；AI 草稿提示词与日志验证见 `base/app/checks/ai-lyrics-prompt-fix/`；桌面歌词等比例缩放验证见 `base/app/checks/desktop-lyrics-proportional-zoom/`；桌面歌词缩放边框与光标验证见 `base/app/checks/desktop-lyrics-resize-border/`；歌词优先的 PC 播放页验证见 `base/app/checks/now-playing-lyrics-layout/`；Android 居中歌词与全屏歌词页验证见 `base/app/checks/android-player-lyrics-redesign/`；Android 手势/三键导航栏避让验证见 `base/app/checks/android-navigation-insets/`；更新检查验证见 `base/app/checks/update-check/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`；酷狗式左右双行与自动缩放验证见 `base/app/checks/desktop-lyrics-kugou/`；Android 单行悬浮歌词、无卡片锁定态与“词”开关验证见 `base/app/checks/android-floating-lyrics-compact/`；文件名标签兜底验证见 `base/app/checks/filename-tag-fallback/`；AI 草稿提示词与日志验证见 `base/app/checks/ai-lyrics-prompt-fix/`；桌面歌词等比例缩放验证见 `base/app/checks/desktop-lyrics-proportional-zoom/`；桌面歌词缩放边框与光标验证见 `base/app/checks/desktop-lyrics-resize-border/`；歌词优先的 PC 播放页验证见 `base/app/checks/now-playing-lyrics-layout/`；Android 居中歌词与全屏歌词页验证见 `base/app/checks/android-player-lyrics-redesign/`；Android 手势/三键导航栏避让验证见 `base/app/checks/android-navigation-insets/`；更新检查验证见 `base/app/checks/update-check/`；Android 通知栏收藏/歌词与锁屏播放器验证见 `base/app/checks/android-lock-screen-player/`。
 
 ---
 
@@ -1158,3 +1180,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.13.12 | 2026-11-25 | Android 系统栏避让：主页迷你播放器与播放页底部控制使用 `navigationBars` 内边距，手势/三键导航均不重叠 |
 | v0.13.13 | 2026-11-25 | PC 播放页队列改为当前页右侧抽屉，播放页保持打开；列表页与播放页共用同一队列抽屉 |
 | v0.14.0 | 2026-11-25 | 更新检查：PC/Android 手动检查 GitHub Releases、自动下载安装包、版本统一 0.2.0、Android 固定调试签名 |
+| v0.15.0 | 2026-11-25 | Android 通知栏收藏/歌词按钮、播放控制居中、锁屏全屏播放器与上滑解锁、设置/备份，版本统一 0.2.1 |

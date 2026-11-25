@@ -16,7 +16,11 @@ use std::time::{Duration, Instant};
 use url::Url;
 
 const LRCLIB_SEARCH: &str = "https://lrclib.net/api/search";
-const USER_AGENT: &str = "Lilt/0.1.0 (https://github.com/Colorful-black1/Lilt)";
+const USER_AGENT: &str = concat!(
+    "Lilt/",
+    env!("CARGO_PKG_VERSION"),
+    " (https://github.com/Colorful-black1/Lilt)"
+);
 const LRCLIB_MIN_INTERVAL: Duration = Duration::from_millis(350);
 const MAX_LRCLIB_BODY: u64 = 2 * 1024 * 1024;
 const MAX_AI_BODY: u64 = 1024 * 1024;

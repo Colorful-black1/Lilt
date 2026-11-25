@@ -199,6 +199,7 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     val floatingFontSize = settings.floatingFontSize
     val floatingPlayedColor = settings.floatingPlayedColor
     val floatingUnplayedColor = settings.floatingUnplayedColor
+    val lockScreenPlayer = settings.lockScreenPlayer
     val onlineLyrics = settings.onlineLyrics
     val aiProvider = settings.aiProvider
     val aiBaseUrl = settings.aiBaseUrl
@@ -989,6 +990,8 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setFloatingFontSize(value: Float) = settings.setFloatingFontSize(value)
+
+    fun setLockScreenPlayer(value: Boolean) = settings.setLockScreenPlayer(value)
 
     fun setFloatingPlayedColor(value: Int?) = settings.setFloatingPlayedColor(value)
 

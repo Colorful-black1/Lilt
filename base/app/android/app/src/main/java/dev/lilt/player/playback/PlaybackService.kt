@@ -1,6 +1,10 @@
 package dev.lilt.player.playback
 
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
@@ -14,11 +18,15 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.widget.Toast
+import androidx.annotation.OptIn
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -26,9 +34,11 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import dev.lilt.player.LockScreenActivity
 import dev.lilt.player.MainActivity
 import dev.lilt.player.data.LiltDatabase
 import dev.lilt.player.data.OnlineLyricsEngine
+import dev.lilt.player.data.SongStateEntity
 import dev.lilt.player.library.EQ_BANDS
 import dev.lilt.player.library.EQ_FREQUENCIES
 import dev.lilt.player.library.EqProfile
@@ -51,6 +61,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * One foreground media session owns playback, the notification and the
@@ -60,6 +71,7 @@ import kotlinx.coroutines.launch
  * Sleep timer state lives here, not in the activity, so the timer keeps
  * counting with the screen off and while the app is not in the foreground.
  */
+@OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var player: ExoPlayer? = null
     private var playback: FadePlayer? = null
@@ -77,6 +89,19 @@ class PlaybackService : MediaSessionService() {
     private var virtualizerAvailable = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val lockScreenRunnable = Runnable { maybeShowLockScreen() }
+    private val lockScreenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF, Intent.ACTION_SCREEN_ON -> {
+                    mainHandler.removeCallbacks(lockScreenRunnable)
+                    // The keyguard reports its final state a moment after the
+                    // screen broadcast, so check slightly later.
+                    mainHandler.postDelayed(lockScreenRunnable, 400L)
+                }
+            }
+        }
+    }
     private val deviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
             refreshOutputDevice(loadProfile = true)
@@ -92,6 +117,9 @@ class PlaybackService : MediaSessionService() {
     private var abEndMs = -1L
     private var abLastJumpAt = 0L
     private var stopAfterCurrent = false
+    private var favoriteIds: Set<Long> = emptySet()
+    private var lastHeartFavorite: Boolean? = null
+    private var lockScreenReceiverRegistered = false
 
     private val overlayScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var overlay: FloatingLyricsOverlay? = null
@@ -234,6 +262,7 @@ class PlaybackService : MediaSessionService() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 loadOverlayLyrics(mediaItem?.mediaId?.toLongOrNull() ?: -1L)
+                updateMediaButtons()
                 maybeFetchOnlineLyrics(mediaItem)
                 clearAbLoop()
                 if (stopAfterCurrent) {
@@ -303,6 +332,8 @@ class PlaybackService : MediaSessionService() {
                         .add(SessionCommand(CMD_AB_CLEAR, Bundle.EMPTY))
                         .add(SessionCommand(CMD_STOP_AFTER_SET, Bundle.EMPTY))
                         .add(SessionCommand(CMD_STOP_AFTER_GET, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_TOGGLE_FAVORITE, Bundle.EMPTY))
+                        .add(SessionCommand(CMD_TOGGLE_FLOATING_LYRICS, Bundle.EMPTY))
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(commands)
@@ -411,11 +442,50 @@ class PlaybackService : MediaSessionService() {
                         CMD_STOP_AFTER_GET -> return Futures.immediateFuture(
                             SessionResult(SessionResult.RESULT_SUCCESS, stopAfterExtras())
                         )
+                        CMD_TOGGLE_FAVORITE -> {
+                            toggleFavorite(currentMediaId())
+                            return Futures.immediateFuture(
+                                SessionResult(SessionResult.RESULT_SUCCESS)
+                            )
+                        }
+                        CMD_TOGGLE_FLOATING_LYRICS -> {
+                            toggleFloatingLyrics()
+                            return Futures.immediateFuture(
+                                SessionResult(SessionResult.RESULT_SUCCESS)
+                            )
+                        }
                     }
                     return super.onCustomCommand(session, controller, customCommand, args)
                 }
             })
             .build()
+        setMediaNotificationProvider(
+            LiltMediaNotificationProvider(
+                context = this,
+                isFavorite = { favoriteIds.contains(currentMediaId()) },
+                isChinese = ::isChinese,
+            ),
+        )
+        updateMediaButtons(force = true)
+        ContextCompat.registerReceiver(
+            this,
+            lockScreenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        lockScreenReceiverRegistered = true
+        overlayScope.launch {
+            LiltDatabase.get(this@PlaybackService)
+                .songStateDao()
+                .observeFavoriteIds()
+                .collect { ids ->
+                    favoriteIds = ids.toSet()
+                    if (updateMediaButtons()) refreshNotification()
+                }
+        }
         settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
         settingsListenerRegistered = true
         loadOverlayLyrics(exo.currentMediaItem?.mediaId?.toLongOrNull() ?: -1L)
@@ -442,6 +512,91 @@ class PlaybackService : MediaSessionService() {
 
     private fun currentMediaId(): Long =
         player?.currentMediaItem?.mediaId?.toLongOrNull() ?: -1L
+
+    private fun isChinese(): Boolean =
+        (settingsPrefs.getString("language", "en") ?: "en") == "zh"
+
+    /**
+     * Keeps the media button preferences in sync with the current favourite.
+     * Android 13+ builds the system media card from these preferences, so this
+     * is also what updates the heart in the notification shade.
+     */
+    private fun updateMediaButtons(force: Boolean = false): Boolean {
+        val current = session ?: return false
+        val favorite = favoriteIds.contains(currentMediaId())
+        if (!force && favorite == lastHeartFavorite) return false
+        lastHeartFavorite = favorite
+        val chinese = isChinese()
+        current.setMediaButtonPreferences(
+            listOf(
+                favoriteButton(favorite, chinese),
+                floatingLyricsButton(chinese),
+            ),
+        )
+        return true
+    }
+
+    /**
+     * Media3 1.6 has no public triggerNotificationUpdate(); rebuilding through
+     * the service callback is the supported way to refresh the pre-13 action
+     * row after a favourite changes without a player event.
+     */
+    private fun refreshNotification() {
+        val current = session ?: return
+        onUpdateNotification(current, false)
+    }
+
+    private fun toggleFavorite(mediaId: Long) {
+        if (mediaId <= 0L) return
+        val wasFavorite = favoriteIds.contains(mediaId)
+        favoriteIds = if (wasFavorite) favoriteIds - mediaId else favoriteIds + mediaId
+        if (updateMediaButtons()) refreshNotification()
+        overlayScope.launch {
+            withContext(Dispatchers.IO) {
+                val dao = LiltDatabase.get(this@PlaybackService).songStateDao()
+                val current = dao.state(mediaId)
+                dao.upsert(
+                    (current ?: SongStateEntity(mediaId = mediaId)).copy(
+                        favorite = !wasFavorite,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun toggleFloatingLyrics() {
+        val enabling = !settingsPrefs.getBoolean("floating_lyrics", false)
+        if (enabling && !Settings.canDrawOverlays(this)) {
+            Toast.makeText(
+                this,
+                if (isChinese()) {
+                    "请先允许 Lilt 显示在其他应用上层"
+                } else {
+                    "Allow Lilt to display over other apps first"
+                },
+                Toast.LENGTH_LONG,
+            ).show()
+            return
+        }
+        settingsPrefs.edit().putBoolean("floating_lyrics", enabling).apply()
+        syncOverlay()
+    }
+
+    private fun maybeShowLockScreen() {
+        if (!settingsPrefs.getBoolean("lock_screen_player", true)) return
+        val exo = player ?: return
+        if (exo.mediaItemCount == 0) return
+        if (exo.playbackState == Player.STATE_IDLE || exo.playbackState == Player.STATE_ENDED) return
+        val keyguard = getSystemService(KeyguardManager::class.java) ?: return
+        if (!keyguard.isKeyguardLocked) return
+        runCatching {
+            startActivity(
+                Intent(this, LockScreenActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                },
+            )
+        }
+    }
 
     private fun syncOverlay() {
         val wanted = settingsPrefs.getBoolean("floating_lyrics", false) &&
@@ -1054,6 +1209,11 @@ class PlaybackService : MediaSessionService() {
         mainHandler.removeCallbacks(abTicker)
         mainHandler.removeCallbacks(stopAfterTicker)
         mainHandler.removeCallbacks(overlayTicker)
+        mainHandler.removeCallbacks(lockScreenRunnable)
+        if (lockScreenReceiverRegistered) {
+            runCatching { unregisterReceiver(lockScreenReceiver) }
+            lockScreenReceiverRegistered = false
+        }
         overlayLyricsJob?.cancel()
         overlayLyricsJob = null
         overlay?.hide()
@@ -1109,6 +1269,8 @@ class PlaybackService : MediaSessionService() {
         const val CMD_AB_CLEAR = "dev.lilt.player.AB_CLEAR"
         const val CMD_STOP_AFTER_SET = "dev.lilt.player.STOP_AFTER_SET"
         const val CMD_STOP_AFTER_GET = "dev.lilt.player.STOP_AFTER_GET"
+        const val CMD_TOGGLE_FAVORITE = "dev.lilt.player.TOGGLE_FAVORITE"
+        const val CMD_TOGGLE_FLOATING_LYRICS = "dev.lilt.player.TOGGLE_FLOATING_LYRICS"
         const val ACTION_FLOATING_REFRESH = "dev.lilt.player.FLOATING_REFRESH"
     }
 }

@@ -81,6 +81,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
+import dev.lilt.player.LockScreenActivity
 import dev.lilt.player.data.UpdateChecker
 import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.ScanState
@@ -123,6 +124,8 @@ fun SettingsScreen(
     val floatingFontSize by vm.floatingFontSize.collectAsStateWithLifecycle()
     val floatingPlayedColor by vm.floatingPlayedColor.collectAsStateWithLifecycle()
     val floatingUnplayedColor by vm.floatingUnplayedColor.collectAsStateWithLifecycle()
+    val lockScreenPlayer by vm.lockScreenPlayer.collectAsStateWithLifecycle()
+    val playerState by vm.player.collectAsStateWithLifecycle()
     val onlineLyrics by vm.onlineLyrics.collectAsStateWithLifecycle()
     val aiProvider by vm.aiProvider.collectAsStateWithLifecycle()
     val aiBaseUrl by vm.aiBaseUrl.collectAsStateWithLifecycle()
@@ -759,6 +762,72 @@ fun SettingsScreen(
                     ),
                 ) {
                     requestWidgetPin(context, widgetUnavailable)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            SettingCard(t("Lock screen", "锁屏")) {
+                Text(
+                    t(
+                        "While a track is loaded, locking the phone shows a full-screen Lilt player. Swipe up to return to the system unlock screen; this never bypasses your PIN or pattern.",
+                        "有歌曲时，锁屏会显示 Lilt 全屏播放器。上滑回到系统解锁界面，不会绕过 PIN 或图案锁。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SettingSwitch(
+                    title = t("Show the player on the lock screen", "锁屏显示播放界面"),
+                    body = t(
+                        "Automatic display uses the display-over-other-apps permission. You can preview it without locking the phone.",
+                        "自动弹出会使用“显示在其他应用上层”权限；也可以不锁屏直接预览。",
+                    ),
+                    checked = lockScreenPlayer,
+                ) { enabled ->
+                    vm.setLockScreenPlayer(enabled)
+                    overlayAllowed = Settings.canDrawOverlays(context)
+                    if (enabled && !overlayAllowed) requestOverlayPermission(context)
+                }
+                if (lockScreenPlayer && !overlayAllowed) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            t(
+                                "Overlay permission is not granted yet, so automatic display may be blocked.",
+                                "尚未授予悬浮窗权限，自动弹出可能被系统拦截。",
+                            ),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = { requestOverlayPermission(context) }) {
+                            Text(t("Grant", "去授权"))
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(context, LockScreenActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                putExtra(LockScreenActivity.EXTRA_PREVIEW, true)
+                            },
+                        )
+                    },
+                    enabled = playerState.mediaId > 0L,
+                ) {
+                    Text(t("Preview lock screen", "预览锁屏界面"))
+                }
+                if (playerState.mediaId <= 0L) {
+                    Text(
+                        t(
+                            "Play a song first to preview the lock screen.",
+                            "先播放一首歌再预览锁屏界面。",
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 

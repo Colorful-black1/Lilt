@@ -368,6 +368,7 @@ data class BackupSettings(
     val floatingFontSize: Float = 26f,
     val floatingPlayedColor: Int? = null,
     val floatingUnplayedColor: Int? = null,
+    val lockScreenPlayer: Boolean = true,
     val onlineLyrics: Boolean = true,
     val aiProvider: String = "deepseek",
     val aiBaseUrl: String = "https://api.deepseek.com/v1",
@@ -397,6 +398,7 @@ data class BackupSettings(
         put("floatingFontSize", floatingFontSize)
         floatingPlayedColor?.let { put("floatingPlayedColor", it) }
         floatingUnplayedColor?.let { put("floatingUnplayedColor", it) }
+        put("lockScreenPlayer", lockScreenPlayer)
         put("onlineLyrics", onlineLyrics)
         put("aiProvider", aiProvider)
         put("aiBaseUrl", aiBaseUrl)
@@ -448,6 +450,7 @@ data class BackupSettings(
             floatingFontSize = json.floatOr("floatingFontSize", 26f, 18f, 44f),
             floatingPlayedColor = json.optionalOpaqueColor("floatingPlayedColor"),
             floatingUnplayedColor = json.optionalOpaqueColor("floatingUnplayedColor"),
+            lockScreenPlayer = json.booleanOr("lockScreenPlayer", true),
             onlineLyrics = json.booleanOr("onlineLyrics", true),
             aiProvider = findAiProvider(json.stringOr("aiProvider", "deepseek")).id,
             aiBaseUrl = json.stringOr("aiBaseUrl", "https://api.deepseek.com/v1"),

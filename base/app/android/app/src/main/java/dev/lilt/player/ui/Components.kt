@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -484,6 +485,68 @@ fun MiniPlayer(state: PlayerUiState, onOpen: () -> Unit, onToggle: () -> Unit, o
                     Icon(Icons.Rounded.SkipNext, contentDescription = t("Next", "下一首"))
                 }
             }
+        }
+    }
+}
+
+/**
+ * Three-zone transport: equal-width side boxes keep the previous / play /
+ * next group exactly in the middle of the row, even when the side actions
+ * change size or disappear.
+ */
+@Composable
+fun CenteredTransport(
+    isPlaying: Boolean,
+    onPrevious: () -> Unit,
+    onPlayPause: () -> Unit,
+    onNext: () -> Unit,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    playSize: Dp = 72.dp,
+    sideSize: Dp = 52.dp,
+    iconSize: Dp = 36.dp,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            leading?.invoke()
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onPrevious, modifier = Modifier.size(sideSize)) {
+                Icon(
+                    Icons.Rounded.SkipPrevious,
+                    contentDescription = t("Previous", "上一首"),
+                    modifier = Modifier.size(iconSize),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(playSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable(onClick = onPlayPause),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = t("Play or pause", "播放或暂停"),
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(if (playSize >= 70.dp) 38.dp else 34.dp),
+                )
+            }
+            IconButton(onClick = onNext, modifier = Modifier.size(sideSize)) {
+                Icon(
+                    Icons.Rounded.SkipNext,
+                    contentDescription = t("Next", "下一首"),
+                    modifier = Modifier.size(iconSize),
+                )
+            }
+        }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            trailing?.invoke()
         }
     }
 }

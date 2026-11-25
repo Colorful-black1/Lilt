@@ -337,49 +337,35 @@ fun LyricsPlayerScreen(
 
 @Composable
 private fun LyricsTransport(player: PlayerUiState, vm: LiltViewModel) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = vm::toggleShuffle) {
-            Icon(
-                Icons.Rounded.Shuffle,
-                t("Shuffle", "随机"),
-                tint = if (player.shuffle) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        IconButton(onClick = vm::previous, modifier = Modifier.size(50.dp)) {
-            Icon(Icons.Rounded.SkipPrevious, t("Previous", "上一首"), modifier = Modifier.size(34.dp))
-        }
-        Box(
-            modifier = Modifier
-                .size(68.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
-                .clickable(onClick = vm::togglePlayPause),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                if (player.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                t("Play or pause", "播放或暂停"),
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(36.dp),
-            )
-        }
-        IconButton(onClick = vm::next, modifier = Modifier.size(50.dp)) {
-            Icon(Icons.Rounded.SkipNext, t("Next", "下一首"), modifier = Modifier.size(34.dp))
-        }
-        IconButton(onClick = vm::cycleRepeat) {
-            Icon(
-                if (player.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne
-                else Icons.Rounded.Repeat,
-                t("Repeat", "循环"),
-                tint = if (player.repeatMode != Player.REPEAT_MODE_OFF)
-                    MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    CenteredTransport(
+        isPlaying = player.isPlaying,
+        onPrevious = vm::previous,
+        onPlayPause = vm::togglePlayPause,
+        onNext = vm::next,
+        playSize = 68.dp,
+        sideSize = 50.dp,
+        iconSize = 34.dp,
+        leading = {
+            IconButton(onClick = vm::toggleShuffle) {
+                Icon(
+                    Icons.Rounded.Shuffle,
+                    t("Shuffle", "随机"),
+                    tint = if (player.shuffle) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        trailing = {
+            IconButton(onClick = vm::cycleRepeat) {
+                Icon(
+                    if (player.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne
+                    else Icons.Rounded.Repeat,
+                    t("Repeat", "循环"),
+                    tint = if (player.repeatMode != Player.REPEAT_MODE_OFF)
+                        MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
 }

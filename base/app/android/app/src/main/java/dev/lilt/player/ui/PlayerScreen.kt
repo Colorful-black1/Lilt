@@ -290,50 +290,34 @@ fun PlayerScreen(
                 Spacer(Modifier.height(18.dp))
                 SeekBar(state = state, onSeek = vm::seekTo)
                 Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = vm::toggleShuffle) {
-                        Icon(
-                            Icons.Rounded.Shuffle,
-                            t("Shuffle", "随机"),
-                            tint = if (state.shuffle) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = vm::previous, modifier = Modifier.size(52.dp)) {
-                        Icon(Icons.Rounded.SkipPrevious, t("Previous", "上一首"), modifier = Modifier.size(36.dp))
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .clickable(onClick = vm::togglePlayPause),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            t("Play or pause", "播放或暂停"),
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(38.dp),
-                        )
-                    }
-                    IconButton(onClick = vm::next, modifier = Modifier.size(52.dp)) {
-                        Icon(Icons.Rounded.SkipNext, t("Next", "下一首"), modifier = Modifier.size(36.dp))
-                    }
-                    IconButton(onClick = vm::cycleRepeat) {
-                        Icon(
-                            if (state.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE)
-                                Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            t("Repeat", "循环"),
-                            tint = if (state.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF)
-                                MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                CenteredTransport(
+                    isPlaying = state.isPlaying,
+                    onPrevious = vm::previous,
+                    onPlayPause = vm::togglePlayPause,
+                    onNext = vm::next,
+                    leading = {
+                        IconButton(onClick = vm::toggleShuffle) {
+                            Icon(
+                                Icons.Rounded.Shuffle,
+                                t("Shuffle", "随机"),
+                                tint = if (state.shuffle) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    trailing = {
+                        IconButton(onClick = vm::cycleRepeat) {
+                            Icon(
+                                if (state.repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE)
+                                    Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                t("Repeat", "循环"),
+                                tint = if (state.repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF)
+                                    MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                )
                 if (speed != 1f) {
                     Spacer(Modifier.height(4.dp))
                     Text(

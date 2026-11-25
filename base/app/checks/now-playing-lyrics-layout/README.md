@@ -68,6 +68,6 @@ in `base/app/src/ui/now_playing.rs`; `dialogs.rs` delegates to it so the existin
 and action plumbing stays unchanged.
 
 ```text
-dist/Lilt-0.2.0-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
-dist/Lilt-0.2.0-win64-portable.zip    18,531,674 bytes
+dist/Lilt-0.2.1-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
+dist/Lilt-0.2.1-win64-portable.zip    18,531,896 bytes
 ```

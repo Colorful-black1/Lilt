@@ -7,14 +7,17 @@ separate "Release page" button.
 
 ## Version
 
-This round moves both builds to the same version so the shared release tag
-`v0.2.0` works on both platforms:
+The update-check feature shipped in the 0.2.1 round so the shared release tag
+`v0.2.1` works on both platforms:
 
 ```text
-PC Cargo.toml            0.2.0
-Android versionName      0.2.0
-Android versionCode      2
+PC Cargo.toml            0.2.1
+Android versionName      0.2.1
+Android versionCode      3
 ```
+
+The update screenshots below were captured during the 0.2.0 update-check round;
+the current builds show 0.2.1.
 
 ## PC flow
 
@@ -50,7 +53,7 @@ Android versionCode      2
 | `03-android-no-release.png` | Android check result: no release published yet |
 
 The repository has no published GitHub Release/tag yet, so the end-to-end package download
-cannot be exercised until `v0.2.0` is pushed. Version comparison is covered by unit tests
+cannot be exercised until `v0.2.1` is pushed. Version comparison is covered by unit tests
 on both platforms; the download/install code is ready for that first release.
 
 ## Tests
@@ -61,7 +64,7 @@ Android: 62 passed, 0 failed
 ```
 
 ```text
-dist/Lilt-0.2.0-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
-dist/Lilt-0.2.0-win64-portable.zip    18,531,674 bytes
-base/app/Lilt-0.2.0-debug.apk         22,605,528 bytes
+dist/Lilt-0.2.1-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
+dist/Lilt-0.2.1-win64-portable.zip    18,531,896 bytes
+base/app/Lilt-0.2.1-debug.apk         22,115,290 bytes
 ```

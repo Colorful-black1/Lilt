@@ -51,6 +51,8 @@ class SettingsStore(context: Context) {
         MutableStateFlow(readOptionalColor("floating_played_color"))
     val floatingUnplayedColor: StateFlow<Int?> =
         MutableStateFlow(readOptionalColor("floating_unplayed_color"))
+    val lockScreenPlayer: StateFlow<Boolean> =
+        MutableStateFlow(prefs.getBoolean("lock_screen_player", true))
     val onlineLyrics: StateFlow<Boolean> =
         MutableStateFlow(prefs.getBoolean("online_lyrics", true))
     val aiProvider: StateFlow<String> =
@@ -86,6 +88,9 @@ class SettingsStore(context: Context) {
                 "floating_unplayed_color" ->
                     (floatingUnplayedColor as MutableStateFlow).value =
                         readOptionalColor(key)
+                "lock_screen_player" ->
+                    (lockScreenPlayer as MutableStateFlow).value =
+                        prefs.getBoolean(key, true)
                 "lyrics_opacity" ->
                     (lyricsOpacity as MutableStateFlow).value =
                         prefs.getFloat(key, 1f)
@@ -210,6 +215,11 @@ class SettingsStore(context: Context) {
         (floatingUnplayedColor as MutableStateFlow).value = cleaned
     }
 
+    fun setLockScreenPlayer(value: Boolean) {
+        prefs.edit { putBoolean("lock_screen_player", value) }
+        (lockScreenPlayer as MutableStateFlow).value = value
+    }
+
     fun setOnlineLyrics(value: Boolean) {
         prefs.edit { putBoolean("online_lyrics", value) }
         (onlineLyrics as MutableStateFlow).value = value
@@ -289,6 +299,7 @@ class SettingsStore(context: Context) {
         floatingFontSize = floatingFontSize.value,
         floatingPlayedColor = floatingPlayedColor.value,
         floatingUnplayedColor = floatingUnplayedColor.value,
+        lockScreenPlayer = lockScreenPlayer.value,
         onlineLyrics = onlineLyrics.value,
         aiProvider = aiProvider.value,
         aiBaseUrl = aiBaseUrl.value,
@@ -322,6 +333,7 @@ class SettingsStore(context: Context) {
         setFloatingFontSize(backup.floatingFontSize)
         setFloatingPlayedColor(backup.floatingPlayedColor)
         setFloatingUnplayedColor(backup.floatingUnplayedColor)
+        setLockScreenPlayer(backup.lockScreenPlayer)
         setOnlineLyrics(backup.onlineLyrics)
         setAiProvider(backup.aiProvider)
         setAiBaseUrl(backup.aiBaseUrl)

@@ -33,22 +33,27 @@ Install it on a connected phone or emulator:
 adb install -r app/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The debug APK is signed with the standard Android debug key, which is fine for sideloading.
-For a store or a shareable release build, create your own signing key and configure
-`signingConfigs` in `app/build.gradle.kts`; a release build is otherwise unsigned.
+The debug APK is signed with the committed development key
+(`app/android/keystore/lilt-debug.keystore`), so later sideload builds can be installed over
+the current one without uninstalling Lilt. For a store build, create your own signing key and
+configure `signingConfigs` in `app/build.gradle.kts`.
 
 ## Put it on a phone
 
-1. Copy `app/Lilt-0.2.0-debug.apk` to the phone by USB or a local file transfer.
+1. Copy `app/Lilt-0.2.1-debug.apk` to the phone by USB or a local file transfer.
 2. Tap the file in the phone's file manager. If Android asks, allow that file manager to
    install unknown apps.
 3. Open Lilt and allow audio access. The first scan starts automatically; the refresh
    button scans again.
 4. For the notification controls on Android 13+, allow notifications when asked.
 5. Optional: open **Settings → Floating lyrics** and turn on **Show over other apps**. If
-   Android opens the display-over-other-apps screen, allow Lilt there; this is only needed
-   for the floating lyric overlay. The now-playing page's **词** button shows or hides it,
-   and **Lock position and controls** can be undone in Settings.
+   Android opens the display-over-other-apps screen, allow Lilt there; this is needed for
+   the floating lyric overlay and for the lock-screen player to appear automatically. The
+   now-playing page's **词** button shows or hides the floating lyrics, and **Lock position
+   and controls** can be undone in Settings.
+6. The media notification now also has a **heart** (favourite) and **词** (floating lyrics)
+   action. **Settings → Lock screen** has the lock-screen player switch and a preview
+   action.
 
 This debug APK is for testing and sideloading, not for a store listing. A store build
 needs a release signing key and an `.aab` produced with `bundleRelease`.
@@ -84,6 +89,18 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **System-bar aware layout.** The home mini player and the player transport apply the
   platform `navigationBars` inset, so their buttons sit above both gesture navigation and
   the taller 3-button navigation bar. No fixed bar height is assumed.
+- **Notification media actions.** The media card has favourite and floating-lyrics buttons
+  alongside the transport. The transport is kept in the system's central play slot; on
+  Android 12 and older the custom notification provider places the five actions in the
+  order favourite, previous, play/pause, next, lyrics. The favourite shares the same Room
+  state as the library and the in-app player; the lyrics button toggles the floating lyric
+  overlay and explains the overlay permission when it is missing.
+- **Lock-screen player.** With a track loaded, locking the phone shows a full-screen Lilt
+  player with the clock, album art, title, seek bar, favourite and repeat controls, and a
+  centred previous/play/next row. Swiping up (or tapping the unlock hint) closes Lilt and
+  reveals the system PIN/pattern screen; it never bypasses the secure keyguard.
+  The setting defaults on and can be turned off or previewed in **Settings → Lock screen**.
+  Automatic display uses the same display-over-other-apps permission as floating lyrics.
 - **Manual update check.** About shows the current version and the GitHub Releases URL.
   Checking downloads a newer APK automatically; **Install update** hands it to the system
   package installer, which may ask for permission to install unknown apps. The APK is
@@ -208,10 +225,11 @@ implemented.
 ## Privacy and permissions
 
 The manifest requests media reading, notifications, the media-playback foreground service,
-wake lock, `SYSTEM_ALERT_WINDOW` for floating lyrics, and `INTERNET` plus
-`ACCESS_NETWORK_STATE` for the optional online lyrics feature. The overlay permission is
-optional, is only requested when the user turns the feature on, and is never needed for
-playback. Online lyrics are optional and can be turned off in Settings; the app sends only
+wake lock, `SYSTEM_ALERT_WINDOW` for floating lyrics and the automatic lock-screen player,
+and `INTERNET` plus `ACCESS_NETWORK_STATE` for the optional online lyrics feature. The
+overlay permission is optional, is only requested when the user turns the feature on, and
+is never needed for playback. Online lyrics are optional and can be turned off in Settings;
+the app sends only
 the track title, artist, album and duration to LRCLIB or the configured AI endpoint. It
 contains no advertising, analytics or crash-reporting SDK. The AI key is encrypted with an
 Android Keystore AES key and is excluded from backups. Media3 also declares
@@ -220,7 +238,7 @@ Android Keystore AES key and is excluded from backups. Media3 also declares
 ## Verification in this workspace
 
 - `./gradlew assembleDebug` passes and produces the APK above.
-- `./gradlew testDebugUnitTest` passes 60 unit tests for M3U round trips, path imports,
+- `./gradlew testDebugUnitTest` passes 62 unit tests for M3U round trips, path imports,
   include/exclude filtering, album/artist grouping, sorting, search grouping, the letter
   index, filename tag fallback and track-prefix handling, LRC parsing, lyric offsets,
   floating lyric line windows and font clamping, widget progress/time formatting, backup

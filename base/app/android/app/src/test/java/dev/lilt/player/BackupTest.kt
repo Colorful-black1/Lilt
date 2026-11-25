@@ -69,6 +69,7 @@ class BackupTest {
             floatingFontSize = 31.5f,
             floatingPlayedColor = 0xFF12AB34.toInt(),
             floatingUnplayedColor = 0xFFF0E6DC.toInt(),
+            lockScreenPlayer = false,
         ),
         eq = BackupEq(
             enabled = true,
@@ -101,6 +102,7 @@ class BackupTest {
         assertEquals(31.5f, decoded.settings.floatingFontSize, 0.001f)
         assertEquals(0xFF12AB34.toInt(), decoded.settings.floatingPlayedColor)
         assertEquals(0xFFF0E6DC.toInt(), decoded.settings.floatingUnplayedColor)
+        assertFalse(decoded.settings.lockScreenPlayer)
         assertEquals("headroom", decoded.eq?.preampMode)
         assertFalse(decoded.eq?.perDevice ?: true)
     }
