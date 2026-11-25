@@ -272,7 +272,7 @@ private fun LiltNavHost(vm: LiltViewModel, nav: NavHostController) {
             RulesScreen(vm, onBack = { nav.popBackStack() })
         }
         composable("about") {
-            AboutScreen(onBack = { nav.popBackStack() })
+            AboutScreen(vm = vm, onBack = { nav.popBackStack() })
         }
         composable("search") {
             SearchScreen(

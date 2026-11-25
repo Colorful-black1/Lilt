@@ -39,7 +39,7 @@ For a store or a shareable release build, create your own signing key and config
 
 ## Put it on a phone
 
-1. Copy `app/Lilt-1.0-debug.apk` to the phone by USB or a local file transfer.
+1. Copy `app/Lilt-0.2.0-debug.apk` to the phone by USB or a local file transfer.
 2. Tap the file in the phone's file manager. If Android asks, allow that file manager to
    install unknown apps.
 3. Open Lilt and allow audio access. The first scan starts automatically; the refresh
@@ -84,6 +84,11 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 - **System-bar aware layout.** The home mini player and the player transport apply the
   platform `navigationBars` inset, so their buttons sit above both gesture navigation and
   the taller 3-button navigation bar. No fixed bar height is assumed.
+- **Manual update check.** About shows the current version and the GitHub Releases URL.
+  Checking downloads a newer APK automatically; **Install update** hands it to the system
+  package installer, which may ask for permission to install unknown apps. The APK is
+  signed with the committed development key so later sideload builds can be installed over
+  earlier ones.
 - **Online lyrics (optional).** When a track starts without lyrics, the playback service
   queries LRCLIB in the background and writes a high-confidence match into Room. Close
   matches open a version picker instead of silently replacing the studio version with a

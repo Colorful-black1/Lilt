@@ -916,6 +916,26 @@
 
 未纳入本轮：逐字歌词、双语翻译行、Android 锁屏歌词。
 
+### 更新检查与 0.2.0 版本（已完成）
+
+交付：
+
+- PC 设置 → 关于与更新新增手动“检查更新”：请求 GitHub Releases API，按语义版本比较当前 `0.2.0` 与最新标签；发现新版本后自动下载 `*-portable.zip` 到第一个可写目录（`Downloads/Lilt Updates`、应用数据目录或 `%TEMP%/Lilt Updates`），显示实际路径并可打开文件夹。正在运行的 EXE 不会被替换。
+- Android 关于页新增同样的手动检查与自动下载；APK 保存到 `files/updates/`，通过 FileProvider 交给系统安装器，安装前由系统确认。若未允许安装未知应用，会打开对应系统设置。
+- 两端都直接显示 GitHub Releases 链接文本，不再使用“Release 页面”按钮；当前没有已发布版本时显示明确空状态。
+- 版本统一为 `0.2.0`：PC `Cargo.toml`、Android `versionName` 与 `versionCode 2`。Android 使用仓库内固定的开发签名密钥，保证后续 sideload APK 可以覆盖安装当前调试包。
+- 仅手动检查；不会在启动时自动联网。只发送标准 GitHub API 请求，不上传曲库、路径或收听历史。
+- 尚未发布 `v0.2.0` 标签，因此实时检查当前显示“还没有已发布的版本”；推送标签后 CI 会生成 PC zip 与 Android APK。
+
+验收：
+
+- PC 与 Android 关于页均显示当前版本、GitHub 链接和检查按钮；无 Release 时空状态正确。
+- 版本比较单测覆盖相同、较新、较旧、`v` 前缀和预发布后缀。
+- PC 与 Android 构建通过；Android APK 版本为 `0.2.0`，签名证书与当前调试包一致。
+- 证据见 `base/app/checks/update-check/`。
+
+未纳入本轮：自动安装 PC zip、在应用内无确认安装 Android APK、后台定时检查。
+
 ### 第 9 轮：Android 系统集成
 
 交付：
@@ -1005,10 +1025,11 @@
 | 2026-11-24 | 歌词优先播放页 | 完成 | PC 两栏歌词页、居中自动滚动、无卡片背景、通栏进度线分隔、两侧快捷按钮与居中五键控制、最大化自适应；Android 居中当前/下一行与全屏歌词；PC 70 项 + Android 60 项测试 |
 | 2026-11-25 | Android 导航栏避让 | 完成 | 主页迷你播放器与播放页底部控制使用 `WindowInsets.navigationBars`，手势导航与三键导航均不重叠；Android 60 项测试 |
 | 2026-11-25 | PC 播放页队列抽屉 | 完成 | 播放页队列按钮改为当前页右侧抽屉，播放页保持打开；列表页与播放页共用队列抽屉 |
+| 2026-11-25 | 更新检查 0.2.0 | 完成 | PC/Android 手动检查 GitHub Releases、自动下载安装包、直接显示 GitHub 链接、版本统一 0.2.0、Android 固定调试签名 |
 | 2026-11-23 | Bugfix | 完成 | PC M4A/MP4 解码崩溃修复、内容探测标签/时长、损坏文件错误提示、PC 41 项测试 |
 | 下一步 | Round 7-E | 待定 | 真正的交叉淡化、批量重命名、Android 磁贴/Auto |
 
-Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`；酷狗式左右双行与自动缩放验证见 `base/app/checks/desktop-lyrics-kugou/`；Android 单行悬浮歌词、无卡片锁定态与“词”开关验证见 `base/app/checks/android-floating-lyrics-compact/`；文件名标签兜底验证见 `base/app/checks/filename-tag-fallback/`；AI 草稿提示词与日志验证见 `base/app/checks/ai-lyrics-prompt-fix/`；桌面歌词等比例缩放验证见 `base/app/checks/desktop-lyrics-proportional-zoom/`；桌面歌词缩放边框与光标验证见 `base/app/checks/desktop-lyrics-resize-border/`；歌词优先的 PC 播放页验证见 `base/app/checks/now-playing-lyrics-layout/`；Android 居中歌词与全屏歌词页验证见 `base/app/checks/android-player-lyrics-redesign/`；Android 手势/三键导航栏避让验证见 `base/app/checks/android-navigation-insets/`。
+Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`；Round 4-C 的验证见 `base/app/checks/round-4-c/`；Round 5 的歌词、睡眠/淡入淡出、均衡器和队列位置验证见 `base/app/checks/round-5/`；Round 6-A 的当前歌曲定位与排序验证见 `base/app/checks/round-6/`；Round 6-B 的单曲虚拟标签编辑见 `base/app/checks/round-6-b/`；Round 6-C 的歌词偏移与显示设置见 `base/app/checks/round-6-c/`；Round 6-D1 的托盘与全局热键验证见 `base/app/checks/round-6-d1/`；Round 6-D2 的桌面歌词、迷你播放器与 SMTC 验证见 `base/app/checks/round-6-d2/`；Round 7-A 的悬浮歌词与主屏小部件验证见 `base/app/checks/round-7-a/`；Round 7-B 的备份导出、恢复确认与恢复后数据验证见 `base/app/checks/round-7-b/`；Round 7-C 的 A-B 循环与失效文件重连验证见 `base/app/checks/round-7-c/`；Round 7-D 的单曲停止与重复歌曲检测验证见 `base/app/checks/round-7-d/`；M4A/MP4 崩溃修复验证见 `base/app/checks/bugfix-m4a-crash/`；桌面歌词透明化与浮钮解锁验证见 `base/app/checks/desktop-lyrics-redesign/`；酷狗式左右双行与自动缩放验证见 `base/app/checks/desktop-lyrics-kugou/`；Android 单行悬浮歌词、无卡片锁定态与“词”开关验证见 `base/app/checks/android-floating-lyrics-compact/`；文件名标签兜底验证见 `base/app/checks/filename-tag-fallback/`；AI 草稿提示词与日志验证见 `base/app/checks/ai-lyrics-prompt-fix/`；桌面歌词等比例缩放验证见 `base/app/checks/desktop-lyrics-proportional-zoom/`；桌面歌词缩放边框与光标验证见 `base/app/checks/desktop-lyrics-resize-border/`；歌词优先的 PC 播放页验证见 `base/app/checks/now-playing-lyrics-layout/`；Android 居中歌词与全屏歌词页验证见 `base/app/checks/android-player-lyrics-redesign/`；Android 手势/三键导航栏避让验证见 `base/app/checks/android-navigation-insets/`；更新检查验证见 `base/app/checks/update-check/`。
 
 ---
 
@@ -1024,6 +1045,9 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 - `base/app/src/ui/dialogs.rs`：PC 正在播放浮层、歌词面板、A-B/单曲停止控件、失效文件与重复歌曲对话框
 - `base/app/src/ui/now_playing.rs`：PC 歌词优先的两栏正在播放页、自动滚动歌词、详情标签与底部播放条
 - `base/app/src/ui/shell.rs`：PC 主框架、列表页队列抽屉与播放页共用的队列内容
+- `base/app/src/update.rs`：PC GitHub Releases 检查、版本比较、便携包自动下载与打开目录
+- `base/app/android/app/src/main/java/dev/lilt/player/data/UpdateChecker.kt`：Android GitHub Releases 检查、APK 下载与版本比较
+- `base/app/android/keystore/lilt-debug.keystore`：固定开发签名密钥，保证调试包可覆盖升级
 - `base/app/src/app.rs`：PC 播放心跳、A-B 循环、单曲停止、失效文件检测与重连
 - `base/app/src/duplicates.rs`：PC 重复歌曲分组、副本排序与大小格式
 - `base/app/src/backup.rs`：PC 版本化备份、校验、ID 归一化与恢复
@@ -1133,3 +1157,4 @@ Round 4 的截图、数据库迁移和计数验证见 `base/app/checks/round-4/`
 | v0.13.11 | 2026-11-24 | 播放页自适应最大化：内容宽度扩展到 2200 px，左侧封面分组垂直平衡，底部五键与两侧控件完整显示 |
 | v0.13.12 | 2026-11-25 | Android 系统栏避让：主页迷你播放器与播放页底部控制使用 `navigationBars` 内边距，手势/三键导航均不重叠 |
 | v0.13.13 | 2026-11-25 | PC 播放页队列改为当前页右侧抽屉，播放页保持打开；列表页与播放页共用同一队列抽屉 |
+| v0.14.0 | 2026-11-25 | 更新检查：PC/Android 手动检查 GitHub Releases、自动下载安装包、版本统一 0.2.0、Android 固定调试签名 |

@@ -16,6 +16,7 @@ mod playback_source;
 mod secret;
 mod theme;
 mod ui;
+mod update;
 mod widgets;
 
 use eframe::egui;
@@ -66,7 +67,11 @@ fn main() -> eframe::Result {
             "--list-audio" => {
                 println!("Sound outputs on this computer:");
                 for (name, is_default) in audio::AudioEngine::describe_outputs() {
-                    println!("{}{}", name, if is_default { "  (system default)" } else { "" });
+                    println!(
+                        "{}{}",
+                        name,
+                        if is_default { "  (system default)" } else { "" }
+                    );
                 }
                 return Ok(());
             }

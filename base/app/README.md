@@ -169,6 +169,12 @@ Set `LILT_DATA_DIR` to use a different data folder.
   lyric line seeks to its adjusted time. The now-playing sheet follows playback and keeps
   the active line in the middle. Settings has lyric font size (10–24 px) and opacity
   (30–100%) sliders with a live preview.
+- **Manual update check.** **Settings → About & updates** shows the current version and the
+  GitHub Releases URL. **Check for updates** queries the latest public release; when a newer
+  tag exists, the Windows portable zip is downloaded automatically to the first writable
+  updates folder (`Downloads/Lilt Updates`, the app data folder, or `%TEMP%/Lilt Updates`).
+  The dialog shows the path and can open the folder. No library data is sent, and the
+  running executable is never replaced.
 - **Windows desktop integration.** A self-drawn tray icon with left-click restore and a
   right-click menu (Show Lilt, Play/Pause, Previous, Next, Desktop lyrics, Lock/Unlock
   desktop lyrics, Mini player, Quit Lilt). Closing hides to the tray by default;

@@ -5,6 +5,13 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import android.provider.Settings as AndroidSettings
+import androidx.core.content.FileProvider
+import dev.lilt.player.data.UpdateCheckResult
+import dev.lilt.player.data.UpdateChecker
+import kotlinx.coroutines.flow.update
+import java.io.File
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -126,6 +133,19 @@ data class CandidatePickerUiState(
     val visible: Boolean get() = mediaId > 0 && candidates.isNotEmpty()
 }
 
+data class UpdateUiState(
+    val currentVersion: String = "",
+    val checking: Boolean = false,
+    val downloading: Boolean = false,
+    val latestVersion: String? = null,
+    val releaseUrl: String? = null,
+    val progress: Float? = null,
+    val downloadedPath: String? = null,
+    val upToDate: Boolean = false,
+    val noRelease: Boolean = false,
+    val error: String? = null,
+)
+
 class LiltViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val db = LiltDatabase.get(application)
@@ -190,6 +210,11 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _candidates = MutableStateFlow(CandidatePickerUiState())
     val candidates: StateFlow<CandidatePickerUiState> = _candidates.asStateFlow()
+
+    private val _update = MutableStateFlow(
+        UpdateUiState(currentVersion = UpdateChecker.currentVersion(application)),
+    )
+    val updateState: StateFlow<UpdateUiState> = _update.asStateFlow()
 
     private val _aiModels = MutableStateFlow<List<String>>(emptyList())
     val aiModels: StateFlow<List<String>> = _aiModels.asStateFlow()
@@ -1352,6 +1377,141 @@ class LiltViewModel(application: Application) : AndroidViewModel(application) {
             if (songs.isNotEmpty()) {
                 val id = repository.createPlaylist(name)
                 songs.forEach { repository.addToPlaylist(id, it.mediaId) }
+            }
+        }
+    }
+
+    fun checkForUpdates() {
+        val snapshot = _update.value
+        if (snapshot.checking || snapshot.downloading) return
+        val current = UpdateChecker.currentVersion(app)
+        _update.value = snapshot.copy(
+            currentVersion = current,
+            checking = true,
+            downloading = false,
+            latestVersion = null,
+            releaseUrl = null,
+            progress = null,
+            downloadedPath = null,
+            upToDate = false,
+            noRelease = false,
+            error = null,
+        )
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                UpdateChecker.fetchLatestRelease(
+                    current,
+                    "Lilt/$current (https://github.com/${UpdateChecker.REPO})",
+                )
+            }
+            when (result) {
+                is UpdateCheckResult.NoRelease -> _update.update {
+                    it.copy(checking = false, noRelease = true)
+                }
+                is UpdateCheckResult.UpToDate -> _update.update {
+                    it.copy(
+                        checking = false,
+                        upToDate = true,
+                        latestVersion = result.latest,
+                    )
+                }
+                is UpdateCheckResult.Error -> _update.update {
+                    it.copy(checking = false, error = result.message)
+                }
+                is UpdateCheckResult.Available -> {
+                    _update.update {
+                        it.copy(
+                            checking = false,
+                            latestVersion = result.version,
+                            releaseUrl = result.releaseUrl,
+                        )
+                    }
+                    val apkUrl = result.apkUrl
+                    if (apkUrl.isNullOrBlank()) {
+                        _update.update {
+                            it.copy(
+                                downloading = false,
+                                error = "The latest release has no APK asset.",
+                            )
+                        }
+                        return@launch
+                    }
+                    _update.update { it.copy(downloading = true, progress = null) }
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            UpdateChecker.downloadApk(
+                                context = app,
+                                url = apkUrl,
+                                version = result.version,
+                            ) { received, total ->
+                                val fraction = total?.takeIf { it > 0 }?.let {
+                                    (received.toFloat() / it).coerceIn(0f, 1f)
+                                }
+                                _update.update { state ->
+                                    state.copy(downloading = true, progress = fraction)
+                                }
+                            }
+                        }
+                    }.onSuccess { file ->
+                        _update.update {
+                            it.copy(
+                                downloading = false,
+                                progress = 1f,
+                                downloadedPath = file.absolutePath,
+                                error = null,
+                            )
+                        }
+                    }.onFailure { error ->
+                        _update.update {
+                            it.copy(
+                                downloading = false,
+                                error = error.message ?: error.javaClass.simpleName,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun installDownloadedUpdate() {
+        val path = _update.value.downloadedPath ?: return
+        val file = File(path)
+        if (!file.exists()) {
+            _update.update { it.copy(error = "The downloaded APK is missing.") }
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !app.packageManager.canRequestPackageInstalls()
+        ) {
+            runCatching {
+                app.startActivity(
+                    Intent(
+                        AndroidSettings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${app.packageName}"),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+            _update.update {
+                it.copy(error = "Allow Lilt to install unknown apps, then tap Install again.")
+            }
+            return
+        }
+        runCatching {
+            val uri = FileProvider.getUriForFile(
+                app,
+                "${app.packageName}.fileprovider",
+                file,
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            app.startActivity(intent)
+            _update.update { it.copy(error = null) }
+        }.onFailure { error ->
+            _update.update {
+                it.copy(error = error.message ?: "Could not open the installer.")
             }
         }
     }

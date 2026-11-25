@@ -263,6 +263,8 @@ pub struct LiltApp {
     pub now_playing: bool,
     pub queue_drawer: bool,
     pub lyrics_open: bool,
+    pub update_status: crate::update::UpdateStatus,
+    pub update_rx: Option<Receiver<crate::update::UpdateStatus>>,
     pub modal: Option<Modal>,
     pub toast: Option<Toast>,
 
@@ -403,6 +405,8 @@ impl LiltApp {
             now_playing: false,
             queue_drawer: false,
             lyrics_open: true,
+            update_status: crate::update::UpdateStatus::Idle,
+            update_rx: None,
             modal: None,
             toast: None,
             palette,
@@ -466,6 +470,42 @@ impl LiltApp {
             }
         }
         app
+    }
+
+    pub fn start_update_check(&mut self) {
+        if self.update_rx.is_some() {
+            return;
+        }
+        let (tx, rx) = channel();
+        self.update_status = crate::update::UpdateStatus::Checking;
+        self.update_rx = Some(rx);
+        std::thread::spawn(move || crate::update::start_check(tx));
+    }
+
+    fn poll_update(&mut self) {
+        let Some(rx) = &self.update_rx else {
+            return;
+        };
+        let mut finished = false;
+        let mut disconnected = false;
+        loop {
+            match rx.try_recv() {
+                Ok(status) => {
+                    if status.done() {
+                        finished = true;
+                    }
+                    self.update_status = status;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    disconnected = true;
+                    break;
+                }
+            }
+        }
+        if finished || disconnected {
+            self.update_rx = None;
+        }
     }
 
     pub fn lang(&self) -> Language {
@@ -4530,6 +4570,7 @@ impl eframe::App for LiltApp {
         self.update_sleep_timer();
         self.update_play_fade();
         self.update_playback();
+        self.poll_update();
         self.handle_shortcuts(ctx);
         self.load_current_lyrics();
         if let Some(toast) = &self.toast {
@@ -4552,6 +4593,7 @@ impl eframe::App for LiltApp {
             || !self.lyrics_inflight.is_empty()
             || self.ai_models_loading
             || self.ai_testing
+            || self.update_rx.is_some()
             || (self.desktop.is_none() && self.screenshot.is_none() && self.desktop_attempts < 3)
         {
             ctx.request_repaint_after(Duration::from_millis(100));

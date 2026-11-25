@@ -41,6 +41,8 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Equalizer
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -71,6 +73,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -78,6 +81,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.lilt.player.LiltViewModel
+import dev.lilt.player.data.UpdateChecker
 import dev.lilt.player.data.BackupPreview
 import dev.lilt.player.data.ScanState
 import dev.lilt.player.library.AI_PROVIDERS
@@ -819,17 +823,20 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(12.dp))
             SettingCard(t("About", "关于")) {
-                Text("Lilt 1.0", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Lilt ${UpdateChecker.currentVersion(context)}",
+                    style = MaterialTheme.typography.titleLarge,
+                )
                 Text(
                     t(
-                        "A local music player. No account, no network, no tracking.",
-                        "本地音乐播放器。没有账号，没有网络，没有追踪。",
+                        "A local music player. No account, no tracking. Only the manual update check contacts GitHub.",
+                        "本地音乐播放器。没有账号、没有追踪；只有手动检查更新时会访问 GitHub。",
                     ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(8.dp))
-                SettingLink(t("About this build", "关于此版本"), t("What is included and what is not.", "包含与未包含的功能。"), onOpenAbout)
+                SettingLink(t("About & updates", "关于与更新"), t("Version, update check, and what is included.", "版本、检查更新，以及包含与未包含的功能。"), onOpenAbout)
             }
             Spacer(Modifier.height(40.dp))
         }
@@ -1090,7 +1097,9 @@ private fun SettingLink(title: String, body: String, onClick: () -> Unit) {    R
 }
 
 @Composable
-fun AboutScreen(onBack: () -> Unit) {
+fun AboutScreen(vm: LiltViewModel, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val update by vm.updateState.collectAsStateWithLifecycle()
     Scaffold(
         modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars),
         topBar = { AppBar(title = t("About", "关于"), onBack = onBack) },
@@ -1107,12 +1116,113 @@ fun AboutScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(22.dp))
             Text(
                 t(
-                    "This Android build scans the audio already on the phone through MediaStore. It keeps the library, playlists and queues in a local Room database. Playback runs in a foreground media session, so the notification, lock screen and headset buttons keep working while the screen is off. Audio and user data stay on the device. Online lyrics are optional: only the track title, artist, album and duration are sent to LRCLIB or the AI endpoint configured in Settings, and the feature can be turned off there. The app includes no advertising, analytics or crash-reporting code.",
-                    "这个 Android 版本通过 MediaStore 扫描手机中已有的音频，并把曲库、播放列表和队列保存在本地 Room 数据库。播放由前台媒体会话负责，所以息屏后通知栏、锁屏和耳机按键仍可控制。音频与用户数据都保存在本机。在线歌词是可选功能：只把歌名、艺术家、专辑和时长发送给 LRCLIB 或设置中配置的 AI 接口，可随时关闭。应用不包含广告、统计或崩溃上报代码。",
+                    "This Android build scans the audio already on the phone through MediaStore. It keeps the library, playlists and queues in a local Room database. Playback runs in a foreground media session, so the notification, lock screen and headset buttons keep working while the screen is off. Audio and user data stay on the device. Online lyrics are optional: only the track title, artist, album and duration are sent to LRCLIB or the AI endpoint configured in Settings, and the feature can be turned off there. The app includes no advertising, analytics or crash-reporting code. It can check GitHub Releases for updates when you press the button on this page.",
+                    "这个 Android 版本通过 MediaStore 扫描手机中已有的音频，并把曲库、播放列表和队列保存在本地 Room 数据库。播放由前台媒体会话负责，所以息屏后通知栏、锁屏和耳机按键仍可控制。音频与用户数据都保存在本机。在线歌词是可选功能：只把歌名、艺术家、专辑和时长发送给 LRCLIB 或设置中配置的 AI 接口，可随时关闭。应用不包含广告、统计或崩溃上报代码。只有在这个页面手动检查更新时会访问 GitHub Releases。",
                 ),
                 style = MaterialTheme.typography.bodyLarge,
             )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(22.dp))
+            Text(t("Software update", "软件更新"), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "${t("Current version", "当前版本")}: ${update.currentVersion}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            when {
+                update.checking -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        t("Checking GitHub Releases…", "正在检查 GitHub Releases…"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                update.downloading -> {
+                    Text(
+                        t(
+                            "Downloading v${update.latestVersion.orEmpty()}…",
+                            "正在下载 v${update.latestVersion.orEmpty()}…",
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    val progress = update.progress
+                    if (progress == null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+                update.error != null -> Text(
+                    "${t("Update check failed", "检查更新失败")}: ${update.error}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                update.downloadedPath != null -> Text(
+                    t(
+                        "v${update.latestVersion.orEmpty()} downloaded. The system installer will ask for confirmation.",
+                        "v${update.latestVersion.orEmpty()} 已下载。系统安装器会再次确认。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                update.upToDate -> Text(
+                    t(
+                        "You are up to date (latest v${update.latestVersion.orEmpty()}).",
+                        "已是最新版本（最新 v${update.latestVersion.orEmpty()}）。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                update.noRelease -> Text(
+                    t("No release has been published yet.", "还没有已发布的版本。"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                else -> Text(
+                    t(
+                        "Checks GitHub Releases and downloads the APK when a newer version is available. No library data is sent.",
+                        "从 GitHub Releases 检查更新；发现新版本后自动下载 APK。不会发送曲库数据。",
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = vm::checkForUpdates,
+                    enabled = !update.checking && !update.downloading,
+                ) {
+                    Text(t("Check for updates", "检查更新"))
+                }
+                if (update.downloadedPath != null) {
+                    Button(onClick = vm::installDownloadedUpdate) {
+                        Text(t("Install update", "安装更新"))
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                UpdateChecker.RELEASES_URL,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(UpdateChecker.RELEASES_URL)),
+                        )
+                    }
+                },
+            )
+            Spacer(Modifier.height(22.dp))
             Text(t("In this build", "本版本包含"), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             listOf(

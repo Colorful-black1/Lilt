@@ -41,6 +41,7 @@ desktop.ini
 
 # ---- Local signing keys and secrets ----
 *.keystore
+!/base/app/android/keystore/lilt-debug.keystore
 *.jks
 .env
 .env.*

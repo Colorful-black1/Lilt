@@ -9,17 +9,32 @@ android {
     namespace = "dev.lilt.player"
     compileSdk = 35
 
+    signingConfigs {
+        create("development") {
+            storeFile = rootProject.file("keystore/lilt-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "dev.lilt.player"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("development")
+        }
         release {
+            // The distributed APK is a sideloaded debug build; keep the same
+            // key so the next release can be installed over the previous one.
+            signingConfig = signingConfigs.getByName("development")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

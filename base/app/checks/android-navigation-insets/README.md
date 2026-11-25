@@ -32,7 +32,7 @@ was switched between gesture and 3-button overlays during the test.
 
 ```text
 Android unit tests: 60 passed, 0 failed
-APK: 22,948,692 bytes
+APK: 22,605,528 bytes
 ```
 
 The navigation inset comes from the platform, so it follows the user's chosen navigation

@@ -4,6 +4,7 @@ use crate::icons::{self, Icon};
 use crate::lyrics_fetch;
 use crate::model::*;
 use crate::theme::{display_font, Palette};
+use crate::update::{self, UpdateStatus};
 use crate::widgets;
 use eframe::egui::{
     self, Align, Align2, Color32, FontId, Layout, Margin, RichText, ScrollArea, Sense, Stroke, Ui,
@@ -1286,8 +1287,8 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                             ui.add_space(4.0);
                             ui.label(
                                 RichText::new(app.t(
-                                    "A local, offline music player built for a calm library. It reads audio files from folders you choose, stores playlists and preferences on this machine, and never makes a network request.",
-                                    "一个安静、纯本地的音乐播放器。只读取你选择的文件夹，播放列表与偏好都保存在本机，不发起任何网络请求。",
+                                    "A local, offline music player built for a calm library. It reads audio files from folders you choose, stores playlists and preferences on this machine. It only goes online for the optional lyrics feature and when you ask it to check for updates.",
+                                    "一个安静、纯本地的音乐播放器。只读取你选择的文件夹，播放列表与偏好都保存在本机；只有可选的在线歌词和手动检查更新会联网。",
                                 ))
                                 .size(11.0)
                                 .color(palette.muted),
@@ -1301,6 +1302,196 @@ pub fn modals(app: &mut LiltApp, ctx: &egui::Context) {
                                 .size(10.0)
                                 .color(palette.faint),
                             );
+                            ui.add_space(10.0);
+                            ui.separator();
+                            ui.add_space(8.0);
+                            ui.label(
+                                RichText::new(app.t("Updates", "检查更新"))
+                                    .font(display_font(14.0))
+                                    .color(palette.text),
+                            );
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} {}",
+                                    app.t("Current version", "当前版本"),
+                                    APP_VERSION
+                                ))
+                                .size(10.5)
+                                .color(palette.muted),
+                            );
+                            ui.add_space(6.0);
+                            let status = app.update_status.clone();
+                            let active = status.active();
+                            let mut start_check = false;
+                            match status {
+                                UpdateStatus::Idle => {
+                                    ui.label(
+                                        RichText::new(app.t(
+                                            "Check GitHub Releases for a newer Windows package. Only release metadata and the package are downloaded; no library data is sent.",
+                                            "从 GitHub Releases 检查新的 Windows 包。只下载版本信息和安装包，不发送曲库数据。",
+                                        ))
+                                        .size(10.5)
+                                        .color(palette.muted),
+                                    );
+                                }
+                                UpdateStatus::Checking => {
+                                    ui.horizontal(|ui| {
+                                        ui.add(egui::Spinner::new().size(14.0));
+                                        ui.label(
+                                            RichText::new(app.t(
+                                                "Checking GitHub Releases…",
+                                                "正在检查 GitHub Releases…",
+                                            ))
+                                            .size(11.0)
+                                            .color(palette.muted),
+                                        );
+                                    });
+                                }
+                                UpdateStatus::UpToDate { latest } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} v{}",
+                                            app.t(
+                                                "You are up to date. Latest release:",
+                                                "已是最新版本。最新发布："
+                                            ),
+                                            latest
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.text),
+                                    );
+                                }
+                                UpdateStatus::Available {
+                                    version,
+                                    release_url,
+                                    notes: _,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} v{}",
+                                            app.t(
+                                                "A newer release is available, but it has no Windows package:",
+                                                "发现新版本，但该版本没有 Windows 安装包："
+                                            ),
+                                            version
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.text),
+                                    );
+                                    ui.hyperlink(&release_url);
+                                }
+                                UpdateStatus::Downloading {
+                                    version,
+                                    received,
+                                    total,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} v{}",
+                                            app.t("Downloading update", "正在下载更新"),
+                                            version
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.text),
+                                    );
+                                    let fraction = total
+                                        .map(|total| {
+                                            (received as f64 / total.max(1) as f64)
+                                                .clamp(0.0, 1.0) as f32
+                                        })
+                                        .unwrap_or(0.0);
+                                    let label = match total {
+                                        Some(total) => format!(
+                                            "{:.1} / {:.1} MB",
+                                            received as f64 / 1_048_576.0,
+                                            total as f64 / 1_048_576.0
+                                        ),
+                                        None => {
+                                            format!("{:.1} MB", received as f64 / 1_048_576.0)
+                                        }
+                                    };
+                                    ui.add(
+                                        egui::ProgressBar::new(fraction)
+                                            .desired_width(360.0)
+                                            .text(label),
+                                    );
+                                }
+                                UpdateStatus::Downloaded {
+                                    version,
+                                    path,
+                                    release_url,
+                                } => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} v{}",
+                                            app.t("Update downloaded", "更新已下载"),
+                                            version
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.text),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(path.display().to_string())
+                                                .size(9.5)
+                                                .color(palette.muted),
+                                        )
+                                        .truncate(),
+                                    );
+                                    ui.horizontal_wrapped(|ui| {
+                                        if widgets::primary_button(
+                                            ui,
+                                            app.t("Open folder", "打开文件夹"),
+                                            Some(Icon::Folder),
+                                            &palette,
+                                        )
+                                        .clicked()
+                                        {
+                                            update::open_folder(&path);
+                                        }
+                                    });
+                                    ui.hyperlink(&release_url);
+                                }
+                                UpdateStatus::NoRelease => {
+                                    ui.label(
+                                        RichText::new(app.t(
+                                            "No release has been published yet.",
+                                            "还没有已发布的版本。",
+                                        ))
+                                        .size(11.0)
+                                        .color(palette.muted),
+                                    );
+                                }
+                                UpdateStatus::Error(message) => {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} {message}",
+                                            app.t("Update check failed:", "检查更新失败：")
+                                        ))
+                                        .size(10.5)
+                                        .color(Color32::from_rgb(0xF2, 0xB8, 0x6B)),
+                                    );
+                                }
+                            }
+                            if !active {
+                                ui.add_space(4.0);
+                                ui.horizontal_wrapped(|ui| {
+                                    if widgets::primary_button(
+                                        ui,
+                                        app.t("Check for updates", "检查更新"),
+                                        Some(Icon::Refresh),
+                                        &palette,
+                                    )
+                                    .clicked()
+                                    {
+                                        start_check = true;
+                                    }
+                                    ui.hyperlink(update::RELEASES_URL);
+                                });
+                            }
+                            if start_check {
+                                app.start_update_check();
+                            }
                         }
                         Modal::Shortcuts => {
                             modal_header(ui, &palette, app.t("Keyboard shortcuts", "键盘快捷键"), &mut close);
