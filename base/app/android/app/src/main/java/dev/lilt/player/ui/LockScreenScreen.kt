@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
@@ -97,6 +98,7 @@ fun LockScreenScreen(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onSeek: (Long) -> Unit,
+    onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
     onToggleFavorite: () -> Unit,
     onUnlock: () -> Unit,
@@ -212,31 +214,63 @@ fun LockScreenScreen(
                     )
                 }
                 Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
-                Text(
-                    state.title.ifBlank { t("Nothing playing", "暂无播放") },
-                    color = Color.White,
-                    style = if (compact) {
-                        MaterialTheme.typography.titleMedium
-                    } else {
-                        MaterialTheme.typography.titleLarge
-                    },
-                    textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
                 val subtitle = listOf(state.artist, state.album)
                     .filter { it.isNotBlank() }
                     .joinToString(" · ")
-                if (subtitle.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        subtitle,
-                        color = Color.White.copy(alpha = 0.72f),
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Balance the heart so the title block stays centred.
+                    Spacer(Modifier.size(40.dp))
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            state.title.ifBlank { t("Nothing playing", "暂无播放") },
+                            color = Color.White,
+                            style = if (compact) {
+                                MaterialTheme.typography.titleMedium
+                            } else {
+                                MaterialTheme.typography.titleLarge
+                            },
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (subtitle.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                subtitle,
+                                color = Color.White.copy(alpha = 0.72f),
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onToggleFavorite,
+                        enabled = state.hasTrack,
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = if (isFavorite) {
+                                t("Remove favorite", "取消收藏")
+                            } else {
+                                t("Favorite", "收藏")
+                            },
+                            tint = if (isFavorite) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.White.copy(alpha = 0.82f)
+                            },
+                            modifier = Modifier.size(if (compact) 22.dp else 24.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
                 LockScreenLyrics(
@@ -257,7 +291,6 @@ fun LockScreenScreen(
                 Spacer(Modifier.height(if (compact) 8.dp else 14.dp))
                 LockScreenTransport(
                     state = state,
-                    isFavorite = isFavorite,
                     compact = compact,
                     playSize = playSize,
                     sideSize = sideSize,
@@ -265,8 +298,8 @@ fun LockScreenScreen(
                     onPlayPause = onPlayPause,
                     onPrevious = onPrevious,
                     onNext = onNext,
+                    onToggleShuffle = onToggleShuffle,
                     onCycleRepeat = onCycleRepeat,
-                    onToggleFavorite = onToggleFavorite,
                 )
                 Spacer(Modifier.height(if (compact) 8.dp else 14.dp))
                 UnlockHint(onUnlock = onUnlock)
@@ -480,7 +513,6 @@ private fun LockScreenProgress(
 @Composable
 private fun LockScreenTransport(
     state: LockScreenState,
-    isFavorite: Boolean,
     compact: Boolean,
     playSize: Dp,
     sideSize: Dp,
@@ -488,8 +520,8 @@ private fun LockScreenTransport(
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
+    onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onToggleFavorite: () -> Unit,
 ) {
     val iconSize = if (compact) 26.dp else 28.dp
     Row(
@@ -497,15 +529,11 @@ private fun LockScreenTransport(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            IconButton(onClick = onCycleRepeat, enabled = state.hasTrack) {
+            IconButton(onClick = onToggleShuffle, enabled = state.hasTrack) {
                 Icon(
-                    if (state.repeatMode == Player.REPEAT_MODE_ONE) {
-                        Icons.Rounded.RepeatOne
-                    } else {
-                        Icons.Rounded.Repeat
-                    },
-                    contentDescription = t("Repeat", "循环"),
-                    tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) {
+                    Icons.Rounded.Shuffle,
+                    contentDescription = t("Shuffle", "随机播放"),
+                    tint = if (state.shuffle) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         Color.White.copy(alpha = 0.82f)
@@ -556,15 +584,15 @@ private fun LockScreenTransport(
             }
         }
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            IconButton(onClick = onToggleFavorite, enabled = state.hasTrack) {
+            IconButton(onClick = onCycleRepeat, enabled = state.hasTrack) {
                 Icon(
-                    if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    contentDescription = if (isFavorite) {
-                        t("Remove favorite", "取消收藏")
+                    if (state.repeatMode == Player.REPEAT_MODE_ONE) {
+                        Icons.Rounded.RepeatOne
                     } else {
-                        t("Favorite", "收藏")
+                        Icons.Rounded.Repeat
                     },
-                    tint = if (isFavorite) {
+                    contentDescription = t("Repeat", "循环"),
+                    tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) {
                         MaterialTheme.colorScheme.primary
                     } else {
                         Color.White.copy(alpha = 0.82f)

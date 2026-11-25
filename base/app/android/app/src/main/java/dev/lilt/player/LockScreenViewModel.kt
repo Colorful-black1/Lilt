@@ -162,6 +162,12 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
         c.seekTo(positionMs.coerceAtLeast(0L))
     }
 
+    fun toggleShuffle() {
+        val c = controller ?: return
+        c.shuffleModeEnabled = !c.shuffleModeEnabled
+        publish(c)
+    }
+
     fun cycleRepeat() {
         val c = controller ?: return
         c.repeatMode = when (c.repeatMode) {

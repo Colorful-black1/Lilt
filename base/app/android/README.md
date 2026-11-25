@@ -96,8 +96,9 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   state as the library and the in-app player; the lyrics button toggles the floating lyric
   overlay and explains the overlay permission when it is missing.
 - **Lock-screen player.** With a track loaded, locking the phone shows a full-screen Lilt
-  player with the clock, album art, title, seek bar, favourite and repeat controls, and a
-  centred previous/play/next row. Saved LRC lyrics appear below the title in a five-line
+  player with the clock, album art, title, seek bar, shuffle on the left, repeat on the
+  right, the favourite heart beside the title, and a centred previous/play/next row.
+  Saved LRC lyrics appear below the title in a five-line
   window that highlights the current line and slides as playback advances; the line wraps
   to two lines when needed; a three-line window is used when the lyric area is short. Swiping up
   (or tapping the unlock hint) closes Lilt and reveals the system PIN/pattern screen; it

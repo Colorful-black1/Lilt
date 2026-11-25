@@ -77,6 +77,7 @@ class LockScreenActivity : ComponentActivity() {
                     onPrevious = vm::previous,
                     onNext = vm::next,
                     onSeek = vm::seekTo,
+                    onToggleShuffle = vm::toggleShuffle,
                     onCycleRepeat = vm::cycleRepeat,
                     onToggleFavorite = vm::toggleFavorite,
                     onUnlock = { finish() },
