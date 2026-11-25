@@ -19,7 +19,7 @@ The mini player previously drew its play/next buttons in the bottom navigation a
 
 ## Evidence
 
-Captured on the `lilt35` emulator (Android 15, 1080脳1920, density 420). The navigation mode
+Captured on the `lilt35` emulator (Android 15, 1080閼?920, density 420). The navigation mode
 was switched between gesture and 3-button overlays during the test.
 
 | File | What it shows |
@@ -32,7 +32,7 @@ was switched between gesture and 3-button overlays during the test.
 
 ```text
 Android unit tests: 60 passed, 0 failed
-APK: 22,115,290 bytes
+APK: 22,705,330 bytes
 ```
 
 The navigation inset comes from the platform, so it follows the user's chosen navigation

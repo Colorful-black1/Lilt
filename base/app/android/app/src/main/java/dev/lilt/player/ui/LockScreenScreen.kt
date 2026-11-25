@@ -1,6 +1,13 @@
 package dev.lilt.player.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -20,6 +27,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -53,27 +61,37 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
 import dev.lilt.player.LockScreenState
+import dev.lilt.player.data.LyricsEntity
+import dev.lilt.player.library.activeLrcLine
+import dev.lilt.player.library.parseLrc
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 @Composable
 fun LockScreenScreen(
     state: LockScreenState,
+    lyrics: LyricsEntity?,
     isFavorite: Boolean,
     onPlayPause: () -> Unit,
     onPrevious: () -> Unit,
@@ -150,7 +168,13 @@ fun LockScreenScreen(
                 .padding(horizontal = 26.dp),
         ) {
             val compact = maxHeight < 700.dp
-            val coverSize = minOf(maxWidth * 0.66f, maxHeight * 0.36f).coerceAtMost(320.dp)
+            val coverSize = if (compact) {
+                minOf(maxWidth * 0.42f, maxHeight * 0.20f).coerceIn(92.dp, 148.dp)
+            } else {
+                // Cap the cover so tall screens give the extra height to the
+                // lyric window instead of a larger artwork square.
+                minOf(maxWidth * 0.62f, maxHeight * 0.26f).coerceIn(150.dp, 200.dp)
+            }
             val clockSize = if (compact) 48.sp else 64.sp
             val playSize = if (compact) 64.dp else 76.dp
             val sideSize = if (compact) 48.dp else 52.dp
@@ -174,7 +198,7 @@ fun LockScreenScreen(
                     letterSpacing = (-2).sp,
                     maxLines = 1,
                 )
-                Spacer(Modifier.weight(if (compact) 0.5f else 0.7f))
+                Spacer(Modifier.height(if (compact) 10.dp else 18.dp))
                 Box(
                     modifier = Modifier
                         .size(coverSize)
@@ -187,14 +211,14 @@ fun LockScreenScreen(
                         corner = 20.dp,
                     )
                 }
-                Spacer(Modifier.height(if (compact) 14.dp else 22.dp))
+                Spacer(Modifier.height(if (compact) 10.dp else 16.dp))
                 Text(
                     state.title.ifBlank { t("Nothing playing", "暂无播放") },
                     color = Color.White,
                     style = if (compact) {
-                        MaterialTheme.typography.titleLarge
+                        MaterialTheme.typography.titleMedium
                     } else {
-                        MaterialTheme.typography.headlineMedium
+                        MaterialTheme.typography.titleLarge
                     },
                     textAlign = TextAlign.Center,
                     maxLines = 2,
@@ -208,13 +232,23 @@ fun LockScreenScreen(
                     Text(
                         subtitle,
                         color = Color.White.copy(alpha = 0.72f),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
+                LockScreenLyrics(
+                    lyrics = lyrics,
+                    hasTrack = state.hasTrack,
+                    positionMs = state.positionMs,
+                    compact = compact,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+                Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
                 LockScreenProgress(
                     state = state,
                     onSeek = onSeek,
@@ -237,6 +271,151 @@ fun LockScreenScreen(
                 Spacer(Modifier.height(if (compact) 8.dp else 14.dp))
                 UnlockHint(onUnlock = onUnlock)
                 Spacer(Modifier.height(if (compact) 4.dp else 10.dp))
+            }
+        }
+    }
+}
+
+/**
+ * A five-line window that follows the active LRC line. Only the window is
+ * composed, so long lyrics never push the active line outside the viewport;
+ * a one-line slide keeps the highlight in the middle as playback advances.
+ */
+@Composable
+private fun LockScreenLyrics(
+    lyrics: LyricsEntity?,
+    hasTrack: Boolean,
+    positionMs: Long,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val document = remember(lyrics?.text) { parseLrc(lyrics?.text.orEmpty()) }
+    val lineHeight = if (compact) 30.dp else 36.dp
+    if (document.isEmpty) {
+        Box(modifier = modifier.clipToBounds(), contentAlignment = Alignment.Center) {
+            if (hasTrack) {
+                Text(
+                    t("No lyrics", "暂无歌词"),
+                    color = Color.White.copy(alpha = 0.42f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+        return
+    }
+    val timed = document.timed
+    val offsetMs = lyrics?.offsetMs ?: 0
+    val active = if (timed) activeLrcLine(document, positionMs, offsetMs) else -1
+    val focus = if (timed) active.coerceAtLeast(0) else 0
+    val highlighted = timed && active >= 0
+    BoxWithConstraints(
+        modifier = modifier.clipToBounds(),
+    ) {
+        val viewportHeight = maxHeight
+        val density = LocalDensity.current
+        val lineHeightPx = with(density) { lineHeight.toPx() }
+        val widthPx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+        val measurer = rememberTextMeasurer()
+        // Keep the whole five-line window inside short screens too; a
+        // two-line active lyric needs one extra row of headroom.
+        val windowRadius = if (viewportHeight >= lineHeight * 5.5f) 2 else 1
+        val activeStyle = remember(compact) {
+            TextStyle(
+                fontSize = if (compact) 15.sp else 16.sp,
+                lineHeight = if (compact) 21.sp else 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+        }
+        AnimatedContent(
+            targetState = focus,
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopStart,
+            transitionSpec = {
+                if (targetState == initialState + 1) {
+                    (
+                        slideInVertically(
+                            animationSpec = tween(360, easing = FastOutSlowInEasing),
+                            initialOffsetY = { lineHeightPx.roundToInt() },
+                        ) + fadeIn(tween(140))
+                        ) togetherWith (
+                        slideOutVertically(
+                            animationSpec = tween(360, easing = FastOutSlowInEasing),
+                            targetOffsetY = { -lineHeightPx.roundToInt() },
+                        ) + fadeOut(tween(90))
+                        )
+                } else {
+                    fadeIn(tween(200)) togetherWith fadeOut(tween(120))
+                }
+            },
+            label = "lock-lyrics",
+        ) { index ->
+            // A five-line window keeps every child near the viewport. A
+            // single tall column would be clipped once playback moved past
+            // the first few lines.
+            val first = (index - windowRadius).coerceAtLeast(0)
+            val last = (index + windowRadius).coerceAtMost(document.lines.lastIndex)
+            val activeHeight = remember(index, widthPx, compact, document) {
+                if (timed) {
+                    val result = measurer.measure(
+                        text = document.lines[index].text,
+                        style = activeStyle,
+                        constraints = Constraints(maxWidth = widthPx),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    lineHeight * result.lineCount.coerceAtLeast(1)
+                } else {
+                    lineHeight
+                }
+            }
+            val rowsBefore = index - first
+            val target = if (timed) {
+                viewportHeight / 2 - (lineHeight * rowsBefore + activeHeight / 2)
+            } else {
+                // Plain text has no timestamps, so centre the whole block.
+                viewportHeight / 2 - lineHeight * (last - first + 1) / 2
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = target),
+            ) {
+                for (lineIndex in first..last) {
+                    val line = document.lines[lineIndex]
+                    val activeLine = highlighted && lineIndex == index
+                    val distance = abs(lineIndex - index)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(if (activeLine) activeHeight else lineHeight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            line.text,
+                            color = when {
+                                !timed -> Color.White.copy(alpha = 0.76f)
+                                activeLine -> Color.White
+                                distance == 0 -> Color.White.copy(alpha = 0.56f)
+                                distance == 1 -> Color.White.copy(alpha = 0.66f)
+                                distance == 2 -> Color.White.copy(alpha = 0.42f)
+                                else -> Color.White.copy(alpha = 0.26f)
+                            },
+                            style = if (activeLine) {
+                                activeStyle
+                            } else {
+                                TextStyle(
+                                    fontSize = if (compact) 14.sp else 15.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                )
+                            },
+                            maxLines = if (activeLine) 2 else 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
         }
     }

@@ -97,8 +97,11 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
   overlay and explains the overlay permission when it is missing.
 - **Lock-screen player.** With a track loaded, locking the phone shows a full-screen Lilt
   player with the clock, album art, title, seek bar, favourite and repeat controls, and a
-  centred previous/play/next row. Swiping up (or tapping the unlock hint) closes Lilt and
-  reveals the system PIN/pattern screen; it never bypasses the secure keyguard.
+  centred previous/play/next row. Saved LRC lyrics appear below the title in a five-line
+  window that highlights the current line and slides as playback advances; the line wraps
+  to two lines when needed; a three-line window is used when the lyric area is short. Swiping up
+  (or tapping the unlock hint) closes Lilt and reveals the system PIN/pattern screen; it
+  never bypasses the secure keyguard.
   The setting defaults on and can be turned off or previewed in **Settings → Lock screen**.
   Automatic display uses the same display-over-other-apps permission as floating lyrics.
 - **Manual update check.** About shows the current version and the GitHub Releases URL.
@@ -216,9 +219,9 @@ needs a release signing key and an `.aab` produced with `bundleRelease`.
 ## Deliberately not in this build
 
 Batch tag editing, cover replacement, embedded ReplayGain writing, drag-to-reorder (the
-playlist and queue up/down controls are available), pinyin letter buckets, lock-screen
-lyrics, a lyric-only home-screen widget, quick-settings tile, Android Auto, Chromecast and
-audio trimming are later rounds. They are not simulated with fake data. Backups are
+playlist and queue up/down controls are available), pinyin letter buckets, a lyric-only
+home-screen widget, quick-settings tile, Android Auto, Chromecast and audio trimming are
+later rounds. They are not simulated with fake data. Backups are
 platform-specific today; importing a desktop backup on Android (or the reverse) is not
 implemented.
 

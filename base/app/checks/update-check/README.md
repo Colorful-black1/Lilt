@@ -66,5 +66,5 @@ Android: 62 passed, 0 failed
 ```text
 dist/Lilt-0.2.1-win64/Lilt.exe        12,085,760 bytes  (PE subsystem 2)
 dist/Lilt-0.2.1-win64-portable.zip    18,531,896 bytes
-base/app/Lilt-0.2.1-debug.apk         22,115,290 bytes
+base/app/Lilt-0.2.1-debug.apk         22,705,330 bytes
 ```

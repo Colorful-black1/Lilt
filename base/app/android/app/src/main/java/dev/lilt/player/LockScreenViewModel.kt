@@ -12,14 +12,17 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import dev.lilt.player.data.LiltDatabase
+import dev.lilt.player.data.LyricsEntity
 import dev.lilt.player.data.MusicRepository
 import dev.lilt.player.data.SettingsStore
 import dev.lilt.player.playback.PlaybackService
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -60,8 +63,13 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
     private val _state = MutableStateFlow(LockScreenState())
     val state: StateFlow<LockScreenState> = _state.asStateFlow()
 
+    private val _lyrics = MutableStateFlow<LyricsEntity?>(null)
+    val lyrics: StateFlow<LyricsEntity?> = _lyrics.asStateFlow()
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
+    private var lyricsJob: Job? = null
+    private var lyricsMediaId = -1L
     private var released = false
     private val clearAbLoop = SessionCommand(PlaybackService.CMD_AB_CLEAR, Bundle.EMPTY)
 
@@ -90,15 +98,17 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             while (isActive) {
                 controller?.let { if (it.isPlaying) publish(it) }
-                delay(500)
+                delay(250)
             }
         }
     }
 
     private fun publish(player: Player) {
         val item = player.currentMediaItem
+        val mediaId = item?.mediaId?.toLongOrNull() ?: -1L
+        loadLyrics(mediaId)
         _state.value = LockScreenState(
-            mediaId = item?.mediaId?.toLongOrNull() ?: -1L,
+            mediaId = mediaId,
             title = item?.mediaMetadata?.title?.toString().orEmpty(),
             artist = item?.mediaMetadata?.artist?.toString().orEmpty(),
             album = item?.mediaMetadata?.albumTitle?.toString().orEmpty(),
@@ -112,6 +122,22 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
             hasNext = player.hasNextMediaItem(),
             itemCount = player.mediaItemCount,
         )
+    }
+
+    /**
+     * The lock screen only reads saved lyrics; it never starts an online
+     * lookup or records playback history. Room emits again after the user
+     * edits or shifts the lyrics and unlocks.
+     */
+    private fun loadLyrics(mediaId: Long) {
+        if (mediaId == lyricsMediaId) return
+        lyricsMediaId = mediaId
+        lyricsJob?.cancel()
+        _lyrics.value = null
+        if (mediaId <= 0L) return
+        lyricsJob = viewModelScope.launch {
+            repository.observeLyrics(mediaId).collect { _lyrics.value = it }
+        }
     }
 
     fun togglePlayPause() {
@@ -154,6 +180,8 @@ class LockScreenViewModel(application: Application) : AndroidViewModel(applicati
 
     override fun onCleared() {
         released = true
+        lyricsJob?.cancel()
+        lyricsJob = null
         controller?.removeListener(listener)
         controllerFuture?.let(MediaController::releaseFuture)
         controller = null

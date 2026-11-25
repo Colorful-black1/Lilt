@@ -64,12 +64,14 @@ class LockScreenActivity : ComponentActivity() {
         setContent {
             val vm: LockScreenViewModel = viewModel()
             val state by vm.state.collectAsStateWithLifecycle()
+            val lyrics by vm.lyrics.collectAsStateWithLifecycle()
             val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
             val accent by vm.accent.collectAsStateWithLifecycle()
             val language by vm.language.collectAsStateWithLifecycle()
             LiltTheme(theme = "dark", accentId = accent, language = language) {
                 LockScreenScreen(
                     state = state,
+                    lyrics = lyrics,
                     isFavorite = state.mediaId in favoriteIds,
                     onPlayPause = vm::togglePlayPause,
                     onPrevious = vm::previous,
